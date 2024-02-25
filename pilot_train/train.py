@@ -358,9 +358,6 @@ def main(config):
     #         eval_freq=config["eval_freq"],
     #     )
 
-    
-    
-    
     print("FINISHED TRAINING")
 
 
