@@ -22,7 +22,10 @@ def get_data_path(data_folder: str, f: str, time: int, data_type: str = "image")
         "image": ".jpg",
         # add more data types here
     }
-    return os.path.join(data_folder, f, f"{str(time)}{data_ext[data_type]}")
+    return os.path.join(data_folder,
+                        f,
+                        "visual_data",
+                        f"{str(time)}{data_ext[data_type]}")
 
 
 def yaw_rotmat(yaw: float) -> np.ndarray:

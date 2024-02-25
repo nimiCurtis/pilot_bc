@@ -3,6 +3,7 @@ import os
 import shutil
 import random
 
+PATH = os.path.dirname(__file__)
 
 def remove_files_in_dir(dir_path: str):
     for f in os.listdir(dir_path):
@@ -34,8 +35,12 @@ def main(args: argparse.Namespace):
     test_folder_names = folder_names[split_index:]
 
     # Create directories for the train and test sets
-    train_dir = os.path.join(args.data_splits_dir, args.dataset_name, "train")
-    test_dir = os.path.join(args.data_splits_dir, args.dataset_name, "test")
+    train_dir = os.path.join(PATH,
+                            args.data_splits_dir,
+                            args.dataset_name, "train")
+    test_dir = os.path.join(PATH,
+                            args.data_splits_dir,
+                            args.dataset_name, "test")
     for dir_path in [train_dir, test_dir]:
         if os.path.exists(dir_path):
             print(f"Clearing files from {dir_path} for new data split")
@@ -68,7 +73,7 @@ if __name__ == "__main__":
         "--split", "-s", type=float, default=0.8, help="Train/test split (default: 0.8)"
     )
     parser.add_argument(
-        "--data-splits-dir", "-o", default="vint_train/data/data_splits", help="Data splits directory"
+        "--data-splits-dir", "-o", default="../dataset", help="Data splits directory"
     )
     args = parser.parse_args()
     main(args)
