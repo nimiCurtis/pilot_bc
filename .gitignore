@@ -1,5 +1,16 @@
-*/__pycache__
-__pycache__
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
 pilot_train.egg-info
-.vscode
+
+.vscode/*
+*/.vscode/*
+
 pilot_dataset
+*.png
+*.jpg
+*.pth
+*.mp4
+*.gif
