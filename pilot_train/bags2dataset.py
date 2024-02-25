@@ -30,7 +30,7 @@ def main(args):
     bp.process_folder(config=process_config)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Visual Navigation Transformer")
+    parser = argparse.ArgumentParser(description="Bag Processing")
 
     # project setup
     parser.add_argument(
@@ -38,7 +38,8 @@ if __name__ == "__main__":
         "-c",
         default=os.path.join("config/process_bag_config.yaml"),
         type=str,
-        help="Path to the config file in train_config folder",
+        help="Path to the config file in config folder",
     )
+    
     args = parser.parse_args()
     main(args)
