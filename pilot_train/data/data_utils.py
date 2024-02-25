@@ -16,7 +16,6 @@ IMAGE_ASPECT_RATIO = (
 )  # all images are centered cropped to a 4:3 aspect ratio in training
 
 
-
 def get_data_path(data_folder: str, f: str, time: int, data_type: str = "image"):
     data_ext = {
         "image": ".jpg",
