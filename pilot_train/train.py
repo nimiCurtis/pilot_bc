@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader, ConcatDataset
 from torch.optim import Adam, AdamW
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
-# from warmup_scheduler import GradualWarmupScheduler
+from warmup_scheduler import GradualWarmupScheduler
 
 # from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 # from diffusers.optimization import get_scheduler
@@ -28,13 +28,13 @@ IMPORT YOUR MODEL HERE
 # from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 # from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 
+from pilot_train.models.vint.vint import ViNT
 
 # from vint_train.data.vint_dataset import ViNT_Dataset
-# from vint_train.training.train_eval_loop import (
-#     train_eval_loop,
-#     train_eval_loop_nomad,
-#     load_model,
-# )
+from pilot_train.training.train_eval_loop import (
+    train_eval_loop,
+    load_model,
+)
 
 from pilot_train.data.pilot_dataset import PilotDataset
 
@@ -150,11 +150,8 @@ def main(config):
             num_workers=0,
             drop_last=False,
         )
-    
-    ################
-    #### OSHER #####
-    ################
-    
+
+
     # Create the model
     # if config["model_type"] == "gnm":
     #     model = GNM(
@@ -164,18 +161,18 @@ def main(config):
     #         config["obs_encoding_size"],
     #         config["goal_encoding_size"],
     #     )
-    # elif config["model_type"] == "vint":
-    #     model = ViNT(
-    #         context_size=config["context_size"],
-    #         len_traj_pred=config["len_traj_pred"],
-    #         learn_angle=config["learn_angle"],
-    #         obs_encoder=config["obs_encoder"],
-    #         obs_encoding_size=config["obs_encoding_size"],
-    #         late_fusion=config["late_fusion"],
-    #         mha_num_attention_heads=config["mha_num_attention_heads"],
-    #         mha_num_attention_layers=config["mha_num_attention_layers"],
-    #         mha_ff_dim_factor=config["mha_ff_dim_factor"],
-    #     )
+    if config["model_type"] == "vint":
+        model = ViNT(
+            context_size=config["context_size"],
+            len_traj_pred=config["len_traj_pred"],
+            learn_angle=config["learn_angle"],
+            obs_encoder=config["obs_encoder"],
+            obs_encoding_size=config["obs_encoding_size"],
+            late_fusion=config["late_fusion"],
+            mha_num_attention_heads=config["mha_num_attention_heads"],
+            mha_num_attention_layers=config["mha_num_attention_layers"],
+            mha_ff_dim_factor=config["mha_ff_dim_factor"],
+        )
     # elif config["model_type"] == "nomad":
     #     if config["vision_encoder"] == "nomad_vint":
     #         vision_encoder = NoMaD_ViNT(
@@ -242,55 +239,55 @@ def main(config):
     #             )
     #         )
 
-    # lr = float(config["lr"])
-    # config["optimizer"] = config["optimizer"].lower()
-    # if config["optimizer"] == "adam":
-    #     optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.98))
-    # elif config["optimizer"] == "adamw":
-    #     optimizer = AdamW(model.parameters(), lr=lr)
-    # elif config["optimizer"] == "sgd":
-    #     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    # else:
-    #     raise ValueError(f"Optimizer {config['optimizer']} not supported")
+    lr = float(config["lr"])
+    config["optimizer"] = config["optimizer"].lower()
+    if config["optimizer"] == "adam":
+        optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.98))
+    elif config["optimizer"] == "adamw":
+        optimizer = AdamW(model.parameters(), lr=lr)
+    elif config["optimizer"] == "sgd":
+        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
+    else:
+        raise ValueError(f"Optimizer {config['optimizer']} not supported")
 
-    # scheduler = None
-    # if config["scheduler"] is not None:
-    #     config["scheduler"] = config["scheduler"].lower()
-    #     if config["scheduler"] == "cosine":
-    #         print("Using cosine annealing with T_max", config["epochs"])
-    #         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #             optimizer, T_max=config["epochs"]
-    #         )
-    #     elif config["scheduler"] == "cyclic":
-    #         print("Using cyclic LR with cycle", config["cyclic_period"])
-    #         scheduler = torch.optim.lr_scheduler.CyclicLR(
-    #             optimizer,
-    #             base_lr=lr / 10.,
-    #             max_lr=lr,
-    #             step_size_up=config["cyclic_period"] // 2,
-    #             cycle_momentum=False,
-    #         )
-    #     elif config["scheduler"] == "plateau":
-    #         print("Using ReduceLROnPlateau")
-    #         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #             optimizer,
-    #             factor=config["plateau_factor"],
-    #             patience=config["plateau_patience"],
-    #             verbose=True,
-    #         )
-    #     else:
-    #         raise ValueError(f"Scheduler {config['scheduler']} not supported")
+    scheduler = None
+    if config["scheduler"] is not None:
+        config["scheduler"] = config["scheduler"].lower()
+        if config["scheduler"] == "cosine":
+            print("Using cosine annealing with T_max", config["epochs"])
+            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=config["epochs"]
+            )
+        elif config["scheduler"] == "cyclic":
+            print("Using cyclic LR with cycle", config["cyclic_period"])
+            scheduler = torch.optim.lr_scheduler.CyclicLR(
+                optimizer,
+                base_lr=lr / 10.,
+                max_lr=lr,
+                step_size_up=config["cyclic_period"] // 2,
+                cycle_momentum=False,
+            )
+        elif config["scheduler"] == "plateau":
+            print("Using ReduceLROnPlateau")
+            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                factor=config["plateau_factor"],
+                patience=config["plateau_patience"],
+                verbose=True,
+            )
+        else:
+            raise ValueError(f"Scheduler {config['scheduler']} not supported")
 
-    #     if config["warmup"]:
-    #         print("Using warmup scheduler")
-    #         scheduler = GradualWarmupScheduler(
-    #             optimizer,
-    #             multiplier=1,
-    #             total_epoch=config["warmup_epochs"],
-    #             after_scheduler=scheduler,
-    #         )
+        if config["warmup"]:
+            print("Using warmup scheduler")
+            scheduler = GradualWarmupScheduler(
+                optimizer,
+                multiplier=1,
+                total_epoch=config["warmup_epochs"],
+                after_scheduler=scheduler,
+            )
 
-    # current_epoch = 0
+    current_epoch = 0
     # if "load_run" in config:
     #     load_project_folder = os.path.join("logs", config["load_run"])
     #     print("Loading model from ", load_project_folder)
@@ -311,28 +308,28 @@ def main(config):
     #     if scheduler is not None and "scheduler" in latest_checkpoint:
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    # if config["model_type"] == "vint" or config["model_type"] == "gnm": 
-    #     train_eval_loop(
-    #         train_model=config["train"],
-    #         model=model,
-    #         optimizer=optimizer,
-    #         scheduler=scheduler,
-    #         dataloader=train_loader,
-    #         test_dataloaders=test_dataloaders,
-    #         transform=transform,
-    #         epochs=config["epochs"],
-    #         device=device,
-    #         project_folder=config["project_folder"],
-    #         normalized=config["normalize"],
-    #         print_log_freq=config["print_log_freq"],
-    #         image_log_freq=config["image_log_freq"],
-    #         num_images_log=config["num_images_log"],
-    #         current_epoch=current_epoch,
-    #         learn_angle=config["learn_angle"],
-    #         alpha=config["alpha"],
-    #         use_wandb=config["use_wandb"],
-    #         eval_fraction=config["eval_fraction"],
-    #     )
+    if config["model_type"] == "vint" or config["model_type"] == "gnm":
+        train_eval_loop(
+            train_model=config["train"],
+            model=model,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            dataloader=train_loader,
+            test_dataloaders=test_dataloaders,
+            transform=transform,
+            epochs=config["epochs"],
+            device=device,
+            project_folder=config["project_folder"],
+            normalized=config["normalize"],
+            print_log_freq=config["print_log_freq"],
+            image_log_freq=config["image_log_freq"],
+            num_images_log=config["num_images_log"],
+            current_epoch=current_epoch,
+            learn_angle=config["learn_angle"],
+            alpha=config["alpha"],
+            use_wandb=config["use_wandb"],
+            eval_fraction=config["eval_fraction"],
+        )
     # else:
     #     train_eval_loop_nomad(
     #         train_model=config["train"],
