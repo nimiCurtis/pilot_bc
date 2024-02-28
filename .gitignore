@@ -12,9 +12,12 @@ pilot_dataset
 */wandb
 wandb
 wandb/
+*/logs
+logs
 
 *.png
 *.jpg
 *.pth
 *.mp4
 *.gif
+*.pth
