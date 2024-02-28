@@ -7,7 +7,7 @@ import wandb
 import yaml
 import torch
 import torch.nn as nn
-from vint_train.visualizing.visualize_utils import (
+from pilot_train.visualizing.visualize_utils import (
     to_numpy,
     numpy_to_img,
     VIZ_IMAGE_SIZE,

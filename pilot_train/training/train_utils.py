@@ -131,8 +131,8 @@ def _log_data(
             if i % print_log_freq == 0 and print_log_freq != 0:
                 print(f"(epoch {epoch}) {logger.full_name()} {logger.average()}")
 
-    if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
-        wandb.log(data_log, commit=wandb_increment_step)
+    # if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
+    #     wandb.log(data_log, commit=wandb_increment_step)
 
     if image_log_freq != 0 and i % image_log_freq == 0:
         visualize_dist_pred(

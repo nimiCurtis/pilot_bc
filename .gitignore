@@ -9,6 +9,10 @@ venv
 */.vscode/*
 
 pilot_dataset
+*/wandb
+wandb
+wandb/
+
 *.png
 *.jpg
 *.pth

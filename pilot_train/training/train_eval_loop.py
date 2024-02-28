@@ -5,7 +5,7 @@ from typing import List, Optional, Dict
 from prettytable import PrettyTable
 
 from pilot_train.training.train_utils import train, evaluate
-from pilot_train.training.train_utils import train_nomad, evaluate_nomad
+#from pilot_train.training.train_utils import train_nomad, evaluate_nomad
 
 import torch
 import torch.nn as nn

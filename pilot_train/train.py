@@ -300,7 +300,7 @@ def main(config):
     # # Multi-GPU
     # if len(config["gpu_ids"]) > 1:
     #     model = nn.DataParallel(model, device_ids=config["gpu_ids"])
-    # model = model.to(device)
+    model = model.to(device)
 
     # if "load_run" in config:  # load optimizer and scheduler after data parallel
     #     if "optimizer" in latest_checkpoint:
@@ -394,6 +394,19 @@ if __name__ == "__main__":
             "project_folder"
         ],  # should error if dir already exists to avoid overwriting and old project
     )
+    
+    if config["use_wandb"]:
+        wandb.login()
+        wandb.init(
+            project=config["project_name"],
+            settings=wandb.Settings(start_method="fork"),
+            entity="pilottau", # TODO: change this to your wandb entity
+        )
+        wandb.save(args.config, policy="now")  # save the config file
+        wandb.run.name = config["run_name"]
+        # update the wandb args with the training configurations
+        if wandb.run:
+            wandb.config.update(config)
 
     print(config)
     main(config)
