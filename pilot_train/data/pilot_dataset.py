@@ -275,7 +275,7 @@ class PilotDataset(Dataset):
             actions = waypoints[1:]
 
         if self.normalize:
-            actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
+            actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
             goal_pos /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
 
         assert actions.shape == (self.len_traj_pred, self.num_action_params), f"{actions.shape} and {(self.len_traj_pred, self.num_action_params)} should be equal"
@@ -288,7 +288,7 @@ class PilotDataset(Dataset):
         else:
             with open(os.path.join(self.data_folder, trajectory_name, "traj_data.json"), "rb") as f:
                 traj_data = json.load(f)
-            self.trajectory_cache[trajectory_name] = traj_data['odom_frame'] ##### change this
+            self.trajectory_cache[trajectory_name] = traj_data['odom_frame'] ##### change this TODO: check
             return traj_data['odom_frame']
 
     def __len__(self) -> int:
@@ -309,7 +309,7 @@ class PilotDataset(Dataset):
         # self.index_to_data[i] = (traj_name, curr_time, max_goal_distance)
         f_curr, curr_time, max_goal_dist = self.index_to_data[i]
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
-        # goal is negative ??? 
+        # goal is negative ??? TODO : check
 
         # Load images
         context = []
@@ -364,13 +364,13 @@ class PilotDataset(Dataset):
         )
 
         return (
-            torch.as_tensor(obs_image, dtype=torch.float32),
-            torch.as_tensor(goal_image, dtype=torch.float32),
-            actions_torch,
+            torch.as_tensor(obs_image, dtype=torch.float32), # [C*(context+1),H,W]
+            torch.as_tensor(goal_image, dtype=torch.float32), # [3,H,W]
+            actions_torch,  # [trej_len_pred,4]
             torch.as_tensor(distance, dtype=torch.int64),
             torch.as_tensor(goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
-        )
+        ) 
 
 

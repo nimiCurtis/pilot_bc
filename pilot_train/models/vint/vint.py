@@ -138,7 +138,7 @@ class ViNT(BaseModel):
         assert goal_encoding.shape[2] == self.goal_encoding_size
 
         # split the observation into context based on the context size
-        # image size is [batch_size, 3*self.context_size, H, W]
+        # image size is [batch_size, C*self.context_size, H, W]
         obs_img = torch.split(obs_img, 3, dim=1)
 
         # image size is [batch_size*self.context_size, 3, H, W]

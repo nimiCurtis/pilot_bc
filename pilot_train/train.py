@@ -127,8 +127,7 @@ def main(config):
     # combine all the datasets from different robots
     train_dataset = ConcatDataset(train_dataset)
 
-    # check one sample 
-    a = train_dataset[250]
+
     
     train_loader = DataLoader(
         train_dataset,

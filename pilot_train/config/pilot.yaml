@@ -13,7 +13,7 @@ optimizer: adamw
 clipping: False
 max_norm: 1.
 scheduler: "cosine"
-warmup: True 
+warmup: False 
 warmup_epochs: 4
 cyclic_period: 10
 plateau_patience: 3

@@ -25,11 +25,11 @@ import matplotlib.pyplot as plt
 # LOAD DATA CONFIG
 with open(os.path.join(os.path.dirname(__file__), "../data/data_config.yaml"), "r") as f:
     data_config = yaml.safe_load(f)
+
 # POPULATE ACTION STATS
 ACTION_STATS = {}
 for key in data_config['action_stats']:
     ACTION_STATS[key] = np.array(data_config['action_stats'][key])
-
 
 # Train utils for ViNT and GNM
 def _compute_losses(
