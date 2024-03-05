@@ -25,6 +25,12 @@ from pilot_train.data.data_utils import (
     to_local_coords,
 )
 
+from pilot_train.utils.utils import (
+    get_action,
+    get_delta,
+    normalize_data,
+)
+
 class PilotDataset(Dataset):
     def __init__(
         self,
@@ -183,6 +189,7 @@ class PilotDataset(Dataset):
 
         for traj_name in tqdm.tqdm(self.traj_names, disable=not use_tqdm, dynamic_ncols=True):
             traj_data = self._get_trajectory(traj_name)
+            properties = self._get_properties(traj_name) ## added
             traj_len = len(traj_data["position"])
 
             for goal_time in range(0, traj_len):
@@ -192,9 +199,11 @@ class PilotDataset(Dataset):
             end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
             for curr_time in range(begin_time, end_time):
                 max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1)
-                samples_index.append((traj_name, curr_time, max_goal_distance))
+                samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
         return samples_index, goals_index
+
+
 
     def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
         """
@@ -246,7 +255,7 @@ class PilotDataset(Dataset):
         except TypeError:
             print(f"Failed to load image {image_path}")
 
-    def _compute_actions(self, traj_data, curr_time, goal_time):
+    def _compute_actions(self, traj_data, curr_time, goal_time, action_stats):
         start_index = curr_time
         end_index = curr_time + self.len_traj_pred * self.waypoint_spacing + 1
         yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
@@ -269,19 +278,29 @@ class PilotDataset(Dataset):
         assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
         if self.learn_angle:
-            yaw = yaw[1:] - yaw[0]
-            actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1)
+            yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw
+            actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1) 
         else:
             actions = waypoints[1:]
 
-        if self.normalize:
-            actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
+        if self.normalize: 
+            #Ours
+            ## only for pos
+            actions_deltas = get_delta(actions[:, :2])
+            normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
+            actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=1)
+            
+            # goal_delta = get_delta()
+            ## do the same for yaw?? 
+            
+            #VinT
+            #actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
             goal_pos /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
 
         assert actions.shape == (self.len_traj_pred, self.num_action_params), f"{actions.shape} and {(self.len_traj_pred, self.num_action_params)} should be equal"
 
         return actions, goal_pos
-
+    
     def _get_trajectory(self, trajectory_name):
         if trajectory_name in self.trajectory_cache:
             return self.trajectory_cache[trajectory_name]
@@ -307,7 +326,7 @@ class PilotDataset(Dataset):
         """
 
         # self.index_to_data[i] = (traj_name, curr_time, max_goal_distance)
-        f_curr, curr_time, max_goal_dist = self.index_to_data[i]
+        f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
         # goal is negative ??? TODO : check
 
@@ -343,9 +362,11 @@ class PilotDataset(Dataset):
         assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
 
         # Compute actions
+        action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
         ###### here setting the goal time to constant
-        actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
-        
+        #actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
+        actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
+
         # Compute distances
         if goal_is_negative:
             distance = self.max_dist_cat
@@ -371,6 +392,30 @@ class PilotDataset(Dataset):
             torch.as_tensor(goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
-        ) 
+        )
 
+    ## added
+    def _get_properties(self,trajectory_name):
+        
+        with open(os.path.join(self.data_folder, trajectory_name, "metadata.json"), "rb") as f:
+                meta_data = json.load(f)
+                robot = meta_data['demonstrator']
+                frame_rate = meta_data['sync_rate']
+                
+        return {
+            'robot': robot,
+            'frame_rate': frame_rate
+        }
 
+    ## added
+    def _get_action_stats(self,properties, waypoint_spacing):
+        #robot = properties['robot']
+        frame_rate = properties['frame_rate']
+
+        lin_vel_lim = self.data_config['max_lin_vel']
+        ang_vel_lim = self.data_config['max_ang_vel']
+        
+        return {'pos': {'max': (lin_vel_lim / frame_rate)*waypoint_spacing,
+                        'min': -(lin_vel_lim /frame_rate)*waypoint_spacing},
+                'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
+                        'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}

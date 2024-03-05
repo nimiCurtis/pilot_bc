@@ -37,10 +37,10 @@ def main(args: argparse.Namespace):
     # Create directories for the train and test sets
     train_dir = os.path.join(PATH,
                             args.data_splits_dir,
-                            args.dataset_name, "train")
+                            args.robot_name, "train")
     test_dir = os.path.join(PATH,
                             args.data_splits_dir,
-                            args.dataset_name, "test")
+                            args.robot_name, "test")
     for dir_path in [train_dir, test_dir]:
         if os.path.exists(dir_path):
             print(f"Clearing files from {dir_path} for new data split")
@@ -58,7 +58,6 @@ def main(args: argparse.Namespace):
         for folder_name in test_folder_names:
             f.write(folder_name + "\n")
 
-
 if __name__ == "__main__":
     # Set up the command line argument parser
     parser = argparse.ArgumentParser()
@@ -66,9 +65,11 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data-dir", "-i", help="Directory containing the data", required=True
     )
+    
     parser.add_argument(
-        "--dataset-name", "-d", help="Name of the dataset", required=True
+        "--robot-name", "-r", help="Name of the dataset", required=True
     )
+    
     parser.add_argument(
         "--split", "-s", type=float, default=0.8, help="Train/test split (default: 0.8)"
     )

@@ -60,7 +60,7 @@ def to_local_coords(
 
     return (positions - curr_pos).dot(rotmat)
 
-
+## why he did that ??
 def calculate_deltas(waypoints: torch.Tensor) -> torch.Tensor:
     """
     Calculate deltas between waypoints

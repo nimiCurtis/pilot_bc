@@ -30,6 +30,7 @@ mha_ff_dim_factor: 4
 late_fusion: False
 
 # normalization for the action space
+# normalization in the dataset class at data/pilot_dataset.py
 normalize: True
 
 # context
@@ -57,12 +58,12 @@ image_size: [85, 64] # width, height
 goal_type: "image"
 
 datasets:
-  turtle:
+  turtlebot:
     data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/dataset 
                 # abs path to the dataset folder
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtle/train
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/train
           # path to train folder with traj_names.txt
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtle/test
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/test
           # path to test folder with traj_names.txt
 
     end_slack: 3 # because many trajectories end in collisions

@@ -55,9 +55,11 @@ def _compute_losses(
         return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 
     # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
+    # This is the actual losses
     assert action_pred.shape == action_label.shape, f"{action_pred.shape} != {action_label.shape}"
     action_loss = action_reduce(F.mse_loss(action_pred, action_label, reduction="none"))
 
+    # Other losses for logger
     action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
         action_pred[:, :, :2], action_label[:, :, :2], dim=-1
     ))
@@ -256,6 +258,7 @@ def train(
         model_outputs = model(obs_image, goal_image)
 
         dist_label = dist_label.to(device)
+        
         action_label = action_label.to(device)
         action_mask = action_mask.to(device)
 

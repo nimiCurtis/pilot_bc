@@ -5,5 +5,8 @@ action_stats:
   max: [5, 4] # [max_dx, max_dy]
 
 # data specific params
-turtle:
-  metric_waypoint_spacing: 0.25 # average spacing between waypoints (meters)
+turtlebot:
+  metric_waypoint_spacing: 0.25 ## <<< it has no meaning right now # average spacing between waypoints (meters)
+  ## added 
+  max_lin_vel: 0.25 # [meter/sec]
+  max_ang_vel: 2.8 # [rad/sec]
