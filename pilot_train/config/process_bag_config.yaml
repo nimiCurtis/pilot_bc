@@ -1,8 +1,8 @@
 # bags_folder: "/home/roblab20/catkin_ws/src/zion_ros/zion_zed_ros_interface/bag"
-bags_folder: "/home/roblab20/dev/pilot/bagtool/bagtool/bag"
+bags_folder: "/media/roblab20/My\ Passport/bags_pilot"
 destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/dataset"
 
-save_raw: false                        # I dont see a reason why to set it to false
+save_raw: true                        # I dont see a reason why to set it to false
 
 nimrod:                               # dataset name
   aligned_topics: ["odom", "rgb"]     # pick topics to be aligned
