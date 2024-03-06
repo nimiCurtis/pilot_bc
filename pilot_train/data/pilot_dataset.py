@@ -203,8 +203,6 @@ class PilotDataset(Dataset):
 
         return samples_index, goals_index
 
-
-
     def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
         """
         Sample a goal from the future in the same trajectory.
@@ -213,6 +211,7 @@ class PilotDataset(Dataset):
         
         goal_offset = np.random.randint(0, max_goal_dist + 1)
         if goal_offset == 0:
+
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
         else:

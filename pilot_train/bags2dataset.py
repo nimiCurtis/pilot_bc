@@ -26,6 +26,12 @@ def main(args):
     config_path = args.config
     with open(config_path, 'r') as file:
             process_config = yaml.safe_load(file)
+            config_string = yaml.dump(process_config)
+    
+    print("Start processing bags into a dataset!")
+    print("\nConfig:\n")
+    print(config_string)
+    print("")
     
     bp.process_folder(config=process_config)
 
@@ -40,6 +46,7 @@ if __name__ == "__main__":
         type=str,
         help="Path to the config file in config folder",
     )
+    
     
     args = parser.parse_args()
     main(args)
