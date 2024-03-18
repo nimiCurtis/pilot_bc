@@ -6,7 +6,7 @@ run_name: vint
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
 batch_size: 400
-eval_batch_size: 400
+eval_batch_size: 64
 epochs: 30
 gpu_ids: [0] 
 num_workers: 4

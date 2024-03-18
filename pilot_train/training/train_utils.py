@@ -38,6 +38,7 @@ def _compute_losses(
         dist_pred: torch.Tensor,
         action_pred: torch.Tensor,
         alpha: float,
+        beta:float,
         learn_angle: bool,
         action_mask: torch.Tensor = None,
 ):
@@ -89,7 +90,7 @@ def _compute_losses(
         results["action_orien_cos_sim"] = action_orien_cos_sim
         results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
 
-    total_loss = alpha * 1e-2 * dist_loss + (1 - alpha) * action_loss
+    total_loss = alpha * 1e-2 * dist_loss + beta * (1 - alpha) * action_loss
     results["total_loss"] = total_loss
 
     return results
@@ -133,8 +134,8 @@ def _log_data(
             if i % print_log_freq == 0 and print_log_freq != 0:
                 print(f"(epoch {epoch}) {logger.full_name()} {logger.average()}")
 
-    # if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
-    #     wandb.log(data_log, commit=wandb_increment_step)
+    if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
+        wandb.log(data_log, commit=wandb_increment_step)
 
     if image_log_freq != 0 and i % image_log_freq == 0:
         visualize_dist_pred(
@@ -174,6 +175,7 @@ def train(
         normalized: bool,
         epoch: int,
         alpha: float = 0.5,
+        beta: float = 10.,
         learn_angle: bool = True,
         print_log_freq: int = 100,
         wandb_log_freq: int = 10,
@@ -181,6 +183,7 @@ def train(
         num_images_log: int = 8,
         use_wandb: bool = True,
         use_tqdm: bool = True,
+        goal_condition = True
 ):
     """
     Train the model for one epoch.
@@ -272,6 +275,7 @@ def train(
             dist_pred=dist_pred,
             action_pred=action_pred,
             alpha=alpha,
+            beta = beta,
             learn_angle=learn_angle,
             action_mask=action_mask,
         )
@@ -319,12 +323,13 @@ def evaluate(
         normalized: bool,
         epoch: int = 0,
         alpha: float = 0.5,
+        beta: float = 10.,
         learn_angle: bool = True,
         num_images_log: int = 8,
         use_wandb: bool = True,
         eval_fraction: float = 1.0,
         use_tqdm: bool = True,
-
+        goal_condition = True
 ):
     """
     Evaluate the model on the given evaluation dataset.
@@ -409,6 +414,7 @@ def evaluate(
                 dist_pred=dist_pred,
                 action_pred=action_pred,
                 alpha=alpha,
+                beta=beta,
                 learn_angle=learn_angle,
                 action_mask=action_mask,
             )

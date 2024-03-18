@@ -4,11 +4,11 @@ run_name: pilot-turtle-linefollow
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 24
-epochs: 100
+batch_size: 16
+epochs: 20
 gpu_ids: [0]
 num_workers: 12
-lr: 5e-4
+lr: 1e-4 # 5e-4
 optimizer: adamw
 clipping: False
 max_norm: 1.
@@ -19,6 +19,7 @@ cyclic_period: 10
 plateau_patience: 3
 plateau_factor: 0.5
 seed: 42
+goal_condition: True
 
 # model params
 model_type: vint
@@ -39,6 +40,7 @@ context_size: 5
 
 # tradeoff between action and distance prediction loss
 alpha: 0.5
+beta: 10
 
 # distance bounds for distance and action and distance predictions 
 distance:

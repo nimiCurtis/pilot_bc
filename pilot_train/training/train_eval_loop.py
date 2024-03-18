@@ -34,9 +34,11 @@ def train_eval_loop(
         num_images_log: int = 8,
         current_epoch: int = 0,
         alpha: float = 0.5,
+        beta: float = 10.,
         learn_angle: bool = True,
         use_wandb: bool = True,
         eval_fraction: float = 0.25,
+        goal_condition = True
 ):
     """
     Train and evaluate the model for several epochs (vint or gnm models)
@@ -81,12 +83,14 @@ def train_eval_loop(
                 normalized=normalized,
                 epoch=epoch,
                 alpha=alpha,
+                beta=beta,
                 learn_angle=learn_angle,
                 print_log_freq=print_log_freq,
                 wandb_log_freq=wandb_log_freq,
                 image_log_freq=image_log_freq,
                 num_images_log=num_images_log,
                 use_wandb=use_wandb,
+                goal_condition=goal_condition
             )
 
         avg_total_test_loss = []
@@ -106,10 +110,12 @@ def train_eval_loop(
                 normalized=normalized,
                 epoch=epoch,
                 alpha=alpha,
+                beta=beta,
                 learn_angle=learn_angle,
                 num_images_log=num_images_log,
                 use_wandb=use_wandb,
                 eval_fraction=eval_fraction,
+                goal_condition=goal_condition
             )
 
             avg_total_test_loss.append(total_eval_loss)

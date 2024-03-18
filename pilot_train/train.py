@@ -128,7 +128,6 @@ def main(config):
     train_dataset = ConcatDataset(train_dataset)
 
 
-    
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
@@ -171,6 +170,7 @@ def main(config):
             mha_num_attention_heads=config["mha_num_attention_heads"],
             mha_num_attention_layers=config["mha_num_attention_layers"],
             mha_ff_dim_factor=config["mha_ff_dim_factor"],
+            goal_condition=config["goal_condition"]
         )
     # elif config["model_type"] == "nomad":
     #     if config["vision_encoder"] == "nomad_vint":
@@ -325,9 +325,11 @@ def main(config):
             num_images_log=config["num_images_log"],
             current_epoch=current_epoch,
             learn_angle=config["learn_angle"],
-            alpha=config["alpha"],
+            alpha=config["alpha"] if config["goal_condition"] else 0,
+            beta=config["beta"],
             use_wandb=config["use_wandb"],
             eval_fraction=config["eval_fraction"],
+            goal_condition = config["goal_condition"]
         )
     # else:
     #     train_eval_loop_nomad(

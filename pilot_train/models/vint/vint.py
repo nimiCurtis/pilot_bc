@@ -62,6 +62,7 @@ class ViNT(BaseModel):
             mha_num_attention_heads: Optional[int] = 2,
             mha_num_attention_layers: Optional[int] = 2,
             mha_ff_dim_factor: Optional[int] = 4,
+            goal_condition = True
     ) -> None:
         """
         ViNT class: uses a Transformer-based architecture to encode (current and past) visual observations
@@ -78,7 +79,10 @@ class ViNT(BaseModel):
         super(ViNT, self).__init__(context_size, len_traj_pred, learn_angle)
         self.obs_encoding_size = obs_encoding_size
         self.goal_encoding_size = obs_encoding_size
-
+        
+        self.goal_condition = goal_condition
+        seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
+        
         self.late_fusion = late_fusion
         if obs_encoder.split("-")[0] == "efficientnet":
             self.obs_encoder = EfficientNet.from_name(obs_encoder, in_channels=3)  # context
@@ -103,7 +107,7 @@ class ViNT(BaseModel):
 
         self.decoder = MultiLayerDecoder(
             embed_dim=self.obs_encoding_size,
-            seq_len=self.context_size + 2,
+            seq_len=seq_len,
             output_layers=[256, 128, 64, 32],
             nhead=mha_num_attention_heads,
             num_layers=mha_num_attention_layers,
@@ -162,10 +166,10 @@ class ViNT(BaseModel):
         # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
         # concatenate the goal encoding to the observation encoding
-        tokens = torch.cat((obs_encoding, goal_encoding), dim=1)
+        tokens = torch.cat((obs_encoding, goal_encoding), dim=1) if self.goal_condition else obs_encoding
         final_repr = self.decoder(tokens)
-        # currently, the size is [batch_size, 32]
 
+        # currently, the size is [batch_size, 32]
         dist_pred = self.dist_predictor(final_repr)
         action_pred = self.action_predictor(final_repr)
 

@@ -273,7 +273,8 @@ class PilotDataset(Dataset):
         assert positions.shape == (self.len_traj_pred + 1, 2), f"{positions.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
         waypoints = to_local_coords(positions, positions[0], yaw[0])
-
+        goal_in_local = to_local_coords(goal_pos, positions[0],yaw[0])
+        
         assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
         if self.learn_angle:
@@ -288,13 +289,14 @@ class PilotDataset(Dataset):
             actions_deltas = get_delta(actions[:, :2])
             normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
             actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=1)
-            
-            # goal_delta = get_delta()
-            ## do the same for yaw?? 
-            
+
+            # goal in local is already the delta from the current pos
+            normalized_goal_delta = normalize_data(goal_in_local, action_stats['pos'])
+            goal_pos = normalized_goal_delta
+
             #VinT
             #actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
-            goal_pos /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
+            #goal_pos = self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
 
         assert actions.shape == (self.len_traj_pred, self.num_action_params), f"{actions.shape} and {(self.len_traj_pred, self.num_action_params)} should be equal"
 
