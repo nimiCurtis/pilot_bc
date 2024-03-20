@@ -1,0 +1,6 @@
+
+# data specific params
+turtlebot:
+  ## added 
+  max_lin_vel: 0.25 # [meter/sec]
+  max_ang_vel: 2.8 # [rad/sec]

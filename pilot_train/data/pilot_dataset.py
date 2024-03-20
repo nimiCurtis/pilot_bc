@@ -97,7 +97,6 @@ class PilotDataset(Dataset):
             self.distance_categories.append(-1)
         self.len_traj_pred = len_traj_pred
         self.learn_angle = learn_angle
-
         self.min_action_distance = min_action_distance
         self.max_action_distance = max_action_distance
 
@@ -211,7 +210,6 @@ class PilotDataset(Dataset):
         
         goal_offset = np.random.randint(0, max_goal_dist + 1)
         if goal_offset == 0:
-
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
         else:
@@ -402,7 +400,7 @@ class PilotDataset(Dataset):
                 meta_data = json.load(f)
                 robot = meta_data['demonstrator']
                 frame_rate = meta_data['sync_rate']
-                
+
         return {
             'robot': robot,
             'frame_rate': frame_rate

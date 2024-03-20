@@ -166,6 +166,8 @@ class ViNT(BaseModel):
         # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
         # concatenate the goal encoding to the observation encoding
+        
+        ## if not goal condition send only the encoding of the observations
         tokens = torch.cat((obs_encoding, goal_encoding), dim=1) if self.goal_condition else obs_encoding
         final_repr = self.decoder(tokens)
 

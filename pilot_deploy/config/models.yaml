@@ -1,0 +1,4 @@
+pilot: 
+  config_path: "../../pilot_train/config/pilot.yaml"
+  ckpt_path: "../checkpoints/pilot-turtle-linefollow_2024_03_06_13_31_24/latest.pth"
+

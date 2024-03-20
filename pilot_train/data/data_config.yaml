@@ -11,7 +11,7 @@ turtlebot:
   max_lin_vel: 0.25 # [meter/sec]
   max_ang_vel: 2.8 # [rad/sec]
 
-    # OPTIONAL (FOR VISUALIZATION ONLY)
+  # OPTIONAL (FOR VISUALIZATION ONLY)
   camera_metrics: # https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
     camera_height: 0.18 # meters
     camera_x_offset: 0.035 # distance between the center of the robot and the forward facing camera
