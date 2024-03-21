@@ -10,7 +10,11 @@ from pilot_train.models.vint.vint import ViNT
 from pilot_train.data.pilot_dataset import PilotDataset
 from torchvision import transforms
 
-from utils import unnormalize_data, to_numpy, transform_images, get_delta, calculate_sin_cos
+from .utils import (tic, toc, unnormalize_data,
+                    to_numpy,
+                    transform_images,
+                    get_delta,
+                    calculate_sin_cos)
 
 class InferenceDataset(PilotDataset):
     def __init__(self, config_path):
@@ -55,6 +59,7 @@ class InferenceDataset(PilotDataset):
 
         # self.index_to_data[i] = (traj_name, curr_time, max_goal_distance)
         f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
+        print(f"collect from: {f_curr} | sample number: {curr_time}")
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
         # goal is negative ??? TODO : check
 
@@ -111,8 +116,6 @@ class InferenceDataset(PilotDataset):
             actions_torch,  # [trej_len_pred,4]
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
         )
-        
-
 
 
 
@@ -197,26 +200,24 @@ class InferenceModel:
         :return: The prediction made by the model.
         """
 
-        # transf_obs_img = transform_images(context_queue, self.model_config["image_size"])
-
+        context_queue_torch = transform_images(context_queue, self.model_config["image_size"])
+        # context_queue_torch = context_queue.unsqueeze(0)
         # has no meaning when goal condition=false
-        
-        
-        obs_images = torch.split(context_queue.unsqueeze(0), 3, dim=1)
-        obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
+        context_queue_torch = context_queue_torch.to(self.device)
+        obs_images = torch.split(context_queue_torch, 3, dim=1)
         obs_images = torch.cat(obs_images, dim=1)
 
         ## has no meaning
-        goal_image = obs_images[0][:3].unsqueeze(0)
+        goal_image = obs_images[-1][:3].unsqueeze(0)
 
         # infer model
         with torch.no_grad():
             distances, torch_normalized_waypoints = self.model(obs_images, goal_image)
-        
+
         # to numpy
         distances = to_numpy(distances)
         normalized_waypoints = to_numpy(torch_normalized_waypoints)
-        
+
         waypoint = self._get_waypoint(normalized_waypoints)
         
         return waypoint
@@ -230,9 +231,9 @@ class InferenceModel:
                             'min': -(lin_vel_lim /frame_rate)},
                     'yaw': {'max': (ang_vel_lim /frame_rate),
                             'min': -(ang_vel_lim /frame_rate)}}
-    
+
     def _get_waypoint(self,normalized_waypoints):
-        
+
         # get delta from current position
         cos_sin_angle = normalized_waypoints[0][:,2:][self.wpt_id]
         ndeltas = get_delta(normalized_waypoints[0][:,:2])
@@ -249,14 +250,32 @@ def main():
 
     data_config_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/config/pilot.yaml"
     dataset = InferenceDataset(data_config_path)
-    context_queue, gt_waypoints, dataset_index = dataset[110]
+    
     config_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_deploy/config/config.yaml"
     model = InferenceModel(config_path=config_path)
+    
+    dt_sum = 0
+    size = 800
+    # size = len(dataset)
+    for i in range(200,size):
+        context_queue, gt_waypoints, dataset_index = dataset[i]
+        
+        gt_waypoints = to_numpy(gt_waypoints)
+        gt_waypoints = np.array([gt_waypoints])
+        gt_waypoint = model._get_waypoint(gt_waypoints)
 
-    waypoint = model.predict(context_queue)
-    print(waypoint)
-
-
+        t = tic()
+        waypoint = model.predict(context_queue)
+        dt = toc(t)
+        print(f"infer: dataset index: {dataset_index} | sample: {i}")
+        print(f"wpt predicted: {np.round(waypoint,5)}")
+        print(f"wpt gt: {np.round(gt_waypoint,5)}")
+        print(f"inference time: {dt}[sec]")
+        print()
+        if(i>0):
+            dt_sum+=dt
+    dt_avg = dt_sum / (size-1)
+    print(f"inference time avg: {dt_avg}[sec]")
 
 if __name__ == "__main__":
     main()

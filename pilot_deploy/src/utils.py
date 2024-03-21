@@ -8,7 +8,7 @@ from PIL import Image as PILImage
 from typing import List, Tuple, Dict, Optional
 from pilot_train.data.data_utils import IMAGE_ASPECT_RATIO
 from sensor_msgs.msg import Image
-
+import time
 
 def calculate_sin_cos(waypoints):
     """
@@ -32,10 +32,10 @@ def calculate_sin_cos(waypoints):
     cos_angle = library.cos(angle)
 
     if library is torch:
-        angle_repr = torch.stack((sin_angle, cos_angle), dim=1)
+        angle_repr = torch.stack((cos_angle, sin_angle), dim=1)
         return torch.cat((waypoints[:, :2], angle_repr), dim=1)
     else:
-        angle_repr = np.stack((sin_angle, cos_angle), axis=1)
+        angle_repr = np.stack((cos_angle, sin_angle), axis=1)
         return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
 
 
@@ -74,6 +74,10 @@ def transform_images(pil_imgs: List[PILImage.Image], image_size: List[int], cent
         pil_imgs = [pil_imgs]
     transf_imgs = []
     for pil_img in pil_imgs:
+        
+        if pil_img.mode == 'RGBA':
+            pil_img = pil_img.convert('RGB')
+
         w, h = pil_img.size
         if center_crop:
             if w > h:
@@ -105,7 +109,9 @@ def normalize_data(data, stats):
 
 
 def unnormalize_data(ndata, stats):
+    # back to [0, 1]
     ndata = (ndata + 1) / 2
+    # back to [min, max] 
     data = ndata * (stats['max'] - stats['min']) + stats['min']
     return data
 
@@ -116,4 +122,11 @@ def get_delta(actions):
     ex_actions = np.concatenate([np.zeros((1, actions.shape[-1])), actions], axis=0)
     delta = ex_actions[1:,:] - ex_actions[:-1,:]
     return delta
+
+def tic():
+    return time.time()
+
+
+def toc(t):
+    return float(tic()) - float(t)
 

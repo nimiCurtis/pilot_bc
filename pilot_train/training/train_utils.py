@@ -26,10 +26,10 @@ import matplotlib.pyplot as plt
 with open(os.path.join(os.path.dirname(__file__), "../data/data_config.yaml"), "r") as f:
     data_config = yaml.safe_load(f)
 
-# POPULATE ACTION STATS
-ACTION_STATS = {}
-for key in data_config['action_stats']:
-    ACTION_STATS[key] = np.array(data_config['action_stats'][key])
+# # POPULATE ACTION STATS
+# ACTION_STATS = {}
+# for key in data_config['action_stats']:
+#     ACTION_STATS[key] = np.array(data_config['action_stats'][key])
 
 # Train utils for ViNT and GNM
 def _compute_losses(
@@ -407,7 +407,12 @@ def evaluate(
             action_mask = action_mask.to(device)
 
             dist_pred, action_pred = model_outputs
-
+            print()
+            print("gt action")
+            print(action_label[0])
+            print("action pred")
+            print(action_pred[0])
+            print()
             losses = _compute_losses(
                 dist_label=dist_label,
                 action_label=action_label,
@@ -561,13 +566,13 @@ def get_delta(actions):
     return delta
 
 
-def get_action(diffusion_output, action_stats=ACTION_STATS):
-    # diffusion_output: (B, 2*T+1, 1)
-    # return: (B, T-1)
-    device = diffusion_output.device
-    ndeltas = diffusion_output
-    ndeltas = ndeltas.reshape(ndeltas.shape[0], -1, 2)
-    ndeltas = to_numpy(ndeltas)
-    ndeltas = unnormalize_data(ndeltas, action_stats)
-    actions = np.cumsum(ndeltas, axis=1)
-    return from_numpy(actions).to(device)
+# def get_action(diffusion_output, action_stats=ACTION_STATS):
+#     # diffusion_output: (B, 2*T+1, 1)
+#     # return: (B, T-1)
+#     device = diffusion_output.device
+#     ndeltas = diffusion_output
+#     ndeltas = ndeltas.reshape(ndeltas.shape[0], -1, 2)
+#     ndeltas = to_numpy(ndeltas)
+#     ndeltas = unnormalize_data(ndeltas, action_stats)
+#     actions = np.cumsum(ndeltas, axis=1)
+#     return from_numpy(actions).to(device)

@@ -306,7 +306,7 @@ class PilotDataset(Dataset):
         else:
             with open(os.path.join(self.data_folder, trajectory_name, "traj_data.json"), "rb") as f:
                 traj_data = json.load(f)
-            self.trajectory_cache[trajectory_name] = traj_data['odom_frame'] ##### change this TODO: check
+            self.trajectory_cache[trajectory_name] = traj_data['odom_frame']
             return traj_data['odom_frame']
 
     def __len__(self) -> int:

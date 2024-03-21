@@ -1,21 +1,15 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='pilot_train',
+    name='pilot_bc',
     version='0.1',
     packages=find_packages(),
-    # entry_points={
-    #     'console_scripts': [
-    #         'bagtool=bagtool.bagtool_main:main',  # 'command=package.module:function'
-    #     ],
-    # },
     install_requires=[
-        # List your package dependencies here, for example:
+        # list your project's dependencies here, for example:
         # 'numpy',
         # 'pandas',
     ],
-    author='Your Name',
-    author_email='your.email@example.com',
-    description='A simple bagtool command line tool',
-    license='MIT',
+    # If your packages are not in the root directory, use the package_dir argument
+    # package_dir={'': 'src'},
+    # You can specify package data, scripts, and more. See the setuptools documentation for details.
 )
