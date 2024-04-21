@@ -43,8 +43,7 @@ class InferenceDataset(PilotDataset):
                         goals_per_obs=data_config["goals_per_obs"],
                         normalize=self.config["normalize"],
                         goal_type=self.config["goal_type"],)
-    
-    
+
     def __getitem__(self, i: int) -> List[PILImage.Image]:
         """
         Args:
