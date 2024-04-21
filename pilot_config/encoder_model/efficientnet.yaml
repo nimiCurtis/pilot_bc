@@ -1,0 +1,3 @@
+name: efficientnet
+version: efficientnet-b0 # by default, this is imagenet pretrained
+obs_encoding_size: 512

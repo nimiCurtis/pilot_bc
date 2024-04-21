@@ -26,7 +26,6 @@ def get_data_path(data_folder: str, f: str, time: int, data_type: str = "image")
                         "visual_data",
                         f"{str(time)}{data_ext[data_type]}")
 
-
 def yaw_rotmat(yaw: float) -> np.ndarray:
     return np.array(
         [
@@ -35,7 +34,6 @@ def yaw_rotmat(yaw: float) -> np.ndarray:
             [0.0, 0.0, 1.0],
         ],
     )
-
 
 def to_local_coords(
     positions: np.ndarray, curr_pos: np.ndarray, curr_yaw: float
@@ -60,7 +58,7 @@ def to_local_coords(
 
     return (positions - curr_pos).dot(rotmat)
 
-## why he did that ??
+## why he did that. Not in use.
 def calculate_deltas(waypoints: torch.Tensor) -> torch.Tensor:
     """
     Calculate deltas between waypoints
@@ -95,6 +93,7 @@ def calculate_sin_cos(waypoints: torch.Tensor) -> torch.Tensor:
     return torch.concat((waypoints[:, :2], angle_repr), axis=1)
 
 
+### Not in use
 def transform_images(
     img: Image.Image, transform: transforms, image_resize_size: Tuple[int, int], aspect_ratio: float = IMAGE_ASPECT_RATIO
 ):

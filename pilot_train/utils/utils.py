@@ -43,6 +43,8 @@ def get_delta(actions):
     delta = ex_actions[1:,:] - ex_actions[:-1,:]
     return delta
 
+
+## not in use
 def get_action(normalized_action_deltas, action_stats):
 
     ndeltas = normalized_action_deltas

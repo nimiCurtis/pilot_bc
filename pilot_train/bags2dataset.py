@@ -46,7 +46,6 @@ if __name__ == "__main__":
         type=str,
         help="Path to the config file in config folder",
     )
-    
-    
+
     args = parser.parse_args()
     main(args)

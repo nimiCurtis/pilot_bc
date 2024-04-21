@@ -12,8 +12,7 @@ import time
 
 def calculate_sin_cos(waypoints):
     """
-    Calculate sin and cos of the angle for waypoints using a generic approach that supports both
-    NumPy arrays and PyTorch tensors.
+    Calculate sin and cos of the angle for waypoints.
 
     Args:
         waypoints: A NumPy array or PyTorch tensor of waypoints. Expected shape is [N, 3] where
@@ -45,13 +44,11 @@ def to_numpy(tensor: torch.Tensor) -> np.ndarray:
 def from_numpy(array: np.ndarray) -> torch.Tensor:
     return torch.from_numpy(array).float()
 
-
 def msg_to_pil(msg: Image) -> PILImage.Image:
     img = np.frombuffer(msg.data, dtype=np.uint8).reshape(
         msg.height, msg.width, -1)
     pil_image = PILImage.fromarray(img)
     return pil_image
-
 
 def pil_to_msg(pil_img: PILImage.Image, encoding="mono8") -> Image:
     img = np.asarray(pil_img)  
@@ -114,7 +111,6 @@ def unnormalize_data(ndata, stats):
     # back to [min, max] 
     data = ndata * (stats['max'] - stats['min']) + stats['min']
     return data
-
 
 #Ours
 def get_delta(actions):

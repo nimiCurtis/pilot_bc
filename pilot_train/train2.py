@@ -6,6 +6,8 @@ import yaml
 import time
 import pdb
 import json
+import hydra
+from omegaconf import DictConfig, OmegaConf
 
 import torch
 import torch.nn as nn
@@ -18,6 +20,7 @@ from warmup_scheduler import GradualWarmupScheduler
 # from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 # from diffusers.optimization import get_scheduler
 
+from pilot_config.config import get_config_dir
 """
 IMPORT YOUR MODEL HERE
 """
@@ -40,7 +43,7 @@ from pilot_train.data.pilot_dataset import PilotDataset
 
 PATH = os.path.dirname(__file__)
 
-def main(config):
+def train(config):
     assert config["distance"]["min_dist_cat"] < config["distance"]["max_dist_cat"]
     assert config["action"]["min_dist_cat"] < config["action"]["max_dist_cat"]
 
@@ -358,56 +361,31 @@ def main(config):
 
     print("FINISHED TRAINING")
 
-
-if __name__ == "__main__":
+@hydra.main( version_base=None ,
+        config_path= get_config_dir(),
+        config_name = "train_pilot_policy")
+def main(cfg:DictConfig):
     torch.multiprocessing.set_start_method("spawn")
 
-    parser = argparse.ArgumentParser(description="Visual Navigation Transformer")
+    log_cfg = cfg.log
+    wandb_cfg =  log_cfg.wandb
 
-    # project setup
-    parser.add_argument(
-        "--config",
-        "-c",
-        default=os.path.join(PATH,"config/pilot.yaml"),
-        type=str,
-        help="Path to the config file in train_config folder",
-    )
-    args = parser.parse_args()
-
-    default_config_p = os.path.join(PATH,"config/defaults.yaml")
-    
-    with open(default_config_p, "r") as f:
-        default_config = yaml.safe_load(f)
-
-    config = default_config
-
-    with open(args.config, "r") as f:
-        user_config = yaml.safe_load(f)
-
-    config.update(user_config)
-
-    config["run_name"] += "_" + time.strftime("%Y_%m_%d_%H_%M_%S")
-    config["project_folder"] = os.path.join(
-        "logs", config["project_name"], config["run_name"]
-    )
-    os.makedirs(
-        config[
-            "project_folder"
-        ],  # should error if dir already exists to avoid overwriting and old project
-    )
-    
-    if config["use_wandb"]:
+    if wandb_cfg.run.enable:
         wandb.login()
         wandb.init(
-            project=config["project_name"],
+            project=wandb_cfg.setup.project,
             settings=wandb.Settings(start_method="fork"),
-            entity="pilottau", # TODO: change this to your wandb entity
+            entity=wandb_cfg.setup.entity, # TODO: change this to your wandb entity
         )
-        wandb.save(args.config, policy="now")  # save the config file
-        wandb.run.name = config["run_name"]
+        wandb.run.name = wandb_cfg.run.name
         # update the wandb args with the training configurations
         if wandb.run:
-            wandb.config.update(config)
+            wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
 
-    print(config)
-    main(config)
+    print("******** Training Config: *********")
+    print(OmegaConf.to_yaml(cfg, resolve=True))
+    print("********************\n")
+    train(cfg)
+
+if __name__ == "__main__":
+    main()

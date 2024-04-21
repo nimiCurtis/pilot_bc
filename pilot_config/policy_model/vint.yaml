@@ -1,0 +1,6 @@
+# model params
+name: vint
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+late_fusion: False

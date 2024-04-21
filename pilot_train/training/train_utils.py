@@ -456,7 +456,6 @@ def evaluate(
 
 
 # Train utils for NOMAD
-
 def _compute_losses_nomad(
         ema_model,
         noise_scheduler,
