@@ -1,6 +1,7 @@
 from typing import List, Dict, Optional, Tuple
 from efficientnet_pytorch import EfficientNet
 from pilot_train.models.vint.base_model import BaseModel
+from omegaconf import DictConfig, OmegaConf
 
 
 import torch
@@ -53,16 +54,10 @@ class MultiLayerDecoder(nn.Module):
 class ViNT(BaseModel):
     def __init__(
             self,
-            context_size: int = 5,
-            len_traj_pred: Optional[int] = 5,
-            learn_angle: Optional[bool] = True,
-            obs_encoder: Optional[str] = "efficientnet-b0",
-            obs_encoding_size: Optional[int] = 512,
-            late_fusion: Optional[bool] = False,
-            mha_num_attention_heads: Optional[int] = 2,
-            mha_num_attention_layers: Optional[int] = 2,
-            mha_ff_dim_factor: Optional[int] = 4,
-            goal_condition = True
+            policy_model_cfg: DictConfig,
+            encoder_model_cfg: DictConfig,
+            training_cfg: DictConfig,
+            data_cfg: DictConfig 
     ) -> None:
         """
         ViNT class: uses a Transformer-based architecture to encode (current and past) visual observations
@@ -76,6 +71,25 @@ class ViNT(BaseModel):
             obs_encoding_size (int): size of the encoding of the observation images
             goal_encoding_size (int): size of the encoding of the goal images
         """
+        
+        # Data config
+        context_size=data_cfg.context_size
+        len_traj_pred=data_cfg.len_traj_pred
+        learn_angle=data_cfg.learn_angle
+        
+        # Encoder config
+        obs_encoder=encoder_model_cfg.version
+        obs_encoding_size=encoder_model_cfg.obs_encoding_size
+        
+        # Policy model
+        late_fusion=policy_model_cfg.late_fusion
+        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
+        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
+        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
+        
+        # Training config
+        goal_condition=training_cfg.goal_condition
+        
         super(ViNT, self).__init__(context_size, len_traj_pred, learn_angle)
         self.obs_encoding_size = obs_encoding_size
         self.goal_encoding_size = obs_encoding_size

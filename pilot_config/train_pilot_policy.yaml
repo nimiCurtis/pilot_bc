@@ -8,15 +8,14 @@ hydra:
 defaults:
   - _self_
   - encoder_model: efficientnet
-  - policy_model: vint  
-  - camera_info: zedm
+  - policy_model: vint 
+  - datasets: dataset
   # - log: defaults
 
 # training setup
-# use_wandb: True # set to false if you don't want to log to wandb
-# train: True
 training:
   batch_size: 16
+  eval_batch_size: 32
   epochs: 15
   gpu_ids: [0]
   num_workers: 12
@@ -32,57 +31,30 @@ training:
   plateau_factor: 0.5
   seed: 42
   goal_condition: False
+  alpha: 0.5
+  beta: 10
 
-# # model params
-# model_type: vint
-# obs_encoder: "efficientnet-b0" # by default, this is imagenet pretrained
-# obs_encoding_size: 512
-# mha_num_attention_heads: 4
-# mha_num_attention_layers: 4
-# mha_ff_dim_factor: 4
-# late_fusion: False
+data:
+  # normalization for the action space
+  # normalization in the dataset class at data/pilot_dataset.py
+  normalize: True
+  # context
+  context_type: temporal
+  context_size: 5
+  distance:
+    min_dist_cat: 0
+    max_dist_cat: 20
+  action:
+    min_dist_cat: 0
+    max_dist_cat: 10
+  close_far_threshold: 10 # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
+  # action output params
+  len_traj_pred: 5
+  learn_angle: True
+  # dataset specific parameters
+  image_size: [85, 64] # width, height
+  goal_type: "image"
 
-# normalization for the action space
-# normalization in the dataset class at data/pilot_dataset.py
-normalize: True
-
-# context
-context_type: temporal
-context_size: 5
-
-# tradeoff between action and distance prediction loss
-alpha: 0.5
-beta: 10
-
-# distance bounds for distance and action and distance predictions 
-distance:
-  min_dist_cat: 0
-  max_dist_cat: 20
-action:
-  min_dist_cat: 0
-  max_dist_cat: 10
-close_far_threshold: 10 # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
-
-# action output params
-len_traj_pred: 5
-learn_angle: True
-
-# dataset specific parameters
-image_size: [85, 64] # width, height
-goal_type: "image"
-
-datasets:
-  name: dataset
-  turtlebot:
-    data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/dataset 
-                # abs path to the dataset folder
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/train
-          # path to train folder with traj_names.txt
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/test
-          # path to test folder with traj_names.txt
-    end_slack: 3 # because many trajectories end in collisions
-    goals_per_obs: 1 # how many goals are sampled per observation
-    negative_mining: True # negative mining from the ViNG paper (Shah et al.)
 
 # logging stuff
 log:
@@ -103,3 +75,47 @@ log:
       project: pilot-release
       entity: nimrodcurtis
       mode: online
+
+####### was ##########
+
+# # model params
+# model_type: vint
+# obs_encoder: "efficientnet-b0" # by default, this is imagenet pretrained
+# obs_encoding_size: 512
+# mha_num_attention_heads: 4
+# mha_num_attention_layers: 4
+# mha_ff_dim_factor: 4
+# late_fusion: False
+
+# normalization for the action space
+# normalization in the dataset class at data/pilot_dataset.py
+# normalize: True
+
+# # context
+# context_type: temporal
+# context_size: 5
+
+# tradeoff between action and distance prediction loss
+# alpha: 0.5
+# beta: 10
+
+# distance bounds for distance and action and distance predictions 
+# distance:
+#   min_dist_cat: 0
+#   max_dist_cat: 20
+# action:
+#   min_dist_cat: 0
+#   max_dist_cat: 10
+# close_far_threshold: 10 # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
+
+# # action output params
+# len_traj_pred: 5
+# learn_angle: True
+
+
+# # dataset specific parameters
+# image_size: [85, 64] # width, height
+# goal_type: "image"
+
+# use_wandb: True # set to false if you don't want to log to wandb
+# train: True

@@ -9,6 +9,7 @@ import io
 import lmdb
 import argparse
 import time
+from omegaconf import DictConfig, OmegaConf
 
 import torch
 from torch.utils.data import Dataset
@@ -34,25 +35,11 @@ from pilot_train.utils.utils import (
 class PilotDataset(Dataset):
     def __init__(
         self,
-        data_folder: str,
-        data_split_folder: str,
+        data_cfg: DictConfig,
+        datasets_cfg: DictConfig,
+        robot_dataset_cfg: DictConfig,
         dataset_name: str,
-        image_size: Tuple[int, int],
-        waypoint_spacing: int,
-        min_dist_cat: int,
-        max_dist_cat: int,
-        min_action_distance: int,
-        max_action_distance: int,
-        negative_mining: bool,
-        len_traj_pred: int,
-        learn_angle: bool,
-        context_size: int,
-        context_type: str = "temporal",
-        end_slack: int = 0,
-        goals_per_obs: int = 1,
-        normalize: bool = True,
-        obs_type: str = "image",
-        goal_type: str = "image",
+        data_split_type: str
     ):
         """
         Main Pilot dataset class
@@ -74,6 +61,27 @@ class PilotDataset(Dataset):
             normalize (bool): Whether to normalize the distances or actions
             goal_type (str): What data type to use for the goal. The only one supported is "image" for now.
         """
+        
+        
+        data_folder=datasets_cfg.data_folder
+        data_split_folder=robot_dataset_cfg[data_split_type]
+        dataset_name=dataset_name
+        image_size= data_cfg.image_size
+        waypoint_spacing=robot_dataset_cfg.waypoint_spacing
+        min_dist_cat=data_cfg.distance.min_dist_cat
+        max_dist_cat=data_cfg.distance.max_dist_cat
+        min_action_distance=data_cfg.action.min_dist_cat
+        max_action_distance=data_cfg.action.max_dist_cat
+        negative_mining=robot_dataset_cfg.negative_mining
+        len_traj_pred=data_cfg.len_traj_pred
+        learn_angle=data_cfg.learn_angle
+        context_size=data_cfg.context_size
+        context_type=data_cfg.context_type
+        end_slack=robot_dataset_cfg.end_slack
+        goals_per_obs=robot_dataset_cfg.goals_per_obs
+        normalize=data_cfg.normalize
+        goal_type=data_cfg.goal_type
+        
         self.data_folder = data_folder
         self.data_split_folder = data_split_folder
         self.dataset_name = dataset_name

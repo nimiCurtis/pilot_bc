@@ -8,11 +8,11 @@ import pdb
 import json
 import hydra
 from omegaconf import DictConfig, OmegaConf
-
+from typing import Tuple
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, ConcatDataset
-from torch.optim import Adam, AdamW
+from torch.optim import Adam, AdamW, SGD
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
 from warmup_scheduler import GradualWarmupScheduler
@@ -24,6 +24,7 @@ from pilot_config.config import get_config_dir
 """
 IMPORT YOUR MODEL HERE
 """
+
 # from vint_train.models.gnm.gnm import GNM
 # from vint_train.models.vint.vint import ViNT
 # from vint_train.models.vint.vit import ViT
@@ -41,33 +42,102 @@ from pilot_train.training.train_eval_loop import (
 
 from pilot_train.data.pilot_dataset import PilotDataset
 
-PATH = os.path.dirname(__file__)
 
-def train(config):
-    assert config["distance"]["min_dist_cat"] < config["distance"]["max_dist_cat"]
-    assert config["action"]["min_dist_cat"] < config["action"]["max_dist_cat"]
+def load_config(cfg:DictConfig)->Tuple[DictConfig]:
+    missings = OmegaConf.missing_keys(cfg)
+    # Assertion to check if the set is empty
+    assert not missings, f"Missing configs: {missings}, please check the main config!"
+
+    configs = {}
+    for key in cfg.keys():
+        assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets']\
+        ,f"{key} is missing in config please check tha main config!"
+
+    return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
+
+def get_model():
+    pass
+
+def get_optimizer(optimizer_name:str, model:nn.Module, lr:float)->torch.optim:
+    optimizer_name = optimizer_name.lower()
+    if optimizer_name == "adam":
+        optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.98))
+    elif optimizer_name == "adamw":
+        optimizer = AdamW(model.parameters(), lr=lr)
+    elif optimizer_name == "sgd":
+        optimizer = SGD(model.parameters(), lr=lr, momentum=0.9)
+    else:
+        raise ValueError(f"Optimizer {optimizer_name} not supported")
+
+    return optimizer
+
+def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
+    scheduler_name = training_cfg.scheduler.lower()
+    if scheduler_name == "cosine":
+        print("Using cosine annealing with T_max", training_cfg.epochs)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=training_cfg.epochs
+        )
+    elif scheduler_name == "cyclic":
+        print("Using cyclic LR with cycle", training_cfg.cyclic_period)
+        scheduler = torch.optim.lr_scheduler.CyclicLR(
+            optimizer,
+            base_lr=lr / 10.,
+            max_lr=lr,
+            step_size_up=training_cfg.cyclic_period // 2,
+            cycle_momentum=False,
+        )
+    elif scheduler_name == "plateau":
+        print("Using ReduceLROnPlateau")
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer,
+            factor=training_cfg.plateau_factor,
+            patience=training_cfg.plateau_patience,
+            verbose=True,
+        )
+    else:
+        raise ValueError(f"Scheduler {scheduler_name} not supported")
+
+    if training_cfg.warmup:
+        print("Using warmup scheduler")
+        scheduler = GradualWarmupScheduler(
+            optimizer,
+            multiplier=1,
+            total_epoch=training_cfg.warmup_epochs,
+            after_scheduler=scheduler,
+        )
+    
+    return scheduler
+
+def train(cfg:DictConfig):
+    
+    training_cfg, data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  load_config(cfg)
+    
+    ## what is this?? 
+    assert data_cfg.distance.min_dist_cat < data_cfg.distance.max_dist_cat
+    assert data_cfg.action.min_dist_cat < data_cfg.action.max_dist_cat
 
     if torch.cuda.is_available():
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        if "gpu_ids" not in config:
-            config["gpu_ids"] = [0]
-        elif type(config["gpu_ids"]) == int:
-            config["gpu_ids"] = [config["gpu_ids"]]
+        if "gpu_ids" not in training_cfg:
+            OmegaConf.update(training_cfg, "gpu_ids",[0], force_add = True)
+        elif type(training_cfg.gpu_ids) == int:
+            OmegaConf.update(training_cfg, "gpu_ids",[training_cfg.gpu_ids])
         os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
-            [str(x) for x in config["gpu_ids"]]
+            [str(x) for x in training_cfg.gpu_ids]
         )
         print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
     else:
         print("Using cpu")
 
-    first_gpu_id = config["gpu_ids"][0]
+    first_gpu_id = training_cfg.gpu_ids[0]
     device = torch.device(
         f"cuda:{first_gpu_id}" if torch.cuda.is_available() else "cpu"
     )
 
-    if "seed" in config:
-        np.random.seed(config["seed"])
-        torch.manual_seed(config["seed"])
+    if "seed" in training_cfg:
+        np.random.seed(training_cfg.seed)
+        torch.manual_seed(training_cfg.seed)
         cudnn.deterministic = True
 
     cudnn.benchmark = True  # good if input sizes don't vary
@@ -80,77 +150,54 @@ def train(config):
     train_dataset = []
     test_dataloaders = {}
 
-    if "context_type" not in config:
-        config["context_type"] = "temporal"
+    # for robot in datasets_cfg.robots:
+    #     robot_dataset_cfg = datasets_cfg[robot]
+    #     if "negative_mining" not in robot_dataset_cfg:
+    #         robot_dataset_cfg["negative_mining"] = True
+    #     if "goals_per_obs" not in robot_dataset_cfg:
+    #         robot_dataset_cfg["goals_per_obs"] = 1
+    #     if "end_slack" not in robot_dataset_cfg:
+    #         robot_dataset_cfg["end_slack"] = 0
+    #     if "waypoint_spacing" not in robot_dataset_cfg:
+    #         OmegaConf.update(robot_dataset_cfg, "waypoint_spacing",1, force_add=True)
 
-    if "clip_goals" not in config:
-        config["clip_goals"] = False
+    #     for data_split_type in ["train", "test"]:
+    #         if data_split_type in robot_dataset_cfg:
+    #                 dataset = PilotDataset(
+    #                     data_cfg = data_cfg,
+    #                     datasets_cfg = datasets_cfg,
+    #                     robot_dataset_cfg = robot_dataset_cfg,
+    #                     dataset_name=robot,
+    #                     data_split_type=data_split_type
+    #                 )
+    #                 if data_split_type == "train":
+    #                     train_dataset.append(dataset)
+    #                 else:
+    #                     dataset_type = f"{robot}_{data_split_type}"
+    #                     if dataset_type not in test_dataloaders:
+    #                         test_dataloaders[dataset_type] = {}
+    #                     test_dataloaders[dataset_type] = dataset
 
-    for dataset_name in config["datasets"]:
-        data_config = config["datasets"][dataset_name]
-        if "negative_mining" not in data_config:
-            data_config["negative_mining"] = True
-        if "goals_per_obs" not in data_config:
-            data_config["goals_per_obs"] = 1
-        if "end_slack" not in data_config:
-            data_config["end_slack"] = 0
-        if "waypoint_spacing" not in data_config:
-            data_config["waypoint_spacing"] = 1
+    # # combine all the datasets from different robots
+    # train_dataset = ConcatDataset(train_dataset)
 
-        for data_split_type in ["train", "test"]:
-            if data_split_type in data_config:
-                    dataset = PilotDataset(
-                        data_folder=data_config["data_folder"],
-                        data_split_folder=data_config[data_split_type],
-                        dataset_name=dataset_name,
-                        image_size=config["image_size"],
-                        waypoint_spacing=data_config["waypoint_spacing"],
-                        min_dist_cat=config["distance"]["min_dist_cat"],
-                        max_dist_cat=config["distance"]["max_dist_cat"],
-                        min_action_distance=config["action"]["min_dist_cat"],
-                        max_action_distance=config["action"]["max_dist_cat"],
-                        negative_mining=data_config["negative_mining"],
-                        len_traj_pred=config["len_traj_pred"],
-                        learn_angle=config["learn_angle"],
-                        context_size=config["context_size"],
-                        context_type=config["context_type"],
-                        end_slack=data_config["end_slack"],
-                        goals_per_obs=data_config["goals_per_obs"],
-                        normalize=config["normalize"],
-                        goal_type=config["goal_type"],
-                    )
-                    if data_split_type == "train":
-                        train_dataset.append(dataset)
-                    else:
-                        dataset_type = f"{dataset_name}_{data_split_type}"
-                        if dataset_type not in test_dataloaders:
-                            test_dataloaders[dataset_type] = {}
-                        test_dataloaders[dataset_type] = dataset
+    # train_loader = DataLoader(
+    #     train_dataset,
+    #     batch_size=training_cfg.batch_size,
+    #     shuffle=True,
+    #     num_workers=training_cfg.num_workers,
+    #     drop_last=False,
+    #     persistent_workers=True,
+    # )
 
-    # combine all the datasets from different robots
-    train_dataset = ConcatDataset(train_dataset)
-
-
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=config["batch_size"],
-        shuffle=True,
-        num_workers=config["num_workers"],
-        drop_last=False,
-        persistent_workers=True,
-    )
-
-    if "eval_batch_size" not in config:
-        config["eval_batch_size"] = config["batch_size"]
-
-    for dataset_type, dataset in test_dataloaders.items():
-        test_dataloaders[dataset_type] = DataLoader(
-            dataset,
-            batch_size=config["eval_batch_size"],
-            shuffle=True,
-            num_workers=0,
-            drop_last=False,
-        )
+    # for dataset_type, dataset in test_dataloaders.items():
+    #     test_dataloaders[dataset_type] = DataLoader(
+    #         dataset,
+    #         batch_size=training_cfg.eval_batch_size,
+    #         shuffle=True,
+    #         num_workers=0,
+    #         drop_last=False,
+    #     )
 
     # Create the model
     # if config["model_type"] == "gnm":
@@ -161,19 +208,13 @@ def train(config):
     #         config["obs_encoding_size"],
     #         config["goal_encoding_size"],
     #     )
-    if config["model_type"] == "vint":
+    if policy_model_cfg.name == "vint":
         model = ViNT(
-            context_size=config["context_size"],
-            len_traj_pred=config["len_traj_pred"],
-            learn_angle=config["learn_angle"],
-            obs_encoder=config["obs_encoder"],
-            obs_encoding_size=config["obs_encoding_size"],
-            late_fusion=config["late_fusion"],
-            mha_num_attention_heads=config["mha_num_attention_heads"],
-            mha_num_attention_layers=config["mha_num_attention_layers"],
-            mha_ff_dim_factor=config["mha_ff_dim_factor"],
-            goal_condition=config["goal_condition"]
-        )
+            policy_model_cfg = policy_model_cfg,
+            encoder_model_cfg = encoder_model_cfg,
+            training_cfg = training_cfg,
+            data_cfg = data_cfg)
+
     # elif config["model_type"] == "nomad":
     #     if config["vision_encoder"] == "nomad_vint":
     #         vision_encoder = NoMaD_ViNT(
@@ -240,53 +281,11 @@ def train(config):
     #             )
     #         )
 
-    lr = float(config["lr"])
-    config["optimizer"] = config["optimizer"].lower()
-    if config["optimizer"] == "adam":
-        optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.98))
-    elif config["optimizer"] == "adamw":
-        optimizer = AdamW(model.parameters(), lr=lr)
-    elif config["optimizer"] == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    else:
-        raise ValueError(f"Optimizer {config['optimizer']} not supported")
+    lr = float(training_cfg.lr)
+    optimizer_name = training_cfg.optimizer
+    optimizer = get_optimizer(optimizer_name, model=model, lr=lr)
+    scheduler = get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=lr) if "scheduler" in training_cfg else None
 
-    scheduler = None
-    if config["scheduler"] is not None:
-        config["scheduler"] = config["scheduler"].lower()
-        if config["scheduler"] == "cosine":
-            print("Using cosine annealing with T_max", config["epochs"])
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=config["epochs"]
-            )
-        elif config["scheduler"] == "cyclic":
-            print("Using cyclic LR with cycle", config["cyclic_period"])
-            scheduler = torch.optim.lr_scheduler.CyclicLR(
-                optimizer,
-                base_lr=lr / 10.,
-                max_lr=lr,
-                step_size_up=config["cyclic_period"] // 2,
-                cycle_momentum=False,
-            )
-        elif config["scheduler"] == "plateau":
-            print("Using ReduceLROnPlateau")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                factor=config["plateau_factor"],
-                patience=config["plateau_patience"],
-                verbose=True,
-            )
-        else:
-            raise ValueError(f"Scheduler {config['scheduler']} not supported")
-
-        if config["warmup"]:
-            print("Using warmup scheduler")
-            scheduler = GradualWarmupScheduler(
-                optimizer,
-                multiplier=1,
-                total_epoch=config["warmup_epochs"],
-                after_scheduler=scheduler,
-            )
 
     current_epoch = 0
     # if "load_run" in config:
