@@ -32,7 +32,7 @@ IMPORT YOUR MODEL HERE
 # from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
 # from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 
-from pilot_train.models.vint.vint import ViNT
+from pilot_train.models.policy.model_registry import get_policy_model
 
 # from vint_train.data.vint_dataset import ViNT_Dataset
 from pilot_train.training.train_eval_loop import (
@@ -41,7 +41,6 @@ from pilot_train.training.train_eval_loop import (
 )
 
 from pilot_train.data.pilot_dataset import PilotDataset
-
 
 def load_config(cfg:DictConfig)->Tuple[DictConfig]:
     missings = OmegaConf.missing_keys(cfg)
@@ -55,8 +54,14 @@ def load_config(cfg:DictConfig)->Tuple[DictConfig]:
 
     return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
 
-def get_model():
-    pass
+def get_model(policy_model_cfg, encoder_model_cfg , training_cfg, data_cfg ):
+    
+    return get_policy_model(
+            policy_model_cfg = policy_model_cfg,
+            encoder_model_cfg = encoder_model_cfg,
+            training_cfg = training_cfg,
+            data_cfg = data_cfg
+            )
 
 def get_optimizer(optimizer_name:str, model:nn.Module, lr:float)->torch.optim:
     optimizer_name = optimizer_name.lower()
@@ -112,10 +117,6 @@ def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
 def train(cfg:DictConfig):
     
     training_cfg, data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  load_config(cfg)
-    
-    ## what is this?? 
-    assert data_cfg.distance.min_dist_cat < data_cfg.distance.max_dist_cat
-    assert data_cfg.action.min_dist_cat < data_cfg.action.max_dist_cat
 
     if torch.cuda.is_available():
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -150,54 +151,54 @@ def train(cfg:DictConfig):
     train_dataset = []
     test_dataloaders = {}
 
-    # for robot in datasets_cfg.robots:
-    #     robot_dataset_cfg = datasets_cfg[robot]
-    #     if "negative_mining" not in robot_dataset_cfg:
-    #         robot_dataset_cfg["negative_mining"] = True
-    #     if "goals_per_obs" not in robot_dataset_cfg:
-    #         robot_dataset_cfg["goals_per_obs"] = 1
-    #     if "end_slack" not in robot_dataset_cfg:
-    #         robot_dataset_cfg["end_slack"] = 0
-    #     if "waypoint_spacing" not in robot_dataset_cfg:
-    #         OmegaConf.update(robot_dataset_cfg, "waypoint_spacing",1, force_add=True)
+    for robot in datasets_cfg.robots:
+        robot_dataset_cfg = datasets_cfg[robot]
+        if "negative_mining" not in robot_dataset_cfg:
+            robot_dataset_cfg["negative_mining"] = True
+        if "goals_per_obs" not in robot_dataset_cfg:
+            robot_dataset_cfg["goals_per_obs"] = 1
+        if "end_slack" not in robot_dataset_cfg:
+            robot_dataset_cfg["end_slack"] = 0
+        if "waypoint_spacing" not in robot_dataset_cfg:
+            OmegaConf.update(robot_dataset_cfg, "waypoint_spacing",1, force_add=True)
 
-    #     for data_split_type in ["train", "test"]:
-    #         if data_split_type in robot_dataset_cfg:
-    #                 dataset = PilotDataset(
-    #                     data_cfg = data_cfg,
-    #                     datasets_cfg = datasets_cfg,
-    #                     robot_dataset_cfg = robot_dataset_cfg,
-    #                     dataset_name=robot,
-    #                     data_split_type=data_split_type
-    #                 )
-    #                 if data_split_type == "train":
-    #                     train_dataset.append(dataset)
-    #                 else:
-    #                     dataset_type = f"{robot}_{data_split_type}"
-    #                     if dataset_type not in test_dataloaders:
-    #                         test_dataloaders[dataset_type] = {}
-    #                     test_dataloaders[dataset_type] = dataset
+        for data_split_type in ["train", "test"]:
+            if data_split_type in robot_dataset_cfg:
+                    dataset = PilotDataset(
+                        data_cfg = data_cfg,
+                        datasets_cfg = datasets_cfg,
+                        robot_dataset_cfg = robot_dataset_cfg,
+                        dataset_name=robot,
+                        data_split_type=data_split_type
+                    )
+                    if data_split_type == "train":
+                        train_dataset.append(dataset)
+                    else:
+                        dataset_type = f"{robot}_{data_split_type}"
+                        if dataset_type not in test_dataloaders:
+                            test_dataloaders[dataset_type] = {}
+                        test_dataloaders[dataset_type] = dataset
 
-    # # combine all the datasets from different robots
-    # train_dataset = ConcatDataset(train_dataset)
+    # combine all the datasets from different robots
+    train_dataset = ConcatDataset(train_dataset)
 
-    # train_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=training_cfg.batch_size,
-    #     shuffle=True,
-    #     num_workers=training_cfg.num_workers,
-    #     drop_last=False,
-    #     persistent_workers=True,
-    # )
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=training_cfg.batch_size,
+        shuffle=True,
+        num_workers=training_cfg.num_workers,
+        drop_last=False,
+        persistent_workers=True,
+    )
 
-    # for dataset_type, dataset in test_dataloaders.items():
-    #     test_dataloaders[dataset_type] = DataLoader(
-    #         dataset,
-    #         batch_size=training_cfg.eval_batch_size,
-    #         shuffle=True,
-    #         num_workers=0,
-    #         drop_last=False,
-    #     )
+    for dataset_type, dataset in test_dataloaders.items():
+        test_dataloaders[dataset_type] = DataLoader(
+            dataset,
+            batch_size=training_cfg.eval_batch_size,
+            shuffle=True,
+            num_workers=0,
+            drop_last=False,
+        )
 
     # Create the model
     # if config["model_type"] == "gnm":
@@ -209,11 +210,12 @@ def train(cfg:DictConfig):
     #         config["goal_encoding_size"],
     #     )
     if policy_model_cfg.name == "vint":
-        model = ViNT(
+        model = get_model(
             policy_model_cfg = policy_model_cfg,
             encoder_model_cfg = encoder_model_cfg,
             training_cfg = training_cfg,
-            data_cfg = data_cfg)
+            data_cfg = data_cfg
+            )
 
     # elif config["model_type"] == "nomad":
     #     if config["vision_encoder"] == "nomad_vint":
@@ -286,7 +288,6 @@ def train(cfg:DictConfig):
     optimizer = get_optimizer(optimizer_name, model=model, lr=lr)
     scheduler = get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=lr) if "scheduler" in training_cfg else None
 
-
     current_epoch = 0
     # if "load_run" in config:
     #     load_project_folder = os.path.join("logs", config["load_run"])
@@ -297,9 +298,9 @@ def train(cfg:DictConfig):
     #     if "epoch" in latest_checkpoint:
     #         current_epoch = latest_checkpoint["epoch"] + 1
 
-    # # Multi-GPU
-    # if len(config["gpu_ids"]) > 1:
-    #     model = nn.DataParallel(model, device_ids=config["gpu_ids"])
+    # Multi-GPU
+    if len(training_cfg.gpu_ids) > 1:
+        model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)
     model = model.to(device)
 
     # if "load_run" in config:  # load optimizer and scheduler after data parallel
@@ -308,30 +309,20 @@ def train(cfg:DictConfig):
     #     if scheduler is not None and "scheduler" in latest_checkpoint:
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    if config["model_type"] == "vint" or config["model_type"] == "gnm":
+    ### continue form here!!!! 
+    
+    if policy_model_cfg.name == "vint":
         train_eval_loop(
-            train_model=config["train"],
             model=model,
             optimizer=optimizer,
             scheduler=scheduler,
             dataloader=train_loader,
             test_dataloaders=test_dataloaders,
             transform=transform,
-            epochs=config["epochs"],
             device=device,
-            project_folder=config["project_folder"],
-            normalized=config["normalize"],
-            print_log_freq=config["print_log_freq"],
-            image_log_freq=config["image_log_freq"],
-            num_images_log=config["num_images_log"],
-            current_epoch=current_epoch,
-            learn_angle=config["learn_angle"],
-            alpha=config["alpha"] if config["goal_condition"] else 0,
-            beta=config["beta"],
-            use_wandb=config["use_wandb"],
-            eval_fraction=config["eval_fraction"],
-            goal_condition = config["goal_condition"]
-        )
+            training_cfg=training_cfg,
+            data_cfg=data_cfg,
+            log_cfg=log_cfg)
 
     # else:
     #     train_eval_loop_nomad(

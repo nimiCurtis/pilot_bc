@@ -17,6 +17,7 @@ training:
   batch_size: 16
   eval_batch_size: 32
   epochs: 15
+  current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
   lr: 1e-4 # 5e-4
@@ -54,6 +55,8 @@ data:
   # dataset specific parameters
   image_size: [85, 64] # width, height
   goal_type: "image"
+  obs_type: "image"
+
 
 
 # logging stuff
@@ -61,6 +64,7 @@ log:
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
+  num_images_log: 8
   print_log_freq: 100 # in iterations
   image_log_freq: 1000 #0 # in iterations
   eval_fraction: 0.25

@@ -22,15 +22,6 @@ from torchvision import transforms
 import torchvision.transforms.functional as TF
 import matplotlib.pyplot as plt
 
-# LOAD DATA CONFIG
-with open(os.path.join(os.path.dirname(__file__), "../data/data_config.yaml"), "r") as f:
-    data_config = yaml.safe_load(f)
-
-# # POPULATE ACTION STATS
-# ACTION_STATS = {}
-# for key in data_config['action_stats']:
-#     ACTION_STATS[key] = np.array(data_config['action_stats'][key])
-
 # Train utils for ViNT and GNM
 def _compute_losses(
         dist_label: torch.Tensor,
@@ -455,114 +446,114 @@ def evaluate(
     return dist_loss_logger.average(), action_loss_logger.average(), total_loss_logger.average()
 
 
-# Train utils for NOMAD
-def _compute_losses_nomad(
-        ema_model,
-        noise_scheduler,
-        batch_obs_images,
-        batch_goal_images,
-        batch_dist_label: torch.Tensor,
-        batch_action_label: torch.Tensor,
-        device: torch.device,
-        action_mask: torch.Tensor,
-):
-    """
-    Compute losses for distance and action prediction.
-    """
+# # Train utils for NOMAD
+# def _compute_losses_nomad(
+#         ema_model,
+#         noise_scheduler,
+#         batch_obs_images,
+#         batch_goal_images,
+#         batch_dist_label: torch.Tensor,
+#         batch_action_label: torch.Tensor,
+#         device: torch.device,
+#         action_mask: torch.Tensor,
+# ):
+#     """
+#     Compute losses for distance and action prediction.
+#     """
 
-    pred_horizon = batch_action_label.shape[1]
-    action_dim = batch_action_label.shape[2]
+#     pred_horizon = batch_action_label.shape[1]
+#     action_dim = batch_action_label.shape[2]
 
-    model_output_dict = model_output(
-        ema_model,
-        noise_scheduler,
-        batch_obs_images,
-        batch_goal_images,
-        pred_horizon,
-        action_dim,
-        num_samples=1,
-        device=device,
-    )
-    uc_actions = model_output_dict['uc_actions']
-    gc_actions = model_output_dict['gc_actions']
-    gc_distance = model_output_dict['gc_distance']
+#     model_output_dict = model_output(
+#         ema_model,
+#         noise_scheduler,
+#         batch_obs_images,
+#         batch_goal_images,
+#         pred_horizon,
+#         action_dim,
+#         num_samples=1,
+#         device=device,
+#     )
+#     uc_actions = model_output_dict['uc_actions']
+#     gc_actions = model_output_dict['gc_actions']
+#     gc_distance = model_output_dict['gc_distance']
 
-    gc_dist_loss = F.mse_loss(gc_distance, batch_dist_label.unsqueeze(-1))
+#     gc_dist_loss = F.mse_loss(gc_distance, batch_dist_label.unsqueeze(-1))
 
-    def action_reduce(unreduced_loss: torch.Tensor):
-        # Reduce over non-batch dimensions to get loss per batch element
-        while unreduced_loss.dim() > 1:
-            unreduced_loss = unreduced_loss.mean(dim=-1)
-        assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
-        return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
+#     def action_reduce(unreduced_loss: torch.Tensor):
+#         # Reduce over non-batch dimensions to get loss per batch element
+#         while unreduced_loss.dim() > 1:
+#             unreduced_loss = unreduced_loss.mean(dim=-1)
+#         assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
+#         return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 
-    # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
-    assert uc_actions.shape == batch_action_label.shape, f"{uc_actions.shape} != {batch_action_label.shape}"
-    assert gc_actions.shape == batch_action_label.shape, f"{gc_actions.shape} != {batch_action_label.shape}"
+#     # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
+#     assert uc_actions.shape == batch_action_label.shape, f"{uc_actions.shape} != {batch_action_label.shape}"
+#     assert gc_actions.shape == batch_action_label.shape, f"{gc_actions.shape} != {batch_action_label.shape}"
 
-    uc_action_loss = action_reduce(F.mse_loss(uc_actions, batch_action_label, reduction="none"))
-    gc_action_loss = action_reduce(F.mse_loss(gc_actions, batch_action_label, reduction="none"))
+#     uc_action_loss = action_reduce(F.mse_loss(uc_actions, batch_action_label, reduction="none"))
+#     gc_action_loss = action_reduce(F.mse_loss(gc_actions, batch_action_label, reduction="none"))
 
-    uc_action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
-        uc_actions[:, :, :2], batch_action_label[:, :, :2], dim=-1
-    ))
-    uc_multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
-        torch.flatten(uc_actions[:, :, :2], start_dim=1),
-        torch.flatten(batch_action_label[:, :, :2], start_dim=1),
-        dim=-1,
-    ))
+#     uc_action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
+#         uc_actions[:, :, :2], batch_action_label[:, :, :2], dim=-1
+#     ))
+#     uc_multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
+#         torch.flatten(uc_actions[:, :, :2], start_dim=1),
+#         torch.flatten(batch_action_label[:, :, :2], start_dim=1),
+#         dim=-1,
+#     ))
 
-    gc_action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
-        gc_actions[:, :, :2], batch_action_label[:, :, :2], dim=-1
-    ))
-    gc_multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
-        torch.flatten(gc_actions[:, :, :2], start_dim=1),
-        torch.flatten(batch_action_label[:, :, :2], start_dim=1),
-        dim=-1,
-    ))
+#     gc_action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
+#         gc_actions[:, :, :2], batch_action_label[:, :, :2], dim=-1
+#     ))
+#     gc_multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
+#         torch.flatten(gc_actions[:, :, :2], start_dim=1),
+#         torch.flatten(batch_action_label[:, :, :2], start_dim=1),
+#         dim=-1,
+#     ))
 
-    results = {
-        "uc_action_loss": uc_action_loss,
-        "uc_action_waypts_cos_sim": uc_action_waypts_cos_similairity,
-        "uc_multi_action_waypts_cos_sim": uc_multi_action_waypts_cos_sim,
-        "gc_dist_loss": gc_dist_loss,
-        "gc_action_loss": gc_action_loss,
-        "gc_action_waypts_cos_sim": gc_action_waypts_cos_similairity,
-        "gc_multi_action_waypts_cos_sim": gc_multi_action_waypts_cos_sim,
-    }
+#     results = {
+#         "uc_action_loss": uc_action_loss,
+#         "uc_action_waypts_cos_sim": uc_action_waypts_cos_similairity,
+#         "uc_multi_action_waypts_cos_sim": uc_multi_action_waypts_cos_sim,
+#         "gc_dist_loss": gc_dist_loss,
+#         "gc_action_loss": gc_action_loss,
+#         "gc_action_waypts_cos_sim": gc_action_waypts_cos_similairity,
+#         "gc_multi_action_waypts_cos_sim": gc_multi_action_waypts_cos_sim,
+#     }
 
-    return results
-
-
-# normalize data
-def get_data_stats(data):
-    data = data.reshape(-1, data.shape[-1])
-    stats = {
-        'min': np.min(data, axis=0),
-        'max': np.max(data, axis=0)
-    }
-    return stats
+#     return results
 
 
-def normalize_data(data, stats):
-    # nomalize to [0,1]
-    ndata = (data - stats['min']) / (stats['max'] - stats['min'])
-    # normalize to [-1, 1]
-    ndata = ndata * 2 - 1
-    return ndata
+# # normalize data
+# def get_data_stats(data):
+#     data = data.reshape(-1, data.shape[-1])
+#     stats = {
+#         'min': np.min(data, axis=0),
+#         'max': np.max(data, axis=0)
+#     }
+#     return stats
 
 
-def unnormalize_data(ndata, stats):
-    ndata = (ndata + 1) / 2
-    data = ndata * (stats['max'] - stats['min']) + stats['min']
-    return data
+# def normalize_data(data, stats):
+#     # nomalize to [0,1]
+#     ndata = (data - stats['min']) / (stats['max'] - stats['min'])
+#     # normalize to [-1, 1]
+#     ndata = ndata * 2 - 1
+#     return ndata
 
 
-def get_delta(actions):
-    # append zeros to first action
-    ex_actions = np.concatenate([np.zeros((actions.shape[0], 1, actions.shape[-1])), actions], axis=1)
-    delta = ex_actions[:, 1:] - ex_actions[:, :-1]
-    return delta
+# def unnormalize_data(ndata, stats):
+#     ndata = (ndata + 1) / 2
+#     data = ndata * (stats['max'] - stats['min']) + stats['min']
+#     return data
+
+
+# def get_delta(actions):
+#     # append zeros to first action
+#     ex_actions = np.concatenate([np.zeros((actions.shape[0], 1, actions.shape[-1])), actions], axis=1)
+#     delta = ex_actions[:, 1:] - ex_actions[:, :-1]
+#     return delta
 
 
 # def get_action(diffusion_output, action_stats=ACTION_STATS):

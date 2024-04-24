@@ -11,6 +11,8 @@ import argparse
 import time
 from omegaconf import DictConfig, OmegaConf
 
+
+
 import torch
 from torch.utils.data import Dataset
 import torchvision.transforms.functional as TF
@@ -32,6 +34,7 @@ from pilot_train.utils.utils import (
     normalize_data,
 )
 
+from pilot_config.config import get_robot_config, get_recording_config
 class PilotDataset(Dataset):
     def __init__(
         self,
@@ -63,29 +66,53 @@ class PilotDataset(Dataset):
         """
         
         
-        data_folder=datasets_cfg.data_folder
+        # Robot cfg
         data_split_folder=robot_dataset_cfg[data_split_type]
-        dataset_name=dataset_name
-        image_size= data_cfg.image_size
-        waypoint_spacing=robot_dataset_cfg.waypoint_spacing
-        min_dist_cat=data_cfg.distance.min_dist_cat
-        max_dist_cat=data_cfg.distance.max_dist_cat
-        min_action_distance=data_cfg.action.min_dist_cat
-        max_action_distance=data_cfg.action.max_dist_cat
-        negative_mining=robot_dataset_cfg.negative_mining
-        len_traj_pred=data_cfg.len_traj_pred
-        learn_angle=data_cfg.learn_angle
-        context_size=data_cfg.context_size
-        context_type=data_cfg.context_type
-        end_slack=robot_dataset_cfg.end_slack
-        goals_per_obs=robot_dataset_cfg.goals_per_obs
-        normalize=data_cfg.normalize
-        goal_type=data_cfg.goal_type
+        self.waypoint_spacing=robot_dataset_cfg.waypoint_spacing
+        self.negative_mining=robot_dataset_cfg.negative_mining
+        self.end_slack=robot_dataset_cfg.end_slack
+        self.goals_per_obs=robot_dataset_cfg.goals_per_obs
+        self.data_config = robot_dataset_cfg
+
+        # Data cfg
+        self.image_size= data_cfg.image_size
+        self.normalize=data_cfg.normalize
+        self.goal_type=data_cfg.goal_type
+        self.obs_type = data_cfg.obs_type
+        self.len_traj_pred=data_cfg.len_traj_pred
+        self.learn_angle=data_cfg.learn_angle
+        if self.learn_angle:
+            self.num_action_params = 3
+        else:
+            self.num_action_params = 2
+        self.context_size=data_cfg.context_size
+        assert data_cfg.context_type in {
+            "temporal",
+            "randomized",
+            "randomized_temporal",
+        }, "context_type must be one of temporal, randomized, randomized_temporal"
+        self.context_type = data_cfg.context_type
         
+        # Possible distances for predicting distance
+        self.distance_categories = list(
+            range(data_cfg.distance.min_dist_cat,
+                data_cfg.distance.max_dist_cat + 1,
+                self.waypoint_spacing)
+        )
+        self.min_dist_cat = self.distance_categories[0]
+        self.max_dist_cat = self.distance_categories[-1]
+        if self.negative_mining:
+            self.distance_categories.append(-1)
+        self.min_action_distance=data_cfg.action.min_dist_cat
+        self.max_action_distance=data_cfg.action.max_dist_cat
+
+        # Names and folders
+        data_folder=datasets_cfg.data_folder
         self.data_folder = data_folder
         self.data_split_folder = data_split_folder
         self.dataset_name = dataset_name
         
+        # Load trajectories names for this robot
         traj_names_file = os.path.join(data_split_folder, "traj_names.txt")
         with open(traj_names_file, "r") as f:
             file_lines = f.read()
@@ -93,64 +120,24 @@ class PilotDataset(Dataset):
         if "" in self.traj_names:
             self.traj_names.remove("")
 
-        self.image_size = image_size
-        self.waypoint_spacing = waypoint_spacing
-        self.distance_categories = list(
-            range(min_dist_cat, max_dist_cat + 1, self.waypoint_spacing)
-        )
-        self.min_dist_cat = self.distance_categories[0]
-        self.max_dist_cat = self.distance_categories[-1]
-        self.negative_mining = negative_mining
-        if self.negative_mining:
-            self.distance_categories.append(-1)
-        self.len_traj_pred = len_traj_pred
-        self.learn_angle = learn_angle
-        self.min_action_distance = min_action_distance
-        self.max_action_distance = max_action_distance
-
-        self.context_size = context_size
-        assert context_type in {
-            "temporal",
-            "randomized",
-            "randomized_temporal",
-        }, "context_type must be one of temporal, randomized, randomized_temporal"
-        self.context_type = context_type
-        self.end_slack = end_slack
-        self.goals_per_obs = goals_per_obs
-        self.normalize = normalize
-        self.obs_type = obs_type
-        self.goal_type = goal_type
-
-        # load data/data_config.yaml
-        with open(
-            os.path.join(os.path.dirname(__file__), "data_config.yaml"), "r"
-        ) as f:
-            all_data_config = yaml.safe_load(f)
-        assert (
-            self.dataset_name in all_data_config
-        ), f"Dataset {self.dataset_name} not found in data_config.yaml"
-        dataset_names = list(all_data_config.keys())
+        # Organize data and indexing
+        dataset_names = datasets_cfg.robots
         dataset_names.sort()
-        # use this index to retrieve the dataset name from the data_config.yaml
+        
+        # use this index to retrieve the dataset name from the dataset config
         self.dataset_index = dataset_names.index(self.dataset_name)
-        self.data_config = all_data_config[self.dataset_name]
         self.trajectory_cache = {}
         self._load_index()
         self._build_caches()
-        
-        if self.learn_angle:
-            self.num_action_params = 3
-        else:
-            self.num_action_params = 2
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state["_image_cache"] = None
-        return state
+        state = self.__dict__.copy() # Make a copy of the object's dictionary.
+        state["_image_cache"] = None # Explicitly remove the image cache from the serialized state.
+        return state 
     
     def __setstate__(self, state):
-        self.__dict__ = state
-        self._build_caches()
+        self.__dict__ = state # Restore the serialized state.
+        self._build_caches() # Rebuild the image cache after the object has been deserialized.
 
     def _build_caches(self, use_tqdm: bool = True):
         """
@@ -165,9 +152,7 @@ class PilotDataset(Dataset):
         for traj_name in self.traj_names:
             self._get_trajectory(traj_name)
 
-        """
-        If the cache file doesn't exist, create it by iterating through the dataset and writing each image to the cache
-        """
+        # If the cache file doesn't exist, create it by iterating through the dataset and writing each image to the cache
         if not os.path.exists(cache_filename):
             tqdm_iterator = tqdm.tqdm(
                 self.goals_index,
@@ -175,7 +160,7 @@ class PilotDataset(Dataset):
                 dynamic_ncols=True,
                 desc=f"Building LMDB cache for {self.dataset_name}"
             )
-            
+
             # map_size = 2**40 bytes = 1 TB
             with lmdb.open(cache_filename, map_size=2**40) as image_cache:
                 with image_cache.begin(write=True) as txn:
@@ -186,7 +171,7 @@ class PilotDataset(Dataset):
 
         # Reopen the cache file in read-only mode
         self._image_cache: lmdb.Environment = lmdb.open(cache_filename, readonly=True)
-        
+
     def _build_index(self, use_tqdm: bool = False):
         """
         Build an index consisting of tuples (trajectory name, time, max goal distance)
@@ -404,23 +389,28 @@ class PilotDataset(Dataset):
     ## added
     def _get_properties(self,trajectory_name):
         
-        with open(os.path.join(self.data_folder, trajectory_name, "metadata.json"), "rb") as f:
-                meta_data = json.load(f)
-                robot = meta_data['demonstrator']
-                frame_rate = meta_data['sync_rate']
+        recording_config = get_recording_config(data_folder=self.data_folder,
+                                                trajectory_name=trajectory_name)
+        robot = recording_config['demonstrator']
+        frame_rate = recording_config['sync_rate']
+        
+        robot_properties = get_robot_config(robot)
+        lin_vel_lim = robot_properties[robot]['max_lin_vel']
+        ang_vel_lim = robot_properties[robot]['max_ang_vel']
 
         return {
             'robot': robot,
-            'frame_rate': frame_rate
+            'frame_rate': frame_rate,
+            'max_lin_vel': lin_vel_lim,
+            'max_ang_vel': ang_vel_lim
         }
 
     ## added
     def _get_action_stats(self,properties, waypoint_spacing):
-        #robot = properties['robot']
+        
         frame_rate = properties['frame_rate']
-
-        lin_vel_lim = self.data_config['max_lin_vel']
-        ang_vel_lim = self.data_config['max_ang_vel']
+        lin_vel_lim = properties['max_lin_vel']
+        ang_vel_lim = properties['max_ang_vel']
         
         return {'pos': {'max': (lin_vel_lim / frame_rate)*waypoint_spacing,
                         'min': -(lin_vel_lim /frame_rate)*waypoint_spacing},

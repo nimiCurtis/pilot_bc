@@ -1,8 +1,7 @@
 from typing import List, Dict, Optional, Tuple
-from efficientnet_pytorch import EfficientNet
-from pilot_train.models.vint.base_model import BaseModel
-from omegaconf import DictConfig, OmegaConf
-
+from pilot_train.models.policy.base_model import BaseModel
+from pilot_train.models.encoder.model_registry import get_encoder_model
+from omegaconf import DictConfig
 
 import torch
 import torch.nn as nn
@@ -77,47 +76,28 @@ class ViNT(BaseModel):
         len_traj_pred=data_cfg.len_traj_pred
         learn_angle=data_cfg.learn_angle
         
-        # Encoder config
-        obs_encoder=encoder_model_cfg.version
-        obs_encoding_size=encoder_model_cfg.obs_encoding_size
-        
         # Policy model
-        late_fusion=policy_model_cfg.late_fusion
         mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
         mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
         mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
-        
+        self.obs_encoding_size=policy_model_cfg.obs_encoding_size
+        self.late_fusion=policy_model_cfg.late_fusion
+
         # Training config
-        goal_condition=training_cfg.goal_condition
+        self.goal_condition=training_cfg.goal_condition
         
         super(ViNT, self).__init__(context_size, len_traj_pred, learn_angle)
-        self.obs_encoding_size = obs_encoding_size
-        self.goal_encoding_size = obs_encoding_size
         
-        self.goal_condition = goal_condition
         seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
         
-        self.late_fusion = late_fusion
-        if obs_encoder.split("-")[0] == "efficientnet":
-            self.obs_encoder = EfficientNet.from_name(obs_encoder, in_channels=3)  # context
-            self.num_obs_features = self.obs_encoder._fc.in_features
-            if self.late_fusion:
-                self.goal_encoder = EfficientNet.from_name("efficientnet-b0", in_channels=3)
-            else:
-                self.goal_encoder = EfficientNet.from_name("efficientnet-b0", in_channels=6)  # obs+goal
-            self.num_goal_features = self.goal_encoder._fc.in_features
-        else:
-            raise NotImplementedError
+        self.obs_encoder = get_encoder_model(encoder_model_cfg)
 
+        self.num_obs_features = self.obs_encoder.get_in_feateures()
         if self.num_obs_features != self.obs_encoding_size:
             self.compress_obs_enc = nn.Linear(self.num_obs_features, self.obs_encoding_size)
         else:
             self.compress_obs_enc = nn.Identity()
 
-        if self.num_goal_features != self.goal_encoding_size:
-            self.compress_goal_enc = nn.Linear(self.num_goal_features, self.goal_encoding_size)
-        else:
-            self.compress_goal_enc = nn.Identity()
 
         self.decoder = MultiLayerDecoder(
             embed_dim=self.obs_encoding_size,
@@ -138,23 +118,6 @@ class ViNT(BaseModel):
             self, obs_img: torch.tensor, goal_img: torch.tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        # get the fused observation and goal encoding
-        if self.late_fusion:
-            goal_encoding = self.goal_encoder.extract_features(goal_img)
-        else:
-            obsgoal_img = torch.cat([obs_img[:, 3 * self.context_size:, :, :], goal_img], dim=1)
-            goal_encoding = self.goal_encoder.extract_features(obsgoal_img)
-        goal_encoding = self.goal_encoder._avg_pooling(goal_encoding)
-        if self.goal_encoder._global_params.include_top:
-            goal_encoding = goal_encoding.flatten(start_dim=1)
-            goal_encoding = self.goal_encoder._dropout(goal_encoding)
-        # currently, the size of goal_encoding is [batch_size, num_goal_features]
-        goal_encoding = self.compress_goal_enc(goal_encoding)
-        if len(goal_encoding.shape) == 2:
-            goal_encoding = goal_encoding.unsqueeze(1)
-        # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-        assert goal_encoding.shape[2] == self.goal_encoding_size
-
         # split the observation into context based on the context size
         # image size is [batch_size, C*self.context_size, H, W]
         obs_img = torch.split(obs_img, 3, dim=1)
@@ -163,15 +126,8 @@ class ViNT(BaseModel):
         obs_img = torch.concat(obs_img, dim=0)
 
         # get the observation encoding
-        obs_encoding = self.obs_encoder.extract_features(obs_img)
-        # currently the size is [batch_size*(self.context_size + 1), 1280, H/32, W/32]
-        obs_encoding = self.obs_encoder._avg_pooling(obs_encoding)
-        # currently the size is [batch_size*(self.context_size + 1), 1280, 1, 1]
-        if self.obs_encoder._global_params.include_top:
-            obs_encoding = obs_encoding.flatten(start_dim=1)
-            obs_encoding = self.obs_encoder._dropout(obs_encoding)
         # currently, the size is [batch_size, self.context_size+2, self.obs_encoding_size]
-
+        obs_encoding = self.obs_encoder.extract_features(obs_img)
         obs_encoding = self.compress_obs_enc(obs_encoding)
         # currently, the size is [batch_size*(self.context_size + 1), self.obs_encoding_size]
         # reshape the obs_encoding to [context + 1, batch, encoding_size], note that the order is flipped
@@ -180,9 +136,8 @@ class ViNT(BaseModel):
         # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
         # concatenate the goal encoding to the observation encoding
-        
         ## if not goal condition send only the encoding of the observations
-        tokens = torch.cat((obs_encoding, goal_encoding), dim=1) if self.goal_condition else obs_encoding
+        tokens = obs_encoding
         final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]

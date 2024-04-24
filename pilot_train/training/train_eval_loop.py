@@ -3,6 +3,7 @@ import os
 import numpy as np
 from typing import List, Optional, Dict
 from prettytable import PrettyTable
+from omegaconf import DictConfig, OmegaConf
 
 from pilot_train.training.train_utils import train, evaluate
 #from pilot_train.training.train_utils import train_nomad, evaluate_nomad
@@ -15,36 +16,22 @@ from torch.optim import Adam
 from torchvision import transforms
 
 
-
 def train_eval_loop(
-        train_model: bool,
-        model: nn.Module,
-        optimizer: Adam,
-        scheduler: Optional[torch.optim.lr_scheduler._LRScheduler],
-        dataloader: DataLoader,
-        test_dataloaders: Dict[str, DataLoader],
-        transform: transforms,
-        epochs: int,
-        device: torch.device,
-        project_folder: str,
-        normalized: bool,
-        wandb_log_freq: int = 10,
-        print_log_freq: int = 100,
-        image_log_freq: int = 1000,
-        num_images_log: int = 8,
-        current_epoch: int = 0,
-        alpha: float = 0.5,
-        beta: float = 10.,
-        learn_angle: bool = True,
-        use_wandb: bool = True,
-        eval_fraction: float = 0.25,
-        goal_condition = True
-):
+            model: nn.Module,
+            optimizer: torch.optim,
+            scheduler,
+            dataloader: DataLoader,
+            test_dataloaders: List[DataLoader],
+            transform: transforms,
+            device,
+            training_cfg: DictConfig,
+            data_cfg: DictConfig,
+            log_cfg: DictConfig):
+
     """
     Train and evaluate the model for several epochs (vint or gnm models)
 
     Args:
-        train_model: whether to train the model or not
         model: model to train
         optimizer: optimizer to use
         scheduler: learning rate scheduler to use
@@ -65,33 +52,53 @@ def train_eval_loop(
         use_wandb: whether to log to wandb or not
         eval_fraction: fraction of training data to use for evaluation
     """
+    
+    # Log config
+    project_folder=log_cfg.project_folder
+    print_log_freq=log_cfg.print_log_freq
+    wandb_log_freq = log_cfg.wandb.run.log_freq
+    image_log_freq=log_cfg.image_log_freq
+    num_images_log=log_cfg.num_images_log
+    use_wandb=log_cfg.wandb.run.enable
+    eval_fraction=log_cfg.eval_fraction
+    
+    # Training config
+    alpha=training_cfg.alpha if training_cfg.goal_condition else 0
+    beta=training_cfg.beta
+    goal_condition = training_cfg.goal_condition
+    current_epoch=training_cfg.current_epoch
+    epochs=training_cfg.epochs
+    
+    # Data config
+    normalized=data_cfg.normalize
+    learn_angle=data_cfg.learn_angle
+    
     assert 0 <= alpha <= 1
-    latest_path = os.path.join(project_folder, f"latest.pth")
+    latest_path = os.path.join(project_folder, f"latest.pth") #change
 
     for epoch in range(current_epoch, current_epoch + epochs):
-        if train_model:
-            print(
-                f"Start ViNT Training Epoch {epoch}/{current_epoch + epochs - 1}"
-            )
-            train(
-                model=model,
-                optimizer=optimizer,
-                dataloader=dataloader,
-                transform=transform,
-                device=device,
-                project_folder=project_folder,
-                normalized=normalized,
-                epoch=epoch,
-                alpha=alpha,
-                beta=beta,
-                learn_angle=learn_angle,
-                print_log_freq=print_log_freq,
-                wandb_log_freq=wandb_log_freq,
-                image_log_freq=image_log_freq,
-                num_images_log=num_images_log,
-                use_wandb=use_wandb,
-                goal_condition=goal_condition
-            )
+        print(
+            f"Start ViNT Training Epoch {epoch}/{current_epoch + epochs - 1}"
+        )
+        train(
+            model=model,
+            optimizer=optimizer,
+            dataloader=dataloader,
+            transform=transform,
+            device=device,
+            project_folder=project_folder,
+            normalized=normalized,
+            epoch=epoch,
+            alpha=alpha,
+            beta=beta,
+            learn_angle=learn_angle,
+            print_log_freq=print_log_freq,
+            wandb_log_freq=wandb_log_freq,
+            image_log_freq=image_log_freq,
+            num_images_log=num_images_log,
+            use_wandb=use_wandb,
+            goal_condition=goal_condition
+        )
 
         avg_total_test_loss = []
         for dataset_type in test_dataloaders:
