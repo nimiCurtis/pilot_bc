@@ -86,7 +86,7 @@ class ViNT(BaseModel):
         # Training config
         self.goal_condition=training_cfg.goal_condition
         
-        super(ViNT, self).__init__(context_size, len_traj_pred, learn_angle)
+        super(ViNT, self).__init__(policy_model_cfg.name, context_size, len_traj_pred, learn_angle)
         
         seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
         
@@ -115,7 +115,7 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor, goal_img: torch.tensor,
+            self, obs_img: torch.tensor, goal_rel_pos_to_obj: torch.tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size

@@ -19,7 +19,7 @@ from warmup_scheduler import GradualWarmupScheduler
 
 # from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 # from diffusers.optimization import get_scheduler
-
+from pilot_train.training.trainer import Trainer
 from pilot_config.config import get_config_dir
 """
 IMPORT YOUR MODEL HERE
@@ -288,7 +288,7 @@ def train(cfg:DictConfig):
     optimizer = get_optimizer(optimizer_name, model=model, lr=lr)
     scheduler = get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=lr) if "scheduler" in training_cfg else None
 
-    current_epoch = 0
+    ### TODO: add the load run in the Trainer class
     # if "load_run" in config:
     #     load_project_folder = os.path.join("logs", config["load_run"])
     #     print("Loading model from ", load_project_folder)
@@ -298,56 +298,32 @@ def train(cfg:DictConfig):
     #     if "epoch" in latest_checkpoint:
     #         current_epoch = latest_checkpoint["epoch"] + 1
 
-    # Multi-GPU
-    if len(training_cfg.gpu_ids) > 1:
-        model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)
-    model = model.to(device)
-
+    
     # if "load_run" in config:  # load optimizer and scheduler after data parallel
     #     if "optimizer" in latest_checkpoint:
     #         optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
     #     if scheduler is not None and "scheduler" in latest_checkpoint:
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    ### continue form here!!!! 
+    # Multi-GPU
+    if len(training_cfg.gpu_ids) > 1:
+        model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)
+    model = model.to(device)
+    model.count_parameters()
     
-    if policy_model_cfg.name == "vint":
-        train_eval_loop(
-            model=model,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            dataloader=train_loader,
-            test_dataloaders=test_dataloaders,
-            transform=transform,
-            device=device,
-            training_cfg=training_cfg,
-            data_cfg=data_cfg,
-            log_cfg=log_cfg)
-
-    # else:
-    #     train_eval_loop_nomad(
-    #         train_model=config["train"],
-    #         model=model,
-    #         optimizer=optimizer,
-    #         lr_scheduler=scheduler,
-    #         noise_scheduler=noise_scheduler,
-    #         train_loader=train_loader,
-    #         test_dataloaders=test_dataloaders,
-    #         transform=transform,
-    #         goal_mask_prob=config["goal_mask_prob"],
-    #         epochs=config["epochs"],
-    #         device=device,
-    #         project_folder=config["project_folder"],
-    #         print_log_freq=config["print_log_freq"],
-    #         wandb_log_freq=config["wandb_log_freq"],
-    #         image_log_freq=config["image_log_freq"],
-    #         num_images_log=config["num_images_log"],
-    #         current_epoch=current_epoch,
-    #         alpha=float(config["alpha"]),
-    #         use_wandb=config["use_wandb"],
-    #         eval_fraction=config["eval_fraction"],
-    #         eval_freq=config["eval_freq"],
-    #     )
+    pilot_trainer = Trainer(model=model,
+        optimizer=optimizer,
+        scheduler=scheduler,
+        dataloader=train_loader,
+        test_dataloaders=test_dataloaders,
+        transform=transform,
+        device=device,
+        training_cfg=training_cfg,
+        data_cfg=data_cfg,
+        log_cfg=log_cfg
+    )
+    
+    pilot_trainer.run()
 
     print("FINISHED TRAINING")
 
