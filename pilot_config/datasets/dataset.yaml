@@ -4,12 +4,11 @@ data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/dataset
 
 # Robots 
 turtlebot: 
-    # abs path to the dataset folder
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/train
-          # path to train folder with traj_names.txt
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/test
-          # path to test folder with traj_names.txt
-    end_slack: 3 # because many trajectories end in collisions
-    goals_per_obs: 1 # how many goals are sampled per observation
-    negative_mining: True # negative mining from the ViNG paper (Shah et al.)
-    
+      # abs path to the dataset folder
+      train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/train
+            # path to train folder with traj_names.txt
+      test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtlebot/test
+            # path to test folder with traj_names.txt
+      end_slack: 3 # because many trajectories end in collisions
+      goals_per_obs: 1 # how many goals are sampled per observation
+      negative_mining: True # negative mining from the ViNG paper (Shah et al.)

@@ -13,6 +13,8 @@ turtlebot:
 
   # OPTIONAL (FOR VISUALIZATION ONLY)
   camera_metrics: # https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
+
+    # For zedm camera
     camera_height: 0.18 # meters
     camera_x_offset: 0.035 # distance between the center of the robot and the forward facing camera
     camera_matrix:

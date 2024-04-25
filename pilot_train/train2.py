@@ -18,22 +18,6 @@ import torch.backends.cudnn as cudnn
 from pilot_train.training.trainer import Trainer
 from pilot_config.config import get_main_config_dir, split_main_config
 
-# from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
-# from diffusers.optimization import get_scheduler
-
-
-"""
-IMPORT YOUR MODEL HERE
-"""
-
-# from vint_train.models.gnm.gnm import GNM
-# from vint_train.models.vint.vint import ViNT
-# from vint_train.models.vint.vit import ViT
-# from vint_train.models.nomad.nomad import NoMaD, DenseNetwork
-# from vint_train.models.nomad.nomad_vint import NoMaD_ViNT, replace_bn_with_gn
-# from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
-# from vint_train.data.vint_dataset import ViNT_Dataset
-
 def train(cfg:DictConfig):
     
     # Get configs    
@@ -109,7 +93,7 @@ def train(cfg:DictConfig):
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
     # Tansform 
-    # TODO: refactoring transofrm implemetnation
+    # TODO: refactoring transofrm implemetnation, this is the Vint implementation
     transform = ([
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
@@ -133,7 +117,8 @@ def train(cfg:DictConfig):
         device=device,
         training_cfg=training_cfg,
         data_cfg=data_cfg,
-        log_cfg=log_cfg
+        log_cfg=log_cfg,
+        datasets_cfg=datasets_cfg
     )
     
     pilot_trainer.run()

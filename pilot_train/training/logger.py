@@ -1,5 +1,10 @@
 import numpy as np
-
+import torch
+import tqdm
+import wandb
+import os
+from pilot_utils.visualizing import Visualizer
+from pilot_utils.utils import to_numpy
 
 class Logger:
     def __init__(
@@ -50,3 +55,75 @@ class Logger:
         if len(self.data) > self.window_size:
             return np.mean(self.data[-self.window_size :])
         return self.average()
+
+class LoggingManager:
+    
+    def __init__(self, datasets_cfg, log_cfg) -> None:
+        
+        log_folder_path = os.path.join(log_cfg.project_folder,
+                                    log_cfg.run_name)
+        self.log_folder = log_folder_path
+        self.dataset_config = datasets_cfg
+        self.use_wandb = log_cfg.wandb.run.enable
+        self.wandb_log_freq=log_cfg.wandb.run.log_freq
+        self.print_log_freq=log_cfg.print_log_freq
+        self.image_log_freq=log_cfg.image_log_freq
+        self.num_images_log = log_cfg.num_images_log
+        self.visualizer = Visualizer(datasets_cfg=datasets_cfg,
+                                    log_cfg=log_cfg)
+        
+    def log_data(self,
+            i,
+            epoch,
+            num_batches,
+            normalized,
+            loggers,
+            obs_image,
+            goal_image,
+            action_pred,
+            action_label,
+            dist_pred,
+            dist_label,
+            goal_pos,
+            dataset_index,
+            mode,
+            use_latest,
+            wandb_increment_step=True,
+    ):
+        """
+        Log data to wandb and print to console.
+        """
+        data_log = {}
+        for key, logger in loggers.items():
+            if use_latest:
+                data_log[logger.full_name()] = logger.latest()
+                if i % self.print_log_freq == 0 and self.print_log_freq != 0:
+                    print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
+            else:
+                data_log[logger.full_name()] = logger.average()
+                if i % self.print_log_freq == 0 and self.print_log_freq != 0:
+                    print(f"(epoch {epoch}) {logger.full_name()} {logger.average()}")
+
+        if self.use_wandb and i % self.wandb_log_freq == 0 and self.wandb_log_freq != 0:
+            wandb.log(data_log, commit=wandb_increment_step)
+
+        if self.image_log_freq != 0 and i % self.image_log_freq == 0:
+            self.visualizer.visualize_dist_pred(
+                to_numpy(obs_image),
+                to_numpy(goal_image),
+                to_numpy(dist_pred),
+                to_numpy(dist_label),
+                mode,
+                epoch,
+            )
+            self.visualizer.visualize_traj_pred(
+                to_numpy(obs_image),
+                to_numpy(goal_image),
+                to_numpy(dataset_index),
+                to_numpy(goal_pos),
+                to_numpy(action_pred),
+                to_numpy(action_label),
+                mode,
+                normalized,
+                epoch,
+            )

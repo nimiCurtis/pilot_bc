@@ -64,9 +64,10 @@ def transform_images(pil_imgs: List[PILImage.Image], image_size: List[int], cent
         [
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
-                                    0.229, 0.224, 0.225]),
+                                    0.229, 0.224, 0.225]),   ## There is a Normazalize here be carefull if there another one
         ]
     )
+    
     if type(pil_imgs) != list:
         pil_imgs = [pil_imgs]
     transf_imgs = []

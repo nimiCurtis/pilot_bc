@@ -13,7 +13,7 @@ class EfficientNet(BaseModel):
     
     def get_in_feateures(self):
         return self.model._fc.in_features
-    
+
     def extract_features(self, img):
         
         # get the observation encoding

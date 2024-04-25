@@ -1,32 +1,62 @@
 import os
-import json
 import itertools
 
-import torch
-from torch import nn
-from torch.utils.data import Dataset, DataLoader
-from warmup_scheduler import GradualWarmupScheduler
-from torch.optim import Adam, AdamW, SGD
-import torchvision.transforms.functional as TF
-from pilot_train.data.data_utils import VISUALIZATION_IMAGE_SIZE
-from torchvision import transforms
-from omegaconf import DictConfig, OmegaConf
-
-
-import torch
 import numpy as np
 import tqdm
 import wandb
+from omegaconf import DictConfig, OmegaConf
+from typing import List, Tuple
+import torch
+from torch import nn
+from torch.utils.data import DataLoader, ConcatDataset
+from warmup_scheduler import GradualWarmupScheduler
+from torch.optim import Adam, AdamW, SGD
+import torchvision.transforms.functional as TF
+from torchvision.transforms import transforms
 
-
-from pilot_train.training.logger import Logger
-from pilot_train.training.train_utils import _compute_losses, _log_data
+from pilot_train.data.data_utils import VISUALIZATION_IMAGE_SIZE
+from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_train.data.pilot_dataset import PilotDataset
-from torch.utils.data import DataLoader, ConcatDataset
 
 class Trainer:
-    def __init__(self, model, optimizer, scheduler, dataloader,test_dataloaders, transform, device, training_cfg, data_cfg, log_cfg):
+    """
+    A class responsible for managing the training and evaluation processes of pilot model.
+
+    This class handles the operations necessary to train a model, evaluate it on test data, log results,
+    and save model checkpoints using a set of configurations provided during instantiation.
+
+    """
+        
+    def __init__(self, model: nn.Module,
+                optimizer: torch.optim,
+                scheduler,
+                dataloader: DataLoader,
+                test_dataloaders: List[DataLoader],
+                transform: transforms ,
+                device,
+                training_cfg: DictConfig,
+                data_cfg: DictConfig, 
+                log_cfg: DictConfig,
+                datasets_cfg: DictConfig):
+        """
+        Initializes the Trainer object with model, optimizer, scheduler, data loaders, and configurations.
+
+        Parameters:
+            model (nn.Module): The model to be trained.
+            optimizer (torch.optim): Optimizer for training the model.
+            scheduler: Learning rate scheduler.
+            dataloader (DataLoader): Loader for training data.
+            test_dataloaders (List[DataLoader]): List of loaders for test data.
+            transform (transforms): Data transformations.
+            device: Computation device (CPU or GPU).
+            training_cfg (DictConfig): Training-specific configurations.
+            data_cfg (DictConfig): Data handling configurations.
+            log_cfg (DictConfig): Logging and visualization configurations.
+            datasets_cfg (DictConfig): Dataset configurations.
+        """
+        
+        
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -39,7 +69,11 @@ class Trainer:
         self.log_cfg = log_cfg
 
         # Log config
-        self.project_folder=log_cfg.project_folder
+        project_log_folder = os.path.join(log_cfg.project_folder,log_cfg.run_name)
+        if not os.path.exists(project_log_folder):
+            os.makedirs(project_log_folder)
+
+        self.project_log_folder=project_log_folder
         self.print_log_freq=log_cfg.print_log_freq
         self.wandb_log_freq = log_cfg.wandb.run.log_freq
         self.image_log_freq=log_cfg.image_log_freq
@@ -59,12 +93,23 @@ class Trainer:
         self.learn_angle=data_cfg.learn_angle
         
         assert 0 <= self.alpha <= 1
-        self.latest_path = os.path.join(self.project_folder, f"latest.pth") # TODO: change
+        self.latest_path = os.path.join(self.project_log_folder, f"latest.pth") # TODO: change
 
         self.best_loss = float('inf')
+        
+        self.logging_manager = LoggingManager(datasets_cfg=datasets_cfg,log_cfg=log_cfg)
 
-    def train_one_epoch(self, epoch):
+    def train_one_epoch(self, epoch: int)->None:
+        """
+        Conducts one epoch of training on the provided data loader and updates the model's parameters.
 
+        Parameters:
+            epoch (int): The current epoch number to use for logging and progress tracking.
+
+        Returns:
+            None
+        """
+        
         self.model.train()
         dist_loss_logger = Logger("dist_loss", "train", window_size=self.print_log_freq)
         action_loss_logger = Logger("action_loss", "train", window_size=self.print_log_freq)
@@ -133,14 +178,11 @@ class Trainer:
 
             dist_pred, action_pred = model_outputs
 
-            losses = _compute_losses(
+            losses = self.model._compute_losses(
                 dist_label=dist_label,
                 action_label=action_label,
                 dist_pred=dist_pred,
                 action_pred=action_pred,
-                alpha= self.alpha,
-                beta = self.beta,
-                learn_angle=self.learn_angle,
                 action_mask=action_mask,
             )
 
@@ -154,13 +196,11 @@ class Trainer:
                     logger = loggers[key]
                     logger.log_data(value.item())
 
-            _log_data(
+            self.logging_manager.log_data(
                 i=i,
                 epoch=epoch,
                 num_batches=num_batches,
                 normalized=self.normalized,
-                project_folder=self.project_folder,
-                num_images_log=self.num_images_log,
                 loggers=loggers,
                 obs_image=viz_obs_image,
                 goal_image=viz_goal_image,
@@ -170,15 +210,23 @@ class Trainer:
                 dist_label=dist_label,
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
-                wandb_log_freq=self.wandb_log_freq,
-                print_log_freq=self.print_log_freq,
-                image_log_freq=self.image_log_freq,
-                use_wandb=self.use_wandb,
                 mode="train",
                 use_latest=True,
             )
 
-    def evaluate_one_epoch(self, dataloader, eval_type, epoch):
+    def evaluate_one_epoch(self, dataloader:DataLoader, eval_type:str, epoch:int)->Tuple:
+        """
+        Evaluates the model's performance on a given dataset for one epoch.
+
+        Parameters:
+            dataloader (DataLoader): The DataLoader for the dataset to evaluate.
+            eval_type (str): Type of evaluation (e.g., "validation", "test").
+            epoch (int): Current epoch number for logging purposes.
+
+        Returns:
+            tuple: Tuple containing the average distance loss, action loss, and total loss for the evaluated epoch.
+        """
+        
         self.model.eval()
         dist_loss_logger = Logger("dist_loss", eval_type)
         action_loss_logger = Logger("action_loss", eval_type)
@@ -242,14 +290,11 @@ class Trainer:
                 # print("Action predictions sample: ")
                 # print(action_pred[0][0])
                 # print()
-                losses = _compute_losses(
+                losses = self.model._compute_losses(
                     dist_label=dist_label,
                     action_label=action_label,
                     dist_pred=dist_pred,
                     action_pred=action_pred,
-                    alpha=self.alpha,
-                    beta=self.beta,
-                    learn_angle=self.learn_angle,
                     action_mask=action_mask,
                 )
 
@@ -258,32 +303,37 @@ class Trainer:
                         logger = loggers[key]
                         logger.log_data(value.item())
 
-        # Log data to wandb/console, with visualizations selected from the last batch
-        _log_data(
-            i=i,
-            epoch=epoch,
-            num_batches=num_batches,
-            normalized=self.normalized,
-            project_folder=self.project_folder,
-            num_images_log=self.num_images_log,
-            loggers=loggers,
-            obs_image=viz_obs_image,
-            goal_image=viz_goal_image,
-            action_pred=action_pred,
-            action_label=action_label,
-            goal_pos=goal_pos,
-            dist_pred=dist_pred,
-            dist_label=dist_label,
-            dataset_index=dataset_index,
-            use_wandb=self.use_wandb,
-            mode=eval_type,
-            use_latest=False,
-            wandb_increment_step=False,
-        )
+                # Log data to wandb/console, with visualizations selected from the last batch
+                self.logging_manager.log_data(
+                    i=i,
+                    epoch=epoch,
+                    num_batches=num_batches,
+                    normalized=self.normalized,
+                    loggers=loggers,
+                    obs_image=viz_obs_image,
+                    goal_image=viz_goal_image,
+                    action_pred=action_pred,
+                    action_label=action_label,
+                    goal_pos=goal_pos,
+                    dist_pred=dist_pred,
+                    dist_label=dist_label,
+                    dataset_index=dataset_index,
+                    mode=eval_type,
+                    use_latest=False,
+                    wandb_increment_step=False,
+                )
 
         return dist_loss_logger.average(), action_loss_logger.average(), total_loss_logger.average()
 
-    def run(self):
+    def run(self)->None:
+        """
+        Executes the training process across all specified epochs, evaluates on test datasets, and manages
+        logging and model saving.
+
+        Returns:
+            None
+        """
+        
         for epoch in range(self.current_epoch, self.current_epoch + self.epochs):
             print()
             print(
@@ -304,9 +354,10 @@ class Trainer:
                 avg_total_test_loss.append(total_eval_loss)
 
             current_avg_loss = np.mean(avg_total_test_loss)
+            
             # Update best loss and save the model if current average loss is the new best
             if current_avg_loss < self.best_loss:
-                best_model_path = os.path.join(self.project_folder, "best_model.pth")
+                best_model_path = os.path.join(self.project_log_folder, "best_model.pth")
                 print(f"Avg Test loss {self.best_loss} decreasing >> {current_avg_loss}\nSaving best model to {best_model_path}")
                 self.best_loss = current_avg_loss
                 checkpoint = {
@@ -339,7 +390,7 @@ class Trainer:
                 "lr": self.optimizer.param_groups[0]["lr"],
             }, commit=False)
 
-            numbered_path = os.path.join(self.project_folder, f"{epoch}.pth")
+            numbered_path = os.path.join(self.project_log_folder, f"{epoch}.pth")
             torch.save(checkpoint, self.latest_path)
             torch.save(checkpoint, numbered_path)  # keep track of model at every epoch
 
@@ -348,7 +399,22 @@ class Trainer:
         print()
     
     @staticmethod
-    def get_model(policy_model_cfg, encoder_model_cfg , training_cfg, data_cfg ):
+    def get_model(policy_model_cfg:DictConfig,
+                encoder_model_cfg:DictConfig ,
+                training_cfg:DictConfig,
+                data_cfg:DictConfig)->nn.Module:
+        """
+        Constructs and returns a model based on the provided configurations.
+
+        Parameters:
+            policy_model_cfg (DictConfig): Configuration for the policy part of the model.
+            encoder_model_cfg (DictConfig): Configuration for the encoder part of the model.
+            training_cfg (DictConfig): Training configurations.
+            data_cfg (DictConfig): Data configurations.
+
+        Returns:
+            nn.Module: The constructed model.
+        """
     
         return get_policy_model(
                 policy_model_cfg = policy_model_cfg,
@@ -359,6 +425,18 @@ class Trainer:
 
     @staticmethod
     def get_optimizer(optimizer_name:str, model:nn.Module, lr:float)->torch.optim:
+        """
+        Retrieves the optimizer based on the provided name and configuration.
+
+        Parameters:
+            optimizer_name (str): Name of the optimizer.
+            model (nn.Module): The model for which the optimizer will be used.
+            lr (float): Learning rate for the optimizer.
+
+        Returns:
+            torch.optim: The constructed optimizer.
+        """
+        
         optimizer_name = optimizer_name.lower()
         if optimizer_name == "adam":
             optimizer = Adam(model.parameters(), lr=lr, betas=(0.9, 0.98))
@@ -373,6 +451,18 @@ class Trainer:
     
     @staticmethod
     def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
+        """
+        Constructs and returns a learning rate scheduler based on the provided configuration.
+
+        Parameters:
+            training_cfg (DictConfig): Training configurations that may include scheduler type.
+            optimizer (torch.optim): Optimizer for which the scheduler will be used.
+            lr (float): Initial learning rate.
+
+        Returns:
+            Scheduler: The constructed scheduler.
+        """
+        
         scheduler_name = training_cfg.scheduler.lower()
         if scheduler_name == "cosine":
             print("Using cosine annealing with T_max", training_cfg.epochs)
@@ -410,9 +500,22 @@ class Trainer:
         
         return scheduler
     
-    
     @staticmethod
-    def get_dataloaders(datasets_cfg, data_cfg, training_cfg):
+    def get_dataloaders(datasets_cfg:DictConfig,
+                        data_cfg:DictConfig,
+                        training_cfg:DictConfig)->Tuple:
+        """
+        Constructs and returns DataLoaders for training and testing based on provided configurations.
+
+        Parameters:
+            datasets_cfg (Config): Configuration defining the datasets to use and their parameters.
+            data_cfg (DictConfig): Data-specific configurations.
+            training_cfg (DictConfig): Training-specific configurations.
+
+        Returns:
+            tuple: A tuple containing the DataLoader for training and a dictionary of DataLoaders for testing.
+        """
+        
         train_dataset = []
         test_dataloaders = {}
 
@@ -466,3 +569,25 @@ class Trainer:
             )
         
         return train_loader, test_dataloaders
+
+
+### TODO: check for what we need this ??
+
+# def load_model(model, model_type, checkpoint: dict) -> None:
+#     """Load model from checkpoint."""
+#     if model_type == "nomad":
+#         state_dict = checkpoint
+#         model.load_state_dict(state_dict, strict=False)
+#     else:
+#         loaded_model = checkpoint["model"]
+#         try:
+#             state_dict = loaded_model.module.state_dict()
+#             model.load_state_dict(state_dict, strict=False)
+#         except AttributeError as e:
+#             state_dict = loaded_model.state_dict()
+#             model.load_state_dict(state_dict, strict=False)
+
+
+# def load_ema_model(ema_model, state_dict: dict) -> None:
+#     """Load model from checkpoint."""
+#     ema_model.load_state_dict(state_dict)

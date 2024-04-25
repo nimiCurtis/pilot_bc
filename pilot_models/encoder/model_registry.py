@@ -6,8 +6,8 @@ from omegaconf import DictConfig, OmegaConf
 # Registry of available models
 model_registry = {
     'efficientnet': EfficientNet,
-    # 'dino': Dino
     # Add new models here as you develop them, e.g., 'resnet': ResNet
+    # 'dino': Dino
 }
 
 def get_encoder_model(config):
@@ -28,7 +28,7 @@ def get_encoder_model(config):
         raise ValueError(f"Model {model_name} is not registered or supported.")
 
     # Extract other parameters, providing default values where appropriate
-    version = config.get('version', 'efficientnet-b0')
+    version = config.get('version')
     in_channels = config.get('in_channels', 3)
     pretrained = config.get('pretrained', False)
 

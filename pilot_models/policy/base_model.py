@@ -60,3 +60,13 @@ class BaseModel(nn.Module):
             action_pred (torch.Tensor): predicted action
         """
         raise NotImplementedError
+    
+    def _compute_losses(
+        self,
+            dist_label: torch.Tensor,
+            action_label: torch.Tensor,
+            dist_pred: torch.Tensor,
+            action_pred: torch.Tensor,
+            action_mask: torch.Tensor = None,
+    ):
+        raise NotImplementedError

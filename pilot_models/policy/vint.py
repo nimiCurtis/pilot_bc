@@ -74,7 +74,7 @@ class ViNT(BaseModel):
         # Data config
         context_size=data_cfg.context_size
         len_traj_pred=data_cfg.len_traj_pred
-        learn_angle=data_cfg.learn_angle
+        self.learn_angle=data_cfg.learn_angle
         
         # Policy model
         mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
@@ -85,8 +85,10 @@ class ViNT(BaseModel):
 
         # Training config
         self.goal_condition=training_cfg.goal_condition
+        self.alpha = training_cfg.alpha
+        self.beta = training_cfg.beta
         
-        super(ViNT, self).__init__(policy_model_cfg.name, context_size, len_traj_pred, learn_angle)
+        super(ViNT, self).__init__(policy_model_cfg.name, context_size, len_traj_pred, self.learn_angle)
         
         seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
         
@@ -114,7 +116,7 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor, current_rel_pos_to_obj: torch.tensor,  goal_rel_pos_to_obj: torch.tensor,
+            self, obs_img: torch.tensor,   goal_rel_pos_to_obj: torch.tensor #current_rel_pos_to_obj: torch.tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size
@@ -156,3 +158,64 @@ class ViNT(BaseModel):
                 action_pred[:, :, 2:].clone(), dim=-1
             )  # normalize the angle prediction
         return dist_pred, action_pred
+    
+    def _compute_losses(
+        self,
+            dist_label: torch.Tensor,
+            action_label: torch.Tensor,
+            dist_pred: torch.Tensor,
+            action_pred: torch.Tensor,
+            action_mask: torch.Tensor = None,
+    ):
+        """
+        Compute losses for distance and action prediction.
+
+        """
+        dist_loss = F.mse_loss(dist_pred.squeeze(-1), dist_label.float())
+
+        def action_reduce(unreduced_loss: torch.Tensor):
+            # Reduce over non-batch dimensions to get loss per batch element
+            while unreduced_loss.dim() > 1:
+                unreduced_loss = unreduced_loss.mean(dim=-1)
+            assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
+            return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
+
+        # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
+        # This is the actual losses
+        assert action_pred.shape == action_label.shape, f"{action_pred.shape} != {action_label.shape}"
+        action_loss = action_reduce(F.mse_loss(action_pred, action_label, reduction="none"))
+
+        # Other losses for logger
+        action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
+            action_pred[:, :, :2], action_label[:, :, :2], dim=-1
+        ))
+        multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
+            torch.flatten(action_pred[:, :, :2], start_dim=1),
+            torch.flatten(action_label[:, :, :2], start_dim=1),
+            dim=-1,
+        ))
+
+        results = {
+            "dist_loss": dist_loss,
+            "action_loss": action_loss,
+            "action_waypts_cos_sim": action_waypts_cos_similairity,
+            "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim,
+        }
+
+        if self.learn_angle:
+            action_orien_cos_sim = action_reduce(F.cosine_similarity(
+                action_pred[:, :, 2:], action_label[:, :, 2:], dim=-1
+            ))
+            multi_action_orien_cos_sim = action_reduce(F.cosine_similarity(
+                torch.flatten(action_pred[:, :, 2:], start_dim=1),
+                torch.flatten(action_label[:, :, 2:], start_dim=1),
+                dim=-1,
+            )
+            )
+            results["action_orien_cos_sim"] = action_orien_cos_sim
+            results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
+
+        total_loss = self.alpha * 1e-2 * dist_loss + self.beta * (1 - self.alpha) * action_loss
+        results["total_loss"] = total_loss
+
+        return results
