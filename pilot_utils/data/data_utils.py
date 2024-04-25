@@ -17,7 +17,7 @@ IMAGE_ASPECT_RATIO = (
 
 ### TODO: remove duplicates!!
 
-def get_data_path(data_folder: str, f: str, time: int, data_type: str = "image"):
+def get_data_path(data_folder: str, img_type:str, f: str, time: int, data_type: str = "image"):
     data_ext = {
         "image": ".jpg",
         # add more data types here
@@ -25,6 +25,7 @@ def get_data_path(data_folder: str, f: str, time: int, data_type: str = "image")
     return os.path.join(data_folder,
                         f,
                         "visual_data",
+                        img_type,
                         f"{str(time)}{data_ext[data_type]}")
 
 def yaw_rotmat(yaw: float) -> np.ndarray:

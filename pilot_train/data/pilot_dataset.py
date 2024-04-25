@@ -66,6 +66,7 @@ class PilotDataset(Dataset):
         self.normalize=data_cfg.normalize
         self.goal_type=data_cfg.goal_type
         self.obs_type = data_cfg.obs_type
+        self.img_type = data_cfg.img_type 
         self.len_traj_pred=data_cfg.len_traj_pred
         self.learn_angle=data_cfg.learn_angle
         if self.learn_angle:
@@ -152,7 +153,7 @@ class PilotDataset(Dataset):
             with lmdb.open(cache_filename, map_size=2**40) as image_cache:
                 with image_cache.begin(write=True) as txn:
                     for traj_name, time in tqdm_iterator:
-                        image_path = get_data_path(self.data_folder, traj_name, time)
+                        image_path = get_data_path(self.data_folder,self.img_type, traj_name, time)
                         with open(image_path, "rb") as f:
                             txn.put(image_path.encode(), f.read())
 
@@ -221,7 +222,7 @@ class PilotDataset(Dataset):
                 json.dump((self.index_to_data, self.goals_index), f)
 
     def _load_image(self, trajectory_name, time):
-        image_path = get_data_path(self.data_folder, trajectory_name, time)
+        image_path = get_data_path(self.data_folder, self.img_type, trajectory_name, time)
 
         try:
             with self._image_cache.begin() as txn:
@@ -284,7 +285,7 @@ class PilotDataset(Dataset):
         if trajectory_name in self.trajectory_cache:
             return self.trajectory_cache[trajectory_name]
         else:
-            with open(os.path.join(self.data_folder, trajectory_name, "traj_data.json"), "rb") as f:
+            with open(os.path.join(self.data_folder, trajectory_name, "traj_robot_data.json"), "rb") as f:
                 traj_data = json.load(f)
             self.trajectory_cache[trajectory_name] = traj_data['odom_frame']
             return traj_data['odom_frame']

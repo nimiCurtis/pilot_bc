@@ -14,10 +14,10 @@ from torch.optim import Adam, AdamW, SGD
 import torchvision.transforms.functional as TF
 from torchvision.transforms import transforms
 
-from pilot_train.data.data_utils import VISUALIZATION_IMAGE_SIZE
+from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
-from pilot_train.data.pilot_dataset import PilotDataset
+from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
 
 class Trainer:
     """

@@ -19,28 +19,37 @@ def remove_files_in_dir(dir_path: str):
 
 def main(args: argparse.Namespace):
     # Get the names of the folders in the data directory that contain the file 'traj_data.json'
+    # TODO: change the collecting method
     folder_names = [
         f
         for f in os.listdir(args.data_dir)
         if os.path.isdir(os.path.join(args.data_dir, f))
-        and "traj_data.json" in os.listdir(os.path.join(args.data_dir, f))
+        and "traj_robot_data.json" in os.listdir(os.path.join(args.data_dir, f))
     ]
+
+    # Assert that there is at least one folder
+    assert len(folder_names) > 0, "No valid folders found in the specified data directory."
 
     # Randomly shuffle the names of the folders
     random.shuffle(folder_names)
 
-    # Split the names of the folders into train and test sets
-    split_index = int(args.split * len(folder_names))
-    train_folder_names = folder_names[:split_index]
-    test_folder_names = folder_names[split_index:]
+    # Split the names of the folders into train and test sets or use the same folder if only one exists
+    if len(folder_names) == 1:
+        train_folder_names = folder_names
+        test_folder_names = folder_names
+    else:
+        split_index = int(args.split * len(folder_names))
+        train_folder_names = folder_names[:split_index]
+        test_folder_names = folder_names[split_index:]
 
     # Create directories for the train and test sets
     train_dir = os.path.join(PATH,
                             args.data_splits_dir,
-                            args.robot_name, "train")
+                            args.dataset_name, "train")
     test_dir = os.path.join(PATH,
                             args.data_splits_dir,
-                            args.robot_name, "test")
+                            args.dataset_name, "test")
+
     for dir_path in [train_dir, test_dir]:
         if os.path.exists(dir_path):
             print(f"Clearing files from {dir_path} for new data split")
@@ -67,7 +76,7 @@ if __name__ == "__main__":
     )
     
     parser.add_argument(
-        "--robot-name", "-r", help="Name of the dataset", required=True
+        "--dataset-name", "-r", help="Name of the dataset", required=True
     )
     
     parser.add_argument(

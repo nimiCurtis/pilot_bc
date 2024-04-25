@@ -5,7 +5,7 @@
 #   max: [5, 4] # [max_dx, max_dy]
 
 # data specific params
-turtlebot:
+nimrod:  ## TODO: change it!!
   metric_waypoint_spacing: 0.22 ## <<< it has no meaning right now # average spacing between waypoints (meters)
   ## added 
   max_lin_vel: 0.22 # [meter/sec]
@@ -13,7 +13,6 @@ turtlebot:
 
   # OPTIONAL (FOR VISUALIZATION ONLY)
   camera_metrics: # https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
-
     # For zedm camera
     camera_height: 0.18 # meters
     camera_x_offset: 0.035 # distance between the center of the robot and the forward facing camera
