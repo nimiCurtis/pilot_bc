@@ -166,7 +166,7 @@ class Trainer:
             #### TODO: change the goal image to relative position to target
             # will be taken from the __getitem__
             goal_image = self.transform(goal_image).to(self.device)
-            model_outputs = self.model(obs_image, goal_image)
+            model_outputs = self.model(obs_image, goal_image, goal_image)
 
             #### TODO: change the dist label 
             dist_label = dist_label.to(self.device)
