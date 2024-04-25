@@ -4,6 +4,7 @@ __pycache__/
 *$py.class
 
 pilot_train.egg-info
+pilot_bc.egg-info
 venv
 .vscode/*
 */.vscode/*

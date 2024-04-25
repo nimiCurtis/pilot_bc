@@ -1,3 +1,0 @@
-pilot_deploy
-pilot_train
-pilot_utils
