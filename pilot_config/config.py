@@ -1,8 +1,10 @@
 import os
 import json
 import yaml
+from omegaconf import OmegaConf, DictConfig
+from typing import Tuple
 
-def get_config_dir():
+def get_main_config_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
 def _get_default_config(file_path: str):
@@ -77,15 +79,16 @@ def get_recording_config(data_folder: str, trajectory_name: str):
     return _get_default_config(file_path=config_path)
 
 
-# def _get_default_config(filename):
-#     return os.path.join(os.path.dirname(os.path.realpath(__file__)), filename)
+def split_main_config(cfg:DictConfig)->Tuple[DictConfig]:
+    
+    missings = OmegaConf.missing_keys(cfg)
+    
+    # Assertion to check if the set is empty
+    assert not missings, f"Missing configs: {missings}, please check the main config!"
 
-# def get_digit_config_path():
-#     return _get_default_config("config_digit.yml")
+    for key in cfg.keys():
+        assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets']\
+        ,f"{key} is missing in config please check the main config!"
 
-# def get_digit_shadow_config_path():
-#     return _get_default_config("config_digit_shadow.yml")
-
-# def get_omnitact_config_path():
-#     return _get_default_config("config_omnitact.yml")
+    return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
 

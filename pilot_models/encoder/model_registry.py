@@ -1,4 +1,4 @@
-from pilot_train.models.encoder.efficientnet import EfficientNet
+from pilot_models.encoder.efficientnet import EfficientNet
 from omegaconf import DictConfig, OmegaConf
 
 # Registry of available models

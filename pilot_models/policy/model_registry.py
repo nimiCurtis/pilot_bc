@@ -1,4 +1,4 @@
-from pilot_train.models.policy.vint import ViNT
+from pilot_models.policy.vint import ViNT
 from omegaconf import DictConfig
 
 # Registry of available models

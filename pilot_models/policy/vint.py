@@ -1,6 +1,6 @@
 from typing import List, Dict, Optional, Tuple
-from pilot_train.models.policy.base_model import BaseModel
-from pilot_train.models.encoder.model_registry import get_encoder_model
+from pilot_models.policy.base_model import BaseModel
+from pilot_models.encoder.model_registry import get_encoder_model
 from omegaconf import DictConfig
 
 import torch
