@@ -36,6 +36,7 @@ IMPORT YOUR MODEL HERE
 
 def train(cfg:DictConfig):
     
+    # Get configs    
     training_cfg, data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  split_main_config(cfg)
 
     # Device management
@@ -63,6 +64,8 @@ def train(cfg:DictConfig):
         cudnn.deterministic = True
     cudnn.benchmark = True  # good if input sizes don't vary
 
+    
+    # Training Getters
     train_dataloader, test_dataloaders = Trainer.get_dataloaders(datasets_cfg=datasets_cfg,
                                                                 data_cfg=data_cfg,
                                                                 training_cfg=training_cfg)
@@ -88,7 +91,6 @@ def train(cfg:DictConfig):
     #             )
     #         )
 
-
     ### TODO: add the load run in the Trainer class
     # if "load_run" in config:
     #     load_project_folder = os.path.join("logs", config["load_run"])
@@ -99,7 +101,7 @@ def train(cfg:DictConfig):
     #     if "epoch" in latest_checkpoint:
     #         current_epoch = latest_checkpoint["epoch"] + 1
 
-    
+
     # if "load_run" in config:  # load optimizer and scheduler after data parallel
     #     if "optimizer" in latest_checkpoint:
     #         optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())

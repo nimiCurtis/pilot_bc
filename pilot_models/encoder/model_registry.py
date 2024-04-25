@@ -1,9 +1,12 @@
 from pilot_models.encoder.efficientnet import EfficientNet
+# from pilot_models.encoder.dino import Dino
+
 from omegaconf import DictConfig, OmegaConf
 
 # Registry of available models
 model_registry = {
     'efficientnet': EfficientNet,
+    # 'dino': Dino
     # Add new models here as you develop them, e.g., 'resnet': ResNet
 }
 

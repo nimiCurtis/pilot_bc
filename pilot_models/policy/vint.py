@@ -98,7 +98,6 @@ class ViNT(BaseModel):
         else:
             self.compress_obs_enc = nn.Identity()
 
-
         self.decoder = MultiLayerDecoder(
             embed_dim=self.obs_encoding_size,
             seq_len=seq_len,
@@ -115,7 +114,7 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor, goal_rel_pos_to_obj: torch.tensor,
+            self, obs_img: torch.tensor, current_rel_pos_to_obj: torch.tensor,  goal_rel_pos_to_obj: torch.tensor,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size
@@ -126,7 +125,7 @@ class ViNT(BaseModel):
         obs_img = torch.concat(obs_img, dim=0)
 
         # get the observation encoding
-        # currently, the size is [batch_size, self.context_size+2, self.obs_encoding_size]
+        # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
         obs_encoding = self.obs_encoder.extract_features(obs_img)
         obs_encoding = self.compress_obs_enc(obs_encoding)
         # currently, the size is [batch_size*(self.context_size + 1), self.obs_encoding_size]
