@@ -116,28 +116,31 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor,   goal_rel_pos_to_obj: torch.tensor #current_rel_pos_to_obj: torch.tensor,
+            self, obs_img: torch.tensor, current_rel_pos_to_target: torch.tensor, goal_rel_pos_to_obj: torch.tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size
-        # image size is [batch_size, C*self.context_size, H, W]
+        # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
         obs_img = torch.split(obs_img, 3, dim=1)
 
-        # image size is [batch_size*self.context_size, 3, H, W]
+        # Currently obs_img size is [self.context_size+1, batch_size, C, H, W] | for example: [6, 16, 3, 64, 85]
         obs_img = torch.concat(obs_img, dim=0)
 
-        # get the observation encoding
-        # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
+        # Currently obs_img size is [batch_size*(self.context_size+1), C, H, W] | for example: [96, 3, 64, 85]
         obs_encoding = self.obs_encoder.extract_features(obs_img)
+        
+        # (Encoded) Currently obs_encoding size is [batch_size*(self.context_size+1), source_encoder_out_features] | for example: [96, 1280]
         obs_encoding = self.compress_obs_enc(obs_encoding)
-        # currently, the size is [batch_size*(self.context_size + 1), self.obs_encoding_size]
-        # reshape the obs_encoding to [context + 1, batch, encoding_size], note that the order is flipped
+        
+        # (Compressed) Currently obs_encoding size is [batch_size*(self.context_size + 1), self.obs_encoding_size (= a param from config)] | for example: [96, 512]
         obs_encoding = obs_encoding.reshape((self.context_size + 1, -1, self.obs_encoding_size))
+        # (reshaped) Currently obs_encoding is [self.context_size + 1, batch_size, self.obs_encoding_size], note that the order is flipped | for example: [6, 16, 512]
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
-        # currently, the size is [batch_size, self.context_size+1, self.obs_encoding_size]
+        # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
 
-        # concatenate the goal encoding to the observation encoding
-        ## if not goal condition send only the encoding of the observations
+        # TODO: process the positonal data through a simple layers in some way and get the positional encoding
+        # TODO: concatenate the obs encoding to the positional encoding
+        # TODO: modify the tokens to get the fused encoding
         tokens = obs_encoding
         final_repr = self.decoder(tokens)
 
