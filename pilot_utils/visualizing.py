@@ -690,6 +690,8 @@ def display_distance_pred(
 
 
 def numpy_to_img(arr: np.ndarray) -> Image:
+    if arr.shape[0] == 1:  # Check if the array has one channel a.k.a depth image
+        arr = np.repeat(arr, 3, axis=0)  # Repeat the channel 3 times
     img = Image.fromarray(np.transpose(np.uint8(255 * arr), (1, 2, 0)))
     img = img.resize(VIZ_IMAGE_SIZE)
     return img

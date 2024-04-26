@@ -92,14 +92,20 @@ def train(cfg:DictConfig):
     #     if scheduler is not None and "scheduler" in latest_checkpoint:
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
-    # Tansform 
+    # Tansform (currently takes place only on the goal image, don't know why) 
     # TODO: refactoring transofrm implemetnation, this is the Vint implementation
-    transform = ([
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+
+    if encoder_model_cfg.in_channels == 3:
+        transform = ([
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    elif encoder_model_cfg.in_channels == 1:
+        transform = ([
+            transforms.Normalize(mean=[0.5], std=[0.5]),
+        ])
+    
     transform = transforms.Compose(transform)
-    
-    
+
     # Multi-GPU
     if len(training_cfg.gpu_ids) > 1:
         model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)

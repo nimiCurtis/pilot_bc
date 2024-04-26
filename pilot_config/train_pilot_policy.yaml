@@ -56,7 +56,8 @@ data:
   image_size: [85, 64] # width, height
   goal_type: "image"
   obs_type: "image"
-  img_type: "depth" # if obs_type = image->  depth | rgb
+  img_type: "depth" # if obs_type = image->  depth (1) | rgb (3) 
+                    # do not forget to change the in_channels as well
 
 
 

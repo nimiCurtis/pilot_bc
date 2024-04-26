@@ -133,7 +133,7 @@ class PilotDataset(Dataset):
         """
         cache_filename = os.path.join(
             self.data_split_folder,
-            f"dataset_{self.dataset_name}.lmdb",
+            f"dataset_{self.dataset_name}_context_{self.img_type}.lmdb",
         )
 
         # Load all the trajectories into memory. These should already be loaded, but just in case.
@@ -209,7 +209,7 @@ class PilotDataset(Dataset):
         """
         index_to_data_path = os.path.join(
             self.data_split_folder,
-            f"dataset_dist_{self.min_dist_cat}_to_{self.max_dist_cat}_context_{self.context_type}_n{self.context_size}_slack_{self.end_slack}.json",
+            f"dataset_dist_{self.min_dist_cat}_to_{self.max_dist_cat}_context_{self.context_type}_obs_{self.img_type}_n{self.context_size}_slack_{self.end_slack}.json",
         )
         try:
             # load the index_to_data if it already exists (to save time)

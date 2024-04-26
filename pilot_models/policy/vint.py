@@ -83,12 +83,17 @@ class ViNT(BaseModel):
         self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
 
+                
         # Training config
         self.goal_condition=training_cfg.goal_condition
         self.alpha = training_cfg.alpha
         self.beta = training_cfg.beta
         
-        super(ViNT, self).__init__(policy_model_cfg.name, context_size, len_traj_pred, self.learn_angle)
+        super(ViNT, self).__init__(policy_model_cfg.name,
+                                context_size,
+                                len_traj_pred,
+                                self.learn_angle,
+                                encoder_model_cfg.in_channels)
         
         seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
         
@@ -121,7 +126,7 @@ class ViNT(BaseModel):
 
         # split the observation into context based on the context size
         # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
-        obs_img = torch.split(obs_img, 3, dim=1)
+        obs_img = torch.split(obs_img, self.in_channels , dim=1)
 
         # Currently obs_img size is [self.context_size+1, batch_size, C, H, W] | for example: [6, 16, 3, 64, 85]
         obs_img = torch.concat(obs_img, dim=0)

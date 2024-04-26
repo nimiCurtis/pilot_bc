@@ -276,8 +276,9 @@ class Trainer:
 
                 viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
 
+                # TODO: replace the goal image
                 goal_image = self.transform(goal_image).to(self.device)
-                model_outputs = self.model(obs_image, goal_image)
+                model_outputs = self.model(obs_image, goal_image, goal_image)
 
                 dist_label = dist_label.to(self.device)
                 action_label = action_label.to(self.device)
