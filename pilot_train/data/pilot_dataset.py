@@ -140,6 +140,8 @@ class PilotDataset(Dataset):
         for traj_name in self.traj_names:
             self._get_trajectory(traj_name)
 
+        # TODO: load target trajectories into memory.
+
         # If the cache file doesn't exist, create it by iterating through the dataset and writing each image to the cache
         if not os.path.exists(cache_filename):
             tqdm_iterator = tqdm.tqdm(
@@ -171,6 +173,8 @@ class PilotDataset(Dataset):
             traj_data = self._get_trajectory(traj_name)
             properties = self._get_properties(traj_name) ## added
             traj_len = len(traj_data["position"])
+            # TODO: add target traj ??
+            # TODO: add assertion ??
 
             for goal_time in range(0, traj_len):
                 goals_index.append((traj_name, goal_time))
@@ -178,7 +182,7 @@ class PilotDataset(Dataset):
             begin_time = self.context_size * self.waypoint_spacing
             end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
             for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1)
+                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1) # keep max disance in range 
                 samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
         return samples_index, goals_index
@@ -308,7 +312,7 @@ class PilotDataset(Dataset):
         # self.index_to_data[i] = (traj_name, curr_time, max_goal_distance)
         f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
-        # goal is negative ??? TODO : check
+        # goal is negative -> probably a goal pos from another trajectory. 
 
         # Load images
         context = []
@@ -329,25 +333,27 @@ class PilotDataset(Dataset):
             self._load_image(f, t) for f, t in context
         ])
 
-        # Load goal image
-        goal_image = self._load_image(f_goal, goal_time)
-
         # Load other trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
         curr_traj_len = len(curr_traj_data["position"])
         assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
 
+        
+        # TODO: load current position rel to target. use f_curr and curr_time.
+        # TODO: Load goal position relative to target
+        goal_image = self._load_image(f_goal, goal_time)
+        # TODO: modify this part 
         goal_traj_data = self._get_trajectory(f_goal)
         goal_traj_len = len(goal_traj_data["position"])
         assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
 
         # Compute actions
         action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
-        ###### here setting the goal time to constant
-        #actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
+        
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
-
-        # Compute distances
+        #actions = waypoints, goal_pos = the position at the goal woth relate to current position
+        
+        # Compute timesteps distances
         if goal_is_negative:
             distance = self.max_dist_cat
         else:
@@ -358,20 +364,24 @@ class PilotDataset(Dataset):
         if self.learn_angle:
             actions_torch = calculate_sin_cos(actions_torch)
 
+        #TODO: check and modify
         action_mask = (
             (distance < self.max_action_distance) and
             (distance > self.min_action_distance) and
             (not goal_is_negative)
         )
 
+        # TODO: modify the return 
         return (
             torch.as_tensor(obs_image, dtype=torch.float32), # [C*(context+1),H,W]
-            torch.as_tensor(goal_image, dtype=torch.float32), # [3,H,W]
+            torch.as_tensor(goal_image, dtype=torch.float32), # change to goal_rel_pos_to_target
+            # add curr_rel_pos_to_target
             actions_torch,  # [trej_len_pred,4]
             torch.as_tensor(distance, dtype=torch.int64),
-            torch.as_tensor(goal_pos, dtype=torch.float32),
-            torch.as_tensor(self.dataset_index, dtype=torch.int64),
+            torch.as_tensor(goal_pos, dtype=torch.float32), # goal_robot_pos_in_local_coords
+            torch.as_tensor(self.dataset_index, dtype=torch.int64), 
             torch.as_tensor(action_mask, dtype=torch.float32),
+            
         )
 
     ## added
