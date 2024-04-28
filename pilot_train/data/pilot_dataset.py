@@ -115,6 +115,7 @@ class PilotDataset(Dataset):
         # use this index to retrieve the dataset name from the dataset config
         self.dataset_index = dataset_names.index(self.dataset_name)
         self.trajectory_cache = {}
+        self.target_trajectory_cache = {}
         self._load_index()
         self._build_caches()
 
@@ -139,6 +140,7 @@ class PilotDataset(Dataset):
         # Load all the trajectories into memory. These should already be loaded, but just in case.
         for traj_name in self.traj_names:
             self._get_trajectory(traj_name)
+            self._get_trajectory(traj_name, target=True)
 
         # TODO: load target trajectories into memory.
 
@@ -173,8 +175,12 @@ class PilotDataset(Dataset):
             traj_data = self._get_trajectory(traj_name)
             properties = self._get_properties(traj_name) ## added
             traj_len = len(traj_data["position"])
-            # TODO: add target traj ??
-            # TODO: add assertion ??
+            
+            # Check robot and target data lenght is equal
+            target_traj_data = self._get_trajectory(traj_name, target=True)
+            target_traj_len = len(target_traj_data)
+            assert traj_len == target_traj_len, "robot and traget data length not equal"
+
 
             for goal_time in range(0, traj_len):
                 goals_index.append((traj_name, goal_time))
@@ -182,7 +188,7 @@ class PilotDataset(Dataset):
             begin_time = self.context_size * self.waypoint_spacing
             end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
             for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1) # keep max disance in range 
+                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1) # keep max distance in range 
                 samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
         return samples_index, goals_index
@@ -285,14 +291,26 @@ class PilotDataset(Dataset):
 
         return actions, goal_pos
     
-    def _get_trajectory(self, trajectory_name):
-        if trajectory_name in self.trajectory_cache:
-            return self.trajectory_cache[trajectory_name]
+    def _get_trajectory(self, trajectory_name, target:bool = False):
+        
+        if not target:
+            if trajectory_name in self.trajectory_cache:
+                return self.trajectory_cache[trajectory_name]
+            else:
+                with open(os.path.join(self.data_folder, trajectory_name, "traj_robot_data.json"), "rb") as f:
+                    traj_data = json.load(f)
+                self.trajectory_cache[trajectory_name] = traj_data['odom_frame']
+                return traj_data['odom_frame']
+
         else:
-            with open(os.path.join(self.data_folder, trajectory_name, "traj_robot_data.json"), "rb") as f:
-                traj_data = json.load(f)
-            self.trajectory_cache[trajectory_name] = traj_data['odom_frame']
-            return traj_data['odom_frame']
+
+            if trajectory_name in self.target_trajectory_cache:
+                return self.target_trajectory_cache[trajectory_name]
+            else:
+                with open(os.path.join(self.data_folder, trajectory_name, "traj_target_data.json"), "rb") as f:
+                    traj_data = json.load(f)
+                self.target_trajectory_cache[trajectory_name] = traj_data
+                return traj_data
 
     def __len__(self) -> int:
         return len(self.index_to_data)
@@ -339,13 +357,15 @@ class PilotDataset(Dataset):
         assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
 
         
-        # TODO: load current position rel to target. use f_curr and curr_time.
-        # TODO: Load goal position relative to target
-        goal_image = self._load_image(f_goal, goal_time)
-        # TODO: modify this part 
-        goal_traj_data = self._get_trajectory(f_goal)
-        goal_traj_len = len(goal_traj_data["position"])
-        assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
+        # Load current position rel to target. use f_curr and curr_time.
+        curr_target_traj_data = self._get_trajectory(f_curr, target=True)
+        curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
+        
+        # Load goal position relative to target
+        goal_target_traj_data = self._get_trajectory(f_goal, target=True)
+        goal_target_traj_data_len = len(goal_target_traj_data)
+        assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
+        goal_rel_pos_to_target = goal_target_traj_data[goal_time]["position"][:2] # Takes the [x,y] 
 
         # Compute actions
         action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
@@ -373,15 +393,19 @@ class PilotDataset(Dataset):
 
         # TODO: modify the return 
         return (
+            # STATE : composed from context + current position of the target with relate to the camera
             torch.as_tensor(obs_image, dtype=torch.float32), # [C*(context+1),H,W]
-            torch.as_tensor(goal_image, dtype=torch.float32), # change to goal_rel_pos_to_target
-            # add curr_rel_pos_to_target
-            actions_torch,  # [trej_len_pred,4]
+            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
+            # GOAL : composed only from the + "desired" position of the target with relate to the camera
+            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
+            # ACTION: composed from the requiered normalized waypoints to reach the desired goal
+            actions_torch,
+            
+            # OTHER: TODO: check what is necassery
             torch.as_tensor(distance, dtype=torch.int64),
             torch.as_tensor(goal_pos, dtype=torch.float32), # goal_robot_pos_in_local_coords
             torch.as_tensor(self.dataset_index, dtype=torch.int64), 
             torch.as_tensor(action_mask, dtype=torch.float32),
-            
         )
 
     ## added
