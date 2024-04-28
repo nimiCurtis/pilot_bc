@@ -99,6 +99,16 @@ class ViNT(BaseModel):
         
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
 
+        # linear input encoder
+
+        lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
+        num_lin_features = policy_model_cfg.num_lin_features  # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
+
+        # think of a better encoding
+        self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, lin_encoding_size // 2),
+                                         nn.ReLU(),
+                                         nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+
         self.num_obs_features = self.obs_encoder.get_in_feateures()
         if self.num_obs_features != self.obs_encoding_size:
             self.compress_obs_enc = nn.Linear(self.num_obs_features, self.obs_encoding_size)
@@ -143,10 +153,17 @@ class ViNT(BaseModel):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
 
-        # TODO: process the positonal data through a simple layers in some way and get the positional encoding
-        # TODO: concatenate the obs encoding to the positional encoding
-        # TODO: modify the tokens to get the fused encoding
-        tokens = obs_encoding
+        if self.goal_condition:
+            linear_input = torch.cat((current_rel_pos_to_target, goal_rel_pos_to_obj), dim=1)
+        else:
+            linear_input = current_rel_pos_to_target
+        lin_encoding = self.lin_encoder(linear_input)
+        if len(lin_encoding.shape) == 2:
+            lin_encoding = lin_encoding.unsqueeze(1)
+        # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+        assert lin_encoding.shape[2] == self.lin_encoding_size
+
+        tokens = torch.cat((obs_encoding, lin_encoding), dim=1)  # obs_encoding
         final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]

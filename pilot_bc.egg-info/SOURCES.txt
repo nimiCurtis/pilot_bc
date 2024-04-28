@@ -15,7 +15,6 @@ pilot_train/train.py
 pilot_train/train2.py
 pilot_train/data/__init__.py
 pilot_train/data/data_split.py
-pilot_train/data/data_utils.py
 pilot_train/data/pilot_dataset.py
 pilot_utils/__init__.py
 pilot_utils/transforms.py
