@@ -94,19 +94,19 @@ class ViNT(BaseModel):
                                 self.learn_angle,
                                 encoder_model_cfg.in_channels)
         
-        seq_len = self.context_size + 2 if self.goal_condition else self.context_size + 1
+        seq_len = self.context_size + 2 
         
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
         self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
         # linear input encoder
 
-        lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
+        self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
         num_lin_features = policy_model_cfg.num_lin_features  # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
 
         # think of a better encoding
-        self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, lin_encoding_size // 2),
-                                         nn.ReLU(),
-                                         nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+        self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, self.lin_encoding_size // 2),
+                                        nn.ReLU(),
+                                        nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
 
         self.num_obs_features = self.obs_encoder.get_in_feateures()
         if self.num_obs_features != self.obs_encoding_size:
@@ -152,10 +152,9 @@ class ViNT(BaseModel):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
 
-        if self.goal_condition:
-            linear_input = torch.cat((current_rel_pos_to_target, goal_rel_pos_to_obj), dim=1)
-        else:
-            linear_input = current_rel_pos_to_target
+
+        linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+        
         lin_encoding = self.lin_encoder(linear_input)
         if len(lin_encoding.shape) == 2:
             lin_encoding = lin_encoding.unsqueeze(1)
@@ -193,8 +192,8 @@ class ViNT(BaseModel):
     ):
         """
         Compute losses for distance and action prediction.
-
         """
+        
         dist_loss = F.mse_loss(dist_pred.squeeze(-1), dist_label.float())
 
         def action_reduce(unreduced_loss: torch.Tensor):
