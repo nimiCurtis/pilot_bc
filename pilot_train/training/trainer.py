@@ -147,7 +147,8 @@ class Trainer:
         for i, data in enumerate(tqdm_iter):
             (
                 obs_image,
-                goal_image,
+                curr_rel_pos_to_target,
+                goal_rel_pos_to_target,
                 action_label,
                 dist_label,
                 goal_pos,
@@ -155,28 +156,36 @@ class Trainer:
                 action_mask,
             ) = data
 
+            # STATE
+            # visual context
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
             obs_image = torch.cat(obs_images, dim=1)
+            # current relative target pos
+            curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
 
-            viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
+            # GOAL
+            goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
+            # This line is for not corrupt the pipeline of visualization right now
+            # TODO: modify it
+            viz_goal_image = viz_obs_image
+
+            # Not in use
+            # TODO: remove the transform from the script and from the train.py script
+            #goal_image = self.transform(goal_image).to(self.device)
             
-            #### TODO: change the goal image to relative position to target
-            # will be taken from the __getitem__
-            goal_image = self.transform(goal_image).to(self.device)
-            model_outputs = self.model(obs_image, goal_image, goal_image)
-
-            #### TODO: change the dist label 
-            dist_label = dist_label.to(self.device)
-            
+            # ACTION
             action_label = action_label.to(self.device)
             action_mask = action_mask.to(self.device)
+            
+            # Infer model
+            model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+            dist_label = dist_label.to(self.device)
+            dist_pred, action_pred = model_outputs
 
             self.optimizer.zero_grad()
-
-            dist_pred, action_pred = model_outputs
 
             losses = self.model._compute_losses(
                 dist_label=dist_label,
@@ -261,7 +270,8 @@ class Trainer:
             for i, data in enumerate(tqdm_iter):
                 (
                     obs_image,
-                    goal_image,
+                    curr_rel_pos_to_target,
+                    goal_rel_pos_to_target,
                     action_label,
                     dist_label,
                     goal_pos,
@@ -269,28 +279,35 @@ class Trainer:
                     action_mask,
                 ) = data
 
+                # STATE
+                # visual context
                 obs_images = torch.split(obs_image, 3, dim=1)
                 viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
                 obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
                 obs_image = torch.cat(obs_images, dim=1)
+                # current relative target pos
+                curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
 
-                viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
+                # GOAL
+                goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
-                # TODO: replace the goal image
-                goal_image = self.transform(goal_image).to(self.device)
-                model_outputs = self.model(obs_image, goal_image, goal_image)
+                # This line is for not corrupt the pipeline of visualization right now
+                # TODO: modify it
+                viz_goal_image = viz_obs_image
 
-                dist_label = dist_label.to(self.device)
+                # Not in use
+                # TODO: remove the transform from the script and from the train.py script
+                #goal_image = self.transform(goal_image).to(self.device)
+                
+                # ACTION
                 action_label = action_label.to(self.device)
                 action_mask = action_mask.to(self.device)
-
+                
+                # Infer model
+                model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                dist_label = dist_label.to(self.device)
                 dist_pred, action_pred = model_outputs
-                # print()
-                # print("GT sample: ")
-                # print(action_label[0][0])
-                # print("Action predictions sample: ")
-                # print(action_pred[0][0])
-                # print()
+
                 losses = self.model._compute_losses(
                     dist_label=dist_label,
                     action_label=action_label,

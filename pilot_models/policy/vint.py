@@ -130,7 +130,7 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor, current_rel_pos_to_target: torch.tensor, goal_rel_pos_to_obj: torch.tensor
+            self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor, goal_rel_pos_to_target: torch.tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size
@@ -176,7 +176,7 @@ class ViNT(BaseModel):
 
         action_pred[:, :, :2] = torch.cumsum(
             action_pred[:, :, :2], dim=1
-        )  # convert position deltas into waypoints
+        )  # convert position deltas into waypoints in local coords
         if self.learn_angle:
             action_pred[:, :, 2:] = F.normalize(
                 action_pred[:, :, 2:].clone(), dim=-1

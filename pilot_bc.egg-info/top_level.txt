@@ -1,5 +1,0 @@
-pilot_config
-pilot_deploy
-pilot_models
-pilot_train
-pilot_utils
