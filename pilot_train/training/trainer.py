@@ -111,7 +111,6 @@ class Trainer:
         """
         
         self.model.train()
-        dist_loss_logger = Logger("dist_loss", "train", window_size=self.print_log_freq)
         action_loss_logger = Logger("action_loss", "train", window_size=self.print_log_freq)
         action_waypts_cos_sim_logger = Logger(
             "action_waypts_cos_sim", "train", window_size=self.print_log_freq
@@ -121,7 +120,6 @@ class Trainer:
         )
         total_loss_logger = Logger("total_loss", "train", window_size=self.print_log_freq)
         loggers = {
-            "dist_loss": dist_loss_logger,
             "action_loss": action_loss_logger,
             "action_waypts_cos_sim": action_waypts_cos_sim_logger,
             "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim_logger,
@@ -150,7 +148,6 @@ class Trainer:
                 curr_rel_pos_to_target,
                 goal_rel_pos_to_target,
                 action_label,
-                dist_label,
                 goal_pos,
                 dataset_index,
                 action_mask,
@@ -182,15 +179,12 @@ class Trainer:
             
             # Infer model
             model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
-            dist_label = dist_label.to(self.device)
-            dist_pred, action_pred = model_outputs
+            action_pred = model_outputs
 
             self.optimizer.zero_grad()
 
             losses = self.model._compute_losses(
-                dist_label=dist_label,
                 action_label=action_label,
-                dist_pred=dist_pred,
                 action_pred=action_pred,
                 action_mask=action_mask,
             )
@@ -215,8 +209,6 @@ class Trainer:
                 goal_image=viz_goal_image,
                 action_pred=action_pred,
                 action_label=action_label,
-                dist_pred=dist_pred,
-                dist_label=dist_label,
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
                 mode="train",
@@ -237,13 +229,11 @@ class Trainer:
         """
         
         self.model.eval()
-        dist_loss_logger = Logger("dist_loss", eval_type)
         action_loss_logger = Logger("action_loss", eval_type)
         action_waypts_cos_sim_logger = Logger("action_waypts_cos_sim", eval_type)
         multi_action_waypts_cos_sim_logger = Logger("multi_action_waypts_cos_sim", eval_type)
         total_loss_logger = Logger("total_loss", eval_type)
         loggers = {
-            "dist_loss": dist_loss_logger,
             "action_loss": action_loss_logger,
             "action_waypts_cos_sim": action_waypts_cos_sim_logger,
             "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim_logger,
@@ -273,7 +263,6 @@ class Trainer:
                     curr_rel_pos_to_target,
                     goal_rel_pos_to_target,
                     action_label,
-                    dist_label,
                     goal_pos,
                     dataset_index,
                     action_mask,
@@ -305,13 +294,10 @@ class Trainer:
                 
                 # Infer model
                 model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
-                dist_label = dist_label.to(self.device)
-                dist_pred, action_pred = model_outputs
+                action_pred = model_outputs
 
                 losses = self.model._compute_losses(
-                    dist_label=dist_label,
                     action_label=action_label,
-                    dist_pred=dist_pred,
                     action_pred=action_pred,
                     action_mask=action_mask,
                 )
@@ -333,15 +319,13 @@ class Trainer:
                     action_pred=action_pred,
                     action_label=action_label,
                     goal_pos=goal_pos,
-                    dist_pred=dist_pred,
-                    dist_label=dist_label,
                     dataset_index=dataset_index,
                     mode=eval_type,
                     use_latest=False,
                     wandb_increment_step=False,
                 )
 
-        return dist_loss_logger.average(), action_loss_logger.average(), total_loss_logger.average()
+        return action_loss_logger.average(), total_loss_logger.average()
 
     def run(self)->None:
         """
@@ -366,7 +350,7 @@ class Trainer:
                     f"Start {dataset_type} {self.model.name} Testing Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
                 )
                 loader = self.test_dataloaders[dataset_type]
-                test_dist_loss, test_action_loss, total_eval_loss = self.evaluate_one_epoch(eval_type=dataset_type,
+                test_action_loss, total_eval_loss = self.evaluate_one_epoch(eval_type=dataset_type,
                                                                                             dataloader=loader,
                                                                                             epoch=epoch)
                 avg_total_test_loss.append(total_eval_loss)

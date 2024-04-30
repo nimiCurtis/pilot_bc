@@ -402,7 +402,6 @@ class PilotDataset(Dataset):
             actions_torch,
             
             # OTHER: TODO: check what is necassery
-            torch.as_tensor(distance, dtype=torch.int64),
             torch.as_tensor(goal_pos, dtype=torch.float32), # goal_robot_pos_in_local_coords
             torch.as_tensor(self.dataset_index, dtype=torch.int64), 
             torch.as_tensor(action_mask, dtype=torch.float32),

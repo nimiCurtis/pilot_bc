@@ -3,7 +3,7 @@ from torchvision import transforms
 import torchvision.transforms.functional as TF
 import numpy as np
 from typing import List, Tuple, Dict, Optional
-from pilot_train.data.data_utils import IMAGE_ASPECT_RATIO
+from pilot_utils.data.data_utils import IMAGE_ASPECT_RATIO
 from PIL import Image as PILImage
 from sensor_msgs.msg import Image
 

@@ -82,8 +82,6 @@ class LoggingManager:
             goal_image,
             action_pred,
             action_label,
-            dist_pred,
-            dist_label,
             goal_pos,
             dataset_index,
             mode,
@@ -108,14 +106,6 @@ class LoggingManager:
             wandb.log(data_log, commit=wandb_increment_step)
 
         if self.image_log_freq != 0 and i % self.image_log_freq == 0:
-            self.visualizer.visualize_dist_pred(
-                to_numpy(obs_image),
-                to_numpy(goal_image),
-                to_numpy(dist_pred),
-                to_numpy(dist_label),
-                mode,
-                epoch,
-            )
             self.visualizer.visualize_traj_pred(
                 to_numpy(obs_image),
                 to_numpy(goal_image),

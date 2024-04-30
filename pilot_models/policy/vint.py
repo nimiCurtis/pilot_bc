@@ -1,12 +1,14 @@
-from typing import List, Dict, Optional, Tuple
-from pilot_models.policy.base_model import BaseModel
-from pilot_models.encoder.model_registry import get_encoder_model
+from typing import Tuple
 from omegaconf import DictConfig
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+
+from pilot_models.policy.base_model import BaseModel
+from pilot_models.encoder.model_registry import get_encoder_model
+from pilot_utils.train.train_utils import replace_bn_with_gn
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, max_seq_len=6):
@@ -94,10 +96,12 @@ class ViNT(BaseModel):
                                 self.learn_angle,
                                 encoder_model_cfg.in_channels)
         
+        # Final sequence length  = context size +
+        #                           current observation (1) + encoded lin observation and target (1) 
         seq_len = self.context_size + 2 
-        
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
         self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
+        
         # linear input encoder
 
         self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
@@ -165,7 +169,6 @@ class ViNT(BaseModel):
         final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]
-        dist_pred = self.dist_predictor(final_repr)
         action_pred = self.action_predictor(final_repr)
 
         # augment outputs to match labels size-wise
@@ -180,21 +183,17 @@ class ViNT(BaseModel):
             action_pred[:, :, 2:] = F.normalize(
                 action_pred[:, :, 2:].clone(), dim=-1
             )  # normalize the angle prediction
-        return dist_pred, action_pred
+        return action_pred
     
     def _compute_losses(
         self,
-            dist_label: torch.Tensor,
             action_label: torch.Tensor,
-            dist_pred: torch.Tensor,
             action_pred: torch.Tensor,
             action_mask: torch.Tensor = None,
     ):
         """
         Compute losses for distance and action prediction.
         """
-        
-        dist_loss = F.mse_loss(dist_pred.squeeze(-1), dist_label.float())
 
         def action_reduce(unreduced_loss: torch.Tensor):
             # Reduce over non-batch dimensions to get loss per batch element
@@ -219,7 +218,6 @@ class ViNT(BaseModel):
         ))
 
         results = {
-            "dist_loss": dist_loss,
             "action_loss": action_loss,
             "action_waypts_cos_sim": action_waypts_cos_similairity,
             "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim,
@@ -238,62 +236,7 @@ class ViNT(BaseModel):
             results["action_orien_cos_sim"] = action_orien_cos_sim
             results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
 
-        total_loss = self.alpha * 1e-2 * dist_loss + self.beta * (1 - self.alpha) * action_loss
+        total_loss = action_loss
         results["total_loss"] = total_loss
 
         return results
-
-from typing import List, Dict, Optional, Tuple, Callable
-# Utils for Group Norm
-def replace_bn_with_gn(
-    root_module: nn.Module,
-    features_per_group: int=16) -> nn.Module:
-    """
-    Relace all BatchNorm layers with GroupNorm.
-    """
-    replace_submodules(
-        root_module=root_module,
-        predicate=lambda x: isinstance(x, nn.BatchNorm2d),
-        func=lambda x: nn.GroupNorm(
-            num_groups=x.num_features//features_per_group,
-            num_channels=x.num_features)
-    )
-    return root_module
-
-
-def replace_submodules(
-        root_module: nn.Module,
-        predicate: Callable[[nn.Module], bool],
-        func: Callable[[nn.Module], nn.Module]) -> nn.Module:
-    """
-    Replace all submodules selected by the predicate with
-    the output of func.
-
-    predicate: Return true if the module is to be replaced.
-    func: Return new module to use.
-    """
-    if predicate(root_module):
-        return func(root_module)
-
-    bn_list = [k.split('.') for k, m
-        in root_module.named_modules(remove_duplicate=True)
-        if predicate(m)]
-    for *parent, k in bn_list:
-        parent_module = root_module
-        if len(parent) > 0:
-            parent_module = root_module.get_submodule('.'.join(parent))
-        if isinstance(parent_module, nn.Sequential):
-            src_module = parent_module[int(k)]
-        else:
-            src_module = getattr(parent_module, k)
-        tgt_module = func(src_module)
-        if isinstance(parent_module, nn.Sequential):
-            parent_module[int(k)] = tgt_module
-        else:
-            setattr(parent_module, k, tgt_module)
-    # verify that all modules are replaced
-    bn_list = [k.split('.') for k, m
-        in root_module.named_modules(remove_duplicate=True)
-        if predicate(m)]
-    assert len(bn_list) == 0
-    return root_module

@@ -29,8 +29,8 @@ def get_encoder_model(config):
 
     # Extract other parameters, providing default values where appropriate
     version = config.get('version')
-    in_channels = config.get('in_channels', 3)
-    pretrained = config.get('pretrained', False)
+    in_channels = config.get('in_channels')
+    pretrained = config.get('pretrained')
 
     # Instantiate the model
     model = model_class(version=version, in_channels=in_channels, pretrained=pretrained)
