@@ -77,6 +77,7 @@ class ViNT(BaseModel):
         context_size=data_cfg.context_size
         len_traj_pred=data_cfg.len_traj_pred
         self.learn_angle=data_cfg.learn_angle
+        self.target_context = data_cfg.target_context
         
         # Policy model
         mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
@@ -102,10 +103,14 @@ class ViNT(BaseModel):
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
         self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
         
-        # linear input encoder
-
+        # Linear input encoder #TODO: modify num_obs_features to be argument
+        num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
+        target_context_size = context_size if self.target_context else 0
+        num_obs_features *= (target_context_size + 1)  # (context+1)
+        num_lin_features = num_obs_features + 2 #policy_model_cfg.num_target_features # x y
         self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
-        num_lin_features = policy_model_cfg.num_lin_features  # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
+
+        # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
 
         # think of a better encoding
         self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, self.lin_encoding_size // 2),
@@ -156,9 +161,8 @@ class ViNT(BaseModel):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
 
-
         linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
-        
+
         lin_encoding = self.lin_encoder(linear_input)
         if len(lin_encoding.shape) == 2:
             lin_encoding = lin_encoding.unsqueeze(1)
@@ -190,6 +194,7 @@ class ViNT(BaseModel):
             action_label: torch.Tensor,
             action_pred: torch.Tensor,
             action_mask: torch.Tensor = None,
+            control_magnitude: torch.Tensor = None,
     ):
         """
         Compute losses for distance and action prediction.
@@ -236,7 +241,7 @@ class ViNT(BaseModel):
             results["action_orien_cos_sim"] = action_orien_cos_sim
             results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
 
-        total_loss = action_loss
+        total_loss = action_loss if control_magnitude is None else control_magnitude*action_loss
         results["total_loss"] = total_loss
 
         return results

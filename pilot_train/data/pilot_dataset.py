@@ -68,6 +68,7 @@ class PilotDataset(Dataset):
         self.obs_type = data_cfg.obs_type
         self.img_type = data_cfg.img_type 
         self.len_traj_pred=data_cfg.len_traj_pred
+        self.target_context=data_cfg.target_context
         self.learn_angle=data_cfg.learn_angle
         if self.learn_angle:
             self.num_action_params = 3
@@ -356,11 +357,18 @@ class PilotDataset(Dataset):
         curr_traj_len = len(curr_traj_data["position"])
         assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
 
-        
+
         # Load current position rel to target. use f_curr and curr_time.
         curr_target_traj_data = self._get_trajectory(f_curr, target=True)
-        curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
         
+        # Take context of target rel pos or only the recent
+        if self.target_context:
+            curr_rel_pos_to_target = torch.cat([
+                torch.as_tensor(curr_target_traj_data[t]["position"][:2], dtype=torch.float32) for f, t in context
+            ])
+        else:
+            curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
+
         # Load goal position relative to target
         goal_target_traj_data = self._get_trajectory(f_goal, target=True)
         goal_target_traj_data_len = len(goal_target_traj_data)
@@ -379,7 +387,7 @@ class PilotDataset(Dataset):
         else:
             distance = (goal_time - curr_time) // self.waypoint_spacing
             assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}"
-        
+
         actions_torch = torch.as_tensor(actions, dtype=torch.float32)
         if self.learn_angle:
             actions_torch = calculate_sin_cos(actions_torch)

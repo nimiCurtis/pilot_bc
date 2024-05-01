@@ -1,5 +1,3 @@
-
-
 robots: ["nimrod"]
 data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/nimrod_dataset
 
