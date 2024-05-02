@@ -16,7 +16,7 @@ defaults:
 training:
   batch_size: 64
   eval_batch_size: 32
-  epochs: 30
+  epochs: 25
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -41,11 +41,11 @@ data:
   normalize: True
   # context
   context_type: temporal
-  target_context: False
+  target_context: True
   context_size: 5
   distance:
     min_dist_cat: 0
-    max_dist_cat: 40
+    max_dist_cat: 20
   action:
     min_dist_cat: 0
     max_dist_cat: 10
