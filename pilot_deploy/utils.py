@@ -6,7 +6,7 @@ import torchvision.transforms.functional as TF
 import torch.nn.functional as F
 from PIL import Image as PILImage
 from typing import List, Tuple, Dict, Optional
-from pilot_train.data.data_utils import IMAGE_ASPECT_RATIO
+from pilot_utils.data.data_utils import IMAGE_ASPECT_RATIO
 from sensor_msgs.msg import Image
 import time
 

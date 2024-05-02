@@ -79,16 +79,44 @@ def get_recording_config(data_folder: str, trajectory_name: str):
     return _get_default_config(file_path=config_path)
 
 
-def split_main_config(cfg:DictConfig)->Tuple[DictConfig]:
+def split_main_config(cfg:DictConfig, rt:bool=False)->Tuple[DictConfig]:
+
+    if not rt:
+            
+        missings = OmegaConf.missing_keys(cfg)
+        
+        # Assertion to check if the set is empty
+        assert not missings, f"Missing configs: {missings}, please check the main config!"
+
+        for key in cfg.keys():
+            assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets']\
+            ,f"{key} is missing in config please check the main config!"
+
+        return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
+    else:
+        return cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.device
+
+def get_inference_model_config(model_name: str, rt:bool=False):    
+    """
+    Search for a 'config.yaml' file within a specified folder and load its configuration.
+
+    Args:
+    model_name (str): The path to the folder where to search for the config file.
+
+    Returns:
+    DictConfig: The configuration loaded into a dictionary if the file is found.
+
+    Raises:
+    FileNotFoundError: If no 'config.yaml' file is found in the folder.
+    """
+    config_path = os.path.join(model_name, 'config.yaml')
     
-    missings = OmegaConf.missing_keys(cfg)
-    
-    # Assertion to check if the set is empty
-    assert not missings, f"Missing configs: {missings}, please check the main config!"
-
-    for key in cfg.keys():
-        assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets']\
-        ,f"{key} is missing in config please check the main config!"
-
-    return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
-
+    # Check if the config file exists in the specified folder
+    if os.path.isfile(config_path):
+        if not rt:
+            return _get_default_config(config_path)
+        else: 
+            config = OmegaConf.load(config_path)
+            return split_main_config(cfg=config, rt=True)
+    else:
+        raise FileNotFoundError(f"No 'config.yaml' file found in {model_name}")

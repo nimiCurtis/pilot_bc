@@ -56,7 +56,6 @@ def train(cfg:DictConfig):
     model = Trainer.get_model(
         policy_model_cfg = policy_model_cfg,
         encoder_model_cfg = encoder_model_cfg,
-        training_cfg = training_cfg,
         data_cfg = data_cfg
         )
 

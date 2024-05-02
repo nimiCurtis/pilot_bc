@@ -57,7 +57,6 @@ class ViNT(BaseModel):
             self,
             policy_model_cfg: DictConfig,
             encoder_model_cfg: DictConfig,
-            training_cfg: DictConfig,
             data_cfg: DictConfig 
     ) -> None:
         """
@@ -85,11 +84,6 @@ class ViNT(BaseModel):
         mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
         self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
-
-        # Training config
-        self.goal_condition=training_cfg.goal_condition
-        self.alpha = training_cfg.alpha
-        self.beta = training_cfg.beta
         
         super(ViNT, self).__init__(policy_model_cfg.name,
                                 context_size,
