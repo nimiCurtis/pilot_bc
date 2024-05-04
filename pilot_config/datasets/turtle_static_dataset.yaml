@@ -11,3 +11,4 @@ turtlebot:
       end_slack: 3 # because many trajectories end in collisions
       goals_per_obs: 1 # how many goals are sampled per observation ## modify??
       negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+      waypoint_spacing: 1

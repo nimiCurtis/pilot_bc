@@ -81,4 +81,5 @@ datasets:
     end_slack: 3
     goals_per_obs: 1
     negative_mining: false
+    waypoint_spacing: 1
 device: cuda 
