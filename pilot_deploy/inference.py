@@ -8,17 +8,18 @@ import numpy as np
 import yaml
 from PIL import Image as PILImage
 from typing import List, Tuple
-# from pilot_train.models.vint.vint import ViNT
-from pilot_train.data.pilot_dataset import PilotDataset
 from torchvision import transforms
 
-from pilot_deploy.utils import tic, toc
+from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_utils.utils import (
     get_delta,
     to_numpy,
     unnormalize_data,
-    calculate_sin_cos
+    calculate_sin_cos,
+    tic, toc
 )
+
+
 
 
 from pilot_models.policy.model_registry import get_policy_model
@@ -200,8 +201,7 @@ class PilotPlanner(nn.Module):
                         'min': -(lin_vel_lim /frame_rate)},
                 'yaw': {'max': (ang_vel_lim /frame_rate),
                         'min': -(ang_vel_lim /frame_rate)}}
-        
-    
+
     def predict_raw(
                 self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor, goal_rel_pos_to_target: torch.tensor
         ) -> Tuple[torch.Tensor, torch.Tensor]:
@@ -215,12 +215,16 @@ class PilotPlanner(nn.Module):
         
         return normalized_actions[0] # no batch dim
 
+def get_inference_config(model_name):
+    model_source_dir = os.path.join(CKPTH_PATH, model_name)
+    return get_inference_model_config(model_source_dir, rt=True)
+
+
 
 def main():
 
     model_name = "pilot-turtle-static-follower_2024-05-01_23-28-38"
-    model_source_dir = os.path.join(CKPTH_PATH, model_name)
-    data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, device = get_inference_model_config(model_source_dir, rt=True)
+    data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, device = get_inference_config(model_name=model_name)
     robot = "turtlebot"
     robot_dataset_cfg = datasets_cfg[robot]
     data_split_type = "test"
