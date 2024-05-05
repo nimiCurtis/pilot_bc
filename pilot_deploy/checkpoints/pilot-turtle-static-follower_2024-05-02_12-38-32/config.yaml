@@ -1,0 +1,85 @@
+training:
+  batch_size: 16
+  eval_batch_size: 32
+  epochs: 30
+  current_epoch: 0
+  gpu_ids:
+  - 0
+  num_workers: 12
+  lr: 0.0001
+  optimizer: adamw
+  clipping: false
+  max_norm: 1.0
+  scheduler: cosine
+  warmup: false
+  warmup_epochs: 4
+  cyclic_period: 10
+  plateau_patience: 3
+  plateau_factor: 0.5
+  seed: 42
+  goal_condition: false
+  alpha: 0.5
+  beta: 10
+data:
+  normalize: true
+  context_type: temporal
+  target_context: true
+  context_size: 5
+  distance:
+    min_dist_cat: 0
+    max_dist_cat: 40
+  action:
+    min_dist_cat: 0
+    max_dist_cat: 10
+  close_far_threshold: 40
+  len_traj_pred: 5
+  learn_angle: true
+  image_size:
+  - 85
+  - 64
+  goal_type: image
+  obs_type: image
+  img_type: depth
+log:
+  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
+  run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  num_images_log: 8
+  print_log_freq: 100
+  image_log_freq: 1000
+  eval_fraction: 0.25
+  eval_freq: 1
+  wandb:
+    run:
+      enable: true
+      name: ${log.run_name}
+      log_freq: 10
+    setup:
+      project: pilot-release
+      entity: nimrodcurtis
+      mode: online
+encoder_model:
+  name: efficientnet
+  version: efficientnet-b0
+  in_channels: 1
+  pretrained: false
+policy_model:
+  name: vint
+  mha_num_attention_heads: 4
+  mha_num_attention_layers: 4
+  mha_ff_dim_factor: 4
+  late_fusion: false
+  obs_encoding_size: 512
+  lin_encoding_size: 512
+  num_lin_features: 2
+datasets:
+  robots:
+  - turtlebot
+  data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/turtle_static_dataset
+  turtlebot:
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtle_static_dataset/train
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/turtle_static_dataset/test
+    end_slack: 3
+    goals_per_obs: 1
+    negative_mining: false
+    waypoint_spacing: 1
+device: cuda

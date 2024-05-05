@@ -223,7 +223,7 @@ def get_inference_config(model_name):
 
 def main():
 
-    model_name = "pilot-turtle-static-follower_2024-05-01_23-28-38"
+    model_name = "pilot-turtle-static-follower_2024-05-02_12-38-32"
     data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, device = get_inference_config(model_name=model_name)
     robot = "turtlebot"
     robot_dataset_cfg = datasets_cfg[robot]
