@@ -1,22 +1,12 @@
 import torch
-from torchvision import transforms
 import torchvision.transforms.functional as TF
-import numpy as np
-from typing import List, Tuple, Dict, Optional
+from typing import List, Tuple
 from pilot_utils.data.data_utils import IMAGE_ASPECT_RATIO
 from PIL import Image as PILImage
 from PIL import Image
-# from sensor_msgs.msg import Image
 
 def transform_images(pil_imgs: List[PILImage.Image], image_size: List[int], center_crop: bool = False) -> torch.Tensor:
     """Transforms a list of PIL image to a torch tensor."""
-    # transform_type = transforms.Compose(
-    #     [
-    #         transforms.ToTensor(),
-    #         # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[
-    #         #                         0.229, 0.224, 0.225]),
-    #     ]
-    # )
     if type(pil_imgs) != list:
         pil_imgs = [pil_imgs]
     transf_imgs = []
@@ -33,7 +23,6 @@ def transform_images(pil_imgs: List[PILImage.Image], image_size: List[int], cent
         #         pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
         # pil_img = pil_img.resize(image_size) 
         transf_img = resize_and_aspect_crop(pil_img, image_resize_size=image_size)
-        # transf_img = torch.unsqueeze(transf_img, 0) # TODO: check
         transf_imgs.append(transf_img)
     return torch.cat(transf_imgs, dim=0)
 
