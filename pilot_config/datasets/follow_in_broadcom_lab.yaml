@@ -1,0 +1,13 @@
+robots: ["nimrod"]
+data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab
+
+# Robots 
+nimrod: 
+      # abs path to the dataset folder
+      train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train
+            # path to train folder with traj_names.txt
+      test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test
+            # path to test folder with traj_names.txt
+      end_slack: 2 # because many trajectories end in collisions
+      goals_per_obs: 1 # how many goals are sampled per observation
+      negative_mining: True # negative mining from the ViNG paper (Shah et al.)

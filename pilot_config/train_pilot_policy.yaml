@@ -9,7 +9,7 @@ defaults:
   - _self_
   - encoder_model: efficientnet
   - policy_model: vint 
-  - datasets: turtle_static_dataset
+  - datasets: follow_in_broadcom_lab
   # - log: defaults
 
 # training setup
