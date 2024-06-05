@@ -1,7 +1,7 @@
 training:
   batch_size: 16
   eval_batch_size: 32
-  epochs: 10
+  epochs: 15
   current_epoch: 0
   gpu_ids:
   - 0
@@ -24,7 +24,7 @@ data:
   normalize: true
   context_type: temporal
   target_context: true
-  context_size: 7
+  context_size: 5
   distance:
     min_dist_cat: 0
     max_dist_cat: 10
@@ -74,11 +74,20 @@ policy_model:
 datasets:
   robots:
   - nimrod
+  - turtlebot
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab
   nimrod:
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test
-    end_slack: 2
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/nimrod
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/nimrod
+    end_slack: 3
     goals_per_obs: 1
-    negative_mining: true
+    negative_mining: false
+    waypoint_spacing: 1
+  turtlebot:
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/turtlebot
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/turtlebot
+    end_slack: 3
+    goals_per_obs: 1
+    negative_mining: false
+    waypoint_spacing: 1
 device: cuda

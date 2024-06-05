@@ -6,6 +6,5 @@ turtlebot_bag-2024-04-30-19-55-25-data
 turtlebot_bag-2024-04-30-20-48-27-data
 turtlebot_bag-2024-04-30-20-40-14-data
 turtlebot_bag-2024-04-30-20-36-08-data
-nimrod_bag-2024-06-04-18-12-13-data
 turtlebot_bag-2024-04-30-21-05-58-data
 turtlebot_bag-2024-04-30-20-41-37-data
