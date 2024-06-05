@@ -372,11 +372,11 @@ class Trainer:
                 torch.save(checkpoint, best_model_path)
 
             checkpoint = {
-                "epoch": epoch,
-                "model": self.model,
-                "optimizer": self.optimizer,
-                "avg_total_test_loss": current_avg_loss,
-                "scheduler": self.scheduler
+                    "epoch": epoch,
+                    "model_state_dict": self.model.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+                    "avg_total_test_loss": current_avg_loss
             }
             # log average eval loss
             wandb.log({}, commit=False)
