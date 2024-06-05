@@ -14,9 +14,9 @@ defaults:
 
 # training setup
 training:
-  batch_size: 64
+  batch_size: 16
   eval_batch_size: 32
-  epochs: 25
+  epochs: 10
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -42,14 +42,14 @@ data:
   # context
   context_type: temporal
   target_context: True
-  context_size: 5
+  context_size: 7
   distance:
     min_dist_cat: 0
-    max_dist_cat: 20
+    max_dist_cat: 10
   action:
     min_dist_cat: 0
-    max_dist_cat: 10
-  close_far_threshold: 40 # need to check 
+    max_dist_cat: 20
+  close_far_threshold: 30 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
   len_traj_pred: 5

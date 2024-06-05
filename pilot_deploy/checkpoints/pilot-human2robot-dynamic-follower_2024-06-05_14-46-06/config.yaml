@@ -1,7 +1,7 @@
 training:
-  batch_size: 64
+  batch_size: 16
   eval_batch_size: 32
-  epochs: 25
+  epochs: 10
   current_epoch: 0
   gpu_ids:
   - 0
@@ -23,7 +23,7 @@ training:
 data:
   normalize: true
   context_type: temporal
-  target_context: true
+  target_context: false
   context_size: 5
   distance:
     min_dist_cat: 0
@@ -81,3 +81,4 @@ datasets:
     end_slack: 2
     goals_per_obs: 1
     negative_mining: true
+device: cuda
