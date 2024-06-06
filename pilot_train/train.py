@@ -1,14 +1,8 @@
 import os
 import wandb
-import argparse
 import numpy as np
-import yaml
-import time
-import pdb
-import json
 import hydra
 from omegaconf import DictConfig, OmegaConf
-from typing import Tuple
 import torch
 import torch.nn as nn
 
@@ -17,14 +11,16 @@ import torch.backends.cudnn as cudnn
 
 from pilot_train.training.trainer import Trainer
 from pilot_config.config import get_main_config_dir, split_main_config
+from pilot_utils.utils import tic, toc
+
 
 def train(cfg:DictConfig):
     
     # Get configs    
-    training_cfg, data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  split_main_config(cfg)
+    training_cfg, device_cfg,  data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  split_main_config(cfg)
 
     # Device management
-    if torch.cuda.is_available():
+    if torch.cuda.is_available() and device_cfg == 'cuda':
         os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
         if "gpu_ids" not in training_cfg:
             OmegaConf.update(training_cfg, "gpu_ids",[0], force_add = True)
@@ -34,13 +30,12 @@ def train(cfg:DictConfig):
             [str(x) for x in training_cfg.gpu_ids]
         )
         print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
+        
+        first_gpu_id = training_cfg.gpu_ids[0]
+        device = torch.device(f"cuda:{first_gpu_id}")
     else:
         print("Using cpu")
-
-    first_gpu_id = training_cfg.gpu_ids[0]
-    device = torch.device(
-        f"cuda:{first_gpu_id}" if torch.cuda.is_available() else "cpu"
-    )
+        device = torch.device("cpu")
 
     if "seed" in training_cfg:
         np.random.seed(training_cfg.seed)
@@ -48,7 +43,6 @@ def train(cfg:DictConfig):
         cudnn.deterministic = True
     cudnn.benchmark = True  # good if input sizes don't vary
 
-    
     # Training Getters
     train_dataloader, test_dataloaders = Trainer.get_dataloaders(datasets_cfg=datasets_cfg,
                                                                 data_cfg=data_cfg,
@@ -93,7 +87,7 @@ def train(cfg:DictConfig):
 
     # Tansform (currently takes place only on the goal image, don't know why) 
     # TODO: refactoring transofrm implemetnation, this is the Vint implementation
-
+    # Not in use in ours
     if encoder_model_cfg.in_channels == 3:
         transform = ([
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -106,7 +100,7 @@ def train(cfg:DictConfig):
     transform = transforms.Compose(transform)
 
     # Multi-GPU
-    if len(training_cfg.gpu_ids) > 1:
+    if device.type == 'cuda' and len(training_cfg.gpu_ids) > 1:
         model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)
     model = model.to(device)
     print(f"Model Type: {model.name}")
@@ -126,10 +120,14 @@ def train(cfg:DictConfig):
         datasets_cfg=datasets_cfg
     )
     
+    print()
+    print("START TRAINING")
+    start_time = tic()
     pilot_trainer.run()
-
+    
     print("FINISHED TRAINING")
-
+    print(f"TRAINING TIME: {toc(start_time)/60} [minutes]")
+    
 @hydra.main( version_base=None ,
         config_path= get_main_config_dir(),
         config_name = "train_pilot_policy")

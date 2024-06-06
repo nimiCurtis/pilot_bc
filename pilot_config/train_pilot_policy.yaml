@@ -35,6 +35,8 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
 
+device: cuda
+
 data:
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py

@@ -58,6 +58,26 @@ def get_robot_config(robot_name: str):
                                f"{robot_name}.yaml")
     return _get_default_config(file_path=config_path)
 
+
+def get_dataset_config(dataset_name: str):
+    """
+    Retrieve the configuration for a specific dataset based on its name.
+
+    Args:
+    dataset_name (str): The name of the dataset for which to retrieve the configuration.
+
+    Returns:
+    dict: The configuration loaded into a dictionary, sourced from a YAML file named after the robot.
+
+    Raises:
+    FileNotFoundError: If the configuration file does not exist.
+    ValueError: If the configuration file is not in a supported format.
+    """
+    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                               "datasets",
+                               f"{dataset_name}.yaml")
+    return _get_default_config(file_path=config_path)
+
 def get_recording_config(data_folder: str, trajectory_name: str):
     """
     Retrieve the configuration for a specific recording based on the trajectory name.
@@ -82,17 +102,16 @@ def get_recording_config(data_folder: str, trajectory_name: str):
 def split_main_config(cfg:DictConfig, rt:bool=False)->Tuple[DictConfig]:
 
     if not rt:
-            
         missings = OmegaConf.missing_keys(cfg)
         
         # Assertion to check if the set is empty
         assert not missings, f"Missing configs: {missings}, please check the main config!"
 
         for key in cfg.keys():
-            assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets']\
+            assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets', 'device']\
             ,f"{key} is missing in config please check the main config!"
 
-        return cfg.training, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
+        return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
     else:
         return cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.device
 
