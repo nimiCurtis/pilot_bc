@@ -2,8 +2,10 @@ import argparse
 import os
 import shutil
 import random
+import json
+import numpy as np
 
-from pilot_config.config import get_dataset_config
+from pilot_config.config import get_dataset_config, get_robot_config, set_robot_config, recursive_update
 
 PATH = os.path.dirname(__file__)
 
@@ -59,53 +61,105 @@ def main(args: argparse.Namespace):
     for robot_name in folders_robots_mapping:
         robot_folder_names = folders_robots_mapping.get(robot_name)
 
-        # Randomly shuffle the names of the folders
-        random.shuffle(robot_folder_names)
+        if len(robot_folder_names)>0:
+            # Randomly shuffle the names of the folders
+            random.shuffle(robot_folder_names)
 
-        # Split the names of the folders into train and test sets or use the same folder if only one exists
-        if len(folder_names) == 1:
-            train_folder_names = folder_names
-            test_folder_names = folder_names
-        else:
-            split_index = int(args.split * len(robot_folder_names))
-            train_folder_names = robot_folder_names[:split_index]
-            test_folder_names = robot_folder_names[split_index:]
-
-        robot_train_dir = os.path.join(train_dir,robot_name)
-        robot_test_dir = os.path.join(test_dir,robot_name)
-        
-        for dir_path in [robot_train_dir, robot_test_dir]:
-            if os.path.exists(dir_path):
-                print(f"Clearing files from {dir_path} for new data split")
-                remove_files_in_dir(dir_path)
+            # Split the names of the folders into train and test sets or use the same folder if only one exists
+            if len(folder_names) == 1:
+                train_folder_names = folder_names
+                test_folder_names = folder_names
             else:
-                print(f"Creating {dir_path}")
-                os.makedirs(dir_path)
+                split_index = int(args.split * len(robot_folder_names))
+                train_folder_names = robot_folder_names[:split_index]
+                test_folder_names = robot_folder_names[split_index:]
 
-        # Write the names of the train and test folders to files
-        with open(os.path.join(robot_train_dir, "traj_names.txt"), "w") as f:
-            for folder_name in train_folder_names:
-                f.write(folder_name + "\n")
+            robot_train_dir = os.path.join(train_dir,robot_name)
+            robot_test_dir = os.path.join(test_dir,robot_name)
+            
+            for dir_path in [robot_train_dir, robot_test_dir]:
+                if os.path.exists(dir_path):
+                    print(f"Clearing files from {dir_path} for new data split")
+                    remove_files_in_dir(dir_path)
+                else:
+                    print(f"Creating {dir_path}")
+                    os.makedirs(dir_path)
 
-        with open(os.path.join(robot_test_dir, "traj_names.txt"), "w") as f:
-            for folder_name in test_folder_names:
-                f.write(folder_name + "\n")
-    
-    # TODO:
-    # Take dataset stats and push to dataset config
-    
+            # Write the names of the train and test folders to files
+            with open(os.path.join(robot_train_dir, "traj_names.txt"), "w") as f:
+                for folder_name in train_folder_names:
+                    f.write(folder_name + "\n")
 
+            with open(os.path.join(robot_test_dir, "traj_names.txt"), "w") as f:
+                for folder_name in test_folder_names:
+                    f.write(folder_name + "\n")
+        
+            # TODO:
+            # Take dataset stats and push to dataset config 
+            robot_config = get_robot_config(robot_name=robot_name)
+            max_lin_vel = []
+            min_lin_vel = []
+            mean_lin_vel = []
+            std_lin_vel = []
+            
+            max_ang_vel = []
+            min_ang_vel = []
+            mean_ang_vel = []
+            std_ang_vel = []
+
+
+            for folder_name in test_folder_names + train_folder_names:
+                
+                with open(os.path.join(args.data_dir,folder_name, "metadata.json"), 'r') as file:
+                    metadata =  json.load(file)
+                    stats = metadata["stats"]
+                    
+                    ## Think about combine the dy velocity
+                    max_lin_vel.append(stats["dx"]["max"])
+                    min_lin_vel.append(stats["dx"]["min"])
+                    mean_lin_vel.append(stats["dx"]["mean"])
+                    std_lin_vel.append(stats["dx"]["std"])
+
+                    max_ang_vel.append(stats["dyaw"]["max"])
+                    min_ang_vel.append(stats["dyaw"]["min"])
+                    mean_ang_vel.append(stats["dyaw"]["mean"])
+                    std_ang_vel.append(stats["dyaw"]["std"])
+            
+            tot_max_lin_vel = np.max(max_lin_vel)
+            tot_min_lin_vel = np.min(min_lin_vel)
+            tot_mean_lin_vel = np.mean(mean_lin_vel)
+            tot_std_lin_vel = np.mean(std_lin_vel)
+            
+            tot_max_ang_vel = np.max(max_ang_vel)
+            tot_min_ang_vel = np.min(min_ang_vel)
+            tot_mean_ang_vel = np.mean(mean_ang_vel)
+            tot_std_ang_vel = np.mean(std_ang_vel)
+
+            robot_config = recursive_update(d=robot_config, u = {robot_name: 
+                                            {"max_lin_vel": float(np.round(tot_max_lin_vel,4)),
+                                            "min_lin_vel": float(np.round(tot_min_lin_vel,4)),
+                                            "mean_lin_vel": float(np.round(tot_mean_lin_vel,4)),
+                                            "std_lin_vel": float(np.round(tot_std_lin_vel,4)),
+                                            
+                                            "max_ang_vel": float(np.round(tot_max_ang_vel,4)),
+                                            "min_ang_vel": float(np.round(tot_min_ang_vel,4)),
+                                            "mean_ang_vel": float(np.round(tot_mean_ang_vel,4)),
+                                            "std_ang_vel": float(np.round(tot_std_ang_vel,4)),
+                                            }})
+            
+            set_robot_config(robot_name=robot_name, config=robot_config)
+            print(f"Update {robot_name} stats")
 
 if __name__ == "__main__":
     # Set up the command line argument parser
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--data-dir", "-i", help="Directory containing the data", default="/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab", required=False
+        "--data-dir", "-i", help="Directory containing the data", required=True
     )
     
     parser.add_argument(
-        "--dataset-name", "-r", help="Name of the dataset", default="follow_in_broadcom_lab",  required=False, 
+        "--dataset-name", "-r", help="Name of the dataset",  required=True, 
     )
     
     parser.add_argument(
