@@ -20,6 +20,7 @@ training:
   goal_condition: false
   alpha: 0.5
   beta: 10
+device: cuda
 data:
   normalize: true
   context_type: temporal
@@ -74,7 +75,6 @@ policy_model:
 datasets:
   robots:
   - nimrod
-  - turtlebot
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab
   nimrod:
     train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/nimrod
@@ -83,11 +83,3 @@ datasets:
     goals_per_obs: 1
     negative_mining: false
     waypoint_spacing: 1
-  turtlebot:
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/turtlebot
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/turtlebot
-    end_slack: 3
-    goals_per_obs: 1
-    negative_mining: false
-    waypoint_spacing: 1
-device: cuda

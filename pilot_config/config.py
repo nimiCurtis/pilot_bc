@@ -59,6 +59,39 @@ def get_robot_config(robot_name: str):
     return _get_default_config(file_path=config_path)
 
 
+def _represent_float(dumper, value):
+    return dumper.represent_scalar('tag:yaml.org,2002:float', '{:.4f}'.format(value))
+
+def set_robot_config(robot_name: str, config: dict, file_format: str = 'yaml'):
+    """
+    Save the configuration for a specific robot based on its name.
+
+    Args:
+    robot_name (str): The name of the robot for which to save the configuration.
+    config (dict): The configuration dictionary to be saved.
+    file_format (str): The format to save the configuration file in. Options are 'yaml' or 'json'.
+
+    Raises:
+    ValueError: If the file format is not supported.
+    """
+    if file_format.lower() not in ['json', 'yaml']:
+        raise ValueError("Unsupported file format: Please use 'json' or 'yaml'")
+
+    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                               "robot",
+                               f"{robot_name}.{file_format}")
+
+    if file_format.lower() == 'json':
+        with open(config_path, 'w') as file:
+            json.dump(config, file, indent=4)
+    elif file_format.lower() == 'yaml':
+        yaml.add_representer(float, _represent_float)
+        with open(config_path, 'w') as file:
+            yaml.safe_dump(config, file)
+
+    print(f"{config_path} was saved.")
+
+
 def get_dataset_config(dataset_name: str):
     """
     Retrieve the configuration for a specific dataset based on its name.
@@ -139,3 +172,11 @@ def get_inference_model_config(model_name: str, rt:bool=False):
             return split_main_config(cfg=config, rt=True)
     else:
         raise FileNotFoundError(f"No 'config.yaml' file found in {model_name}")
+
+def recursive_update(d, u):
+    for k, v in u.items():
+        if isinstance(v, dict):
+            d[k] = recursive_update(d.get(k, {}), v)
+        else:
+            d[k] = v
+    return d

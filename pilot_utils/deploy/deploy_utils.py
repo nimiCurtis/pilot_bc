@@ -19,7 +19,7 @@ def pil_to_msg(pil_img: PILImage.Image, encoding="mono8") -> Image:
     ros_image.step = ros_image.width
     return ros_image
 
-def image_to_numpy(msg, empty_value=None, output_resolution=None, max_depth=None, use_bridge=False)->np.ndarray:
+def image_to_numpy(msg, empty_value=None, output_resolution=None, max_depth=5000, use_bridge=False)->np.ndarray:
     """
     Converts a ROS image message to a numpy array, applying format conversions, depth normalization, and resolution scaling.
 
@@ -52,7 +52,9 @@ def image_to_numpy(msg, empty_value=None, output_resolution=None, max_depth=None
         elif is_depth16:
             data = np.frombuffer(msg.data, dtype=np.uint16).reshape(msg.height, msg.width).copy()
             max_depth_clip = max_depth if max_depth else np.max(data)
-            data = 1 - (np.clip(data, a_min=0, a_max=max_depth_clip) / max_depth_clip)
+            # data = 1 - (np.clip(data, a_min=0, a_max=max_depth_clip) / max_depth_clip)
+            data = np.clip(data, a_min=0, a_max=max_depth_clip) / max_depth_clip
+
             data = np.array(255*data.astype(np.float32),dtype=np.uint8)
         elif is_depth32:
             data = np.frombuffer(msg.data, dtype=np.float32).reshape(msg.height, msg.width).copy()
