@@ -80,6 +80,7 @@ class Trainer:
         self.num_images_log=log_cfg.num_images_log
         self.use_wandb=log_cfg.wandb.run.enable
         self.eval_fraction=log_cfg.eval_fraction
+        self.save_model_freq = log_cfg.save_model_freq 
         
         # Training config
         self.alpha=training_cfg.alpha if training_cfg.goal_condition else 0
@@ -357,10 +358,11 @@ class Trainer:
 
             current_avg_loss = np.mean(avg_total_test_loss)
             
+            print("\033[33m" +f"Best Test loss: {self.best_loss} | Current epoch Test loss: {current_avg_loss}"+ "\033[0m")
             # Update best loss and save the model if current average loss is the new best
             if current_avg_loss < self.best_loss:
                 best_model_path = os.path.join(self.project_log_folder, "best_model.pth")
-                print(f"Avg Test loss {self.best_loss} decreasing >> {current_avg_loss}\nSaving best model to {best_model_path}")
+                print("\033[32m" + f"Test loss {self.best_loss} decreasing >> {current_avg_loss}\nSaving best model to {best_model_path}" + "\033[0m")
                 self.best_loss = current_avg_loss
                 checkpoint = {
                     "epoch": epoch,
@@ -393,8 +395,10 @@ class Trainer:
             }, commit=False)
 
             numbered_path = os.path.join(self.project_log_folder, f"{epoch}.pth")
-            torch.save(checkpoint, self.latest_path)
-            torch.save(checkpoint, numbered_path)  # keep track of model at every epoch
+            
+            if epoch % self.save_model_freq == 0:
+                torch.save(checkpoint, self.latest_path)
+                torch.save(checkpoint, numbered_path)  # keep track of model at every epoch
 
         # Flush the last set of eval logs
         wandb.log({})
