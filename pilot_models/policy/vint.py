@@ -76,8 +76,9 @@ class ViNT(BaseModel):
         context_size=data_cfg.context_size
         len_traj_pred=data_cfg.len_traj_pred
         self.learn_angle=data_cfg.learn_angle
+        self.target_obs_enable = data_cfg.target_observation_enable
         self.target_context = data_cfg.target_context
-        
+        self.goal_condition = data_cfg.goal_condition
         # Policy model
         mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
         mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
@@ -93,7 +94,10 @@ class ViNT(BaseModel):
         
         # Final sequence length  = context size +
         #                           current observation (1) + encoded lin observation and target (1) 
-        seq_len = self.context_size + 2 
+        if self.goal_condition:
+            seq_len = self.context_size + 2
+        else:
+            seq_len = self.context_size + 1 
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
         self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
         
@@ -101,7 +105,11 @@ class ViNT(BaseModel):
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
         target_context_size = context_size if self.target_context else 0
         num_obs_features *= (target_context_size + 1)  # (context+1)
-        num_lin_features = num_obs_features + 2 #policy_model_cfg.num_target_features # x y
+        
+        if self.target_obs_enable:
+            num_lin_features = num_obs_features + 2 #policy_model_cfg.num_target_features # x y
+        else:
+            num_lin_features = 2
         self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
 
         # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
@@ -125,6 +133,8 @@ class ViNT(BaseModel):
             num_layers=mha_num_attention_layers,
             ff_dim_factor=mha_ff_dim_factor,
         )
+
+
         self.dist_predictor = nn.Sequential(
             nn.Linear(32, 1),
         )
@@ -133,7 +143,7 @@ class ViNT(BaseModel):
         )
 
     def forward(
-            self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor, goal_rel_pos_to_target: torch.tensor
+            self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         # split the observation into context based on the context size
@@ -145,25 +155,35 @@ class ViNT(BaseModel):
 
         # Currently obs_img size is [batch_size*(self.context_size+1), C, H, W] | for example: [96, 3, 64, 85]
         obs_encoding = self.obs_encoder.extract_features(obs_img)
-        
+
         # (Encoded) Currently obs_encoding size is [batch_size*(self.context_size+1), source_encoder_out_features] | for example: [96, 1280]
         obs_encoding = self.compress_obs_enc(obs_encoding)
-        
+
         # (Compressed) Currently obs_encoding size is [batch_size*(self.context_size + 1), self.obs_encoding_size (= a param from config)] | for example: [96, 512]
         obs_encoding = obs_encoding.reshape((self.context_size + 1, -1, self.obs_encoding_size))
         # (reshaped) Currently obs_encoding is [self.context_size + 1, batch_size, self.obs_encoding_size], note that the order is flipped | for example: [6, 16, 512]
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
 
-        linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+        if self.goal_condition:
+            if self.target_obs_enable:
+                linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+            else:
+                # print("here")
+                linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
 
-        lin_encoding = self.lin_encoder(linear_input)
-        if len(lin_encoding.shape) == 2:
-            lin_encoding = lin_encoding.unsqueeze(1)
-        # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-        assert lin_encoding.shape[2] == self.lin_encoding_size
+            lin_encoding = self.lin_encoder(linear_input)
+            if len(lin_encoding.shape) == 2:
+                lin_encoding = lin_encoding.unsqueeze(1)
+            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+            assert lin_encoding.shape[2] == self.lin_encoding_size
 
-        tokens = torch.cat((obs_encoding, lin_encoding), dim=1)  # obs_encoding
+        
+            tokens = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+        
+        else:       # No Goal condition >> take the obs_encoding as the tokens
+            tokens = obs_encoding
+
         final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]
@@ -182,7 +202,7 @@ class ViNT(BaseModel):
                 action_pred[:, :, 2:].clone(), dim=-1
             )  # normalize the angle prediction
         return action_pred
-    
+
     def _compute_losses(
         self,
             action_label: torch.Tensor,

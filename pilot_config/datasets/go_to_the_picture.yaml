@@ -1,0 +1,26 @@
+robots: ["nimrod"]
+data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture
+
+# Robots 
+nimrod: 
+      # abs path to the dataset folder
+      train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
+            # path to train folder with traj_names.txt
+      test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod
+            # path to test folder with traj_names.txt
+      end_slack: 0 # because many trajectories end in collisions
+      goals_per_obs: 1 # how many goals are sampled per observation
+      negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+      waypoint_spacing: 1
+
+# Robots 
+# turtlebot: 
+#       # abs path to the dataset folder
+#       train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/turtlebot
+#             # path to train folder with traj_names.txt
+#       test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/turtlebot
+#             # path to test folder with traj_names.txt
+#       end_slack: 3 # because many trajectories end in collisions
+#       goals_per_obs: 1 # how many goals are sampled per observation ## modify??
+#       negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+#       waypoint_spacing: 1

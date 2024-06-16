@@ -87,7 +87,7 @@ def train(cfg:DictConfig):
 
     # Tansform (currently takes place only on the goal image, don't know why) 
     # TODO: refactoring transofrm implemetnation, this is the Vint implementation
-    # Not in use in ours
+    # Not in use in ours !!!!!!!!!!!!!!!!!!!!!!!!
     if encoder_model_cfg.in_channels == 3:
         transform = ([
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),

@@ -202,7 +202,7 @@ class PilotPlanner(nn.Module):
         self.model.to(device=device)
         self.device = device
 
-    def forward(self, obs_img: torch.Tensor, curr_rel_pos_to_target: torch.Tensor, goal_rel_pos_to_target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs_img: torch.Tensor, curr_rel_pos_to_target: torch.Tensor = None, goal_rel_pos_to_target: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through the model to predict the next waypoint.
 
@@ -272,8 +272,13 @@ class PilotPlanner(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Raw normalized actions predicted by the model.
         """
         context_queue = obs_img.unsqueeze(0).to(self.device)
-        target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
-        goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
+        target_context_queue, goal_to_target = None, None
+        
+        if curr_rel_pos_to_target is not None:
+            target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
+        
+        if goal_rel_pos_to_target is not None:
+            goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
         with torch.no_grad():
             normalized_actions = self.model(context_queue, target_context_queue, goal_to_target)
@@ -312,7 +317,7 @@ def main():
 
     # Specify the type of data split to use for testing
     data_split_type = "test"
-
+    
     # Choose the device for computation 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
 

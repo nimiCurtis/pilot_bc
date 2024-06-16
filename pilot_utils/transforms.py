@@ -29,11 +29,11 @@ def transform_images(pil_imgs: List[PILImage.Image], image_size: List[int], cent
 def resize_and_aspect_crop(
     img: Image.Image, image_resize_size: Tuple[int, int], aspect_ratio: float = IMAGE_ASPECT_RATIO
 ):
-    w, h = img.size
-    if w > h:
-        img = TF.center_crop(img, (h, int(h * aspect_ratio)))  # crop to the right ratio
-    else:
-        img = TF.center_crop(img, (int(w / aspect_ratio), w))
+    # w, h = img.size
+    # if w > h:
+    #     img = TF.center_crop(img, (h, int(h * aspect_ratio)))  # crop to the right ratio
+    # else:
+    #     img = TF.center_crop(img, (int(w / aspect_ratio), w))
     img = img.resize(image_resize_size)
     resize_img = TF.to_tensor(img)
     return resize_img

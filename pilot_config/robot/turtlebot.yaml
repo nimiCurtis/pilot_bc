@@ -1,35 +1,24 @@
-# global params for diffusion model
-# normalized min and max
-# action_stats:
-#   min: [-2.5, -4] # [min_dx, min_dy]
-#   max: [5, 4] # [max_dx, max_dy]
-
-# data specific params
 turtlebot:
-  metric_waypoint_spacing: 0.22 ## <<< it has no meaning right now # average spacing between waypoints (meters)
-  ## added 
-  max_lin_vel: 0.22 # [meter/sec]
-  max_ang_vel: 2.8 # [rad/sec]
-
-  # OPTIONAL (FOR VISUALIZATION ONLY)
-  camera_metrics: # https://docs.opencv.org/4.x/dc/dbb/tutorial_py_calibration.html
-    # For zedm camera
-    camera_height: 0.18 # meters
-    camera_x_offset: 0.035 # distance between the center of the robot and the forward facing camera
+  camera_metrics:
+    camera_height: 0.18
     camera_matrix:
-      fx: 224.345
-      fy: 224.17
       cx: 207.72
       cy: 119.839
-    # dist_coeffs:
-    #   k1: -0.038483
-    #   k2: -0.010456
-    #   p1: 0.003930
-    #   p2: -0.001007
-    #   k3: 0.0
+      fx: 224.345
+      fy: 224.17
+    camera_x_offset: 0.035
     dist_coeffs:
       k1: 0.0
       k2: 0.0
+      k3: 0.0
       p1: 0.0
       p2: 0.0
-      k3: 0.0
+  max_ang_vel: 2.8
+  max_lin_vel: 0.22
+  mean_ang_vel: 0.0005
+  mean_lin_vel: 0.0116
+  metric_waypoint_spacing: 0.22
+  min_ang_vel: -0.7804
+  min_lin_vel: -0.3125
+  std_ang_vel: 0.1682
+  std_lin_vel: 0.085

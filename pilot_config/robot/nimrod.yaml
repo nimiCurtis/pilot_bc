@@ -13,12 +13,12 @@ nimrod:
       k3: 0.0
       p1: 0.0
       p2: 0.0
-  max_ang_vel: 1.2586
-  max_lin_vel: 0.8049 # 0.7718
-  mean_ang_vel: -0.0076
-  mean_lin_vel: 0.0158
+  max_ang_vel: 0.7791
+  max_lin_vel: 0.6062
+  mean_ang_vel: -0.0004
+  mean_lin_vel: 0.0816
   metric_waypoint_spacing: 0.22
-  min_ang_vel: -1.141
-  min_lin_vel: -0.8049
-  std_ang_vel: 0.2114
-  std_lin_vel: 0.1675
+  min_ang_vel: -0.9489
+  min_lin_vel: -0.4322
+  std_ang_vel: 0.1118
+  std_lin_vel: 0.091

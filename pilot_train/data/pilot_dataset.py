@@ -62,6 +62,8 @@ class PilotDataset(Dataset):
         self.data_config = robot_dataset_cfg
 
         # Data cfg
+        self.goal_condition = data_cfg.goal_condition
+
         self.image_size= data_cfg.image_size
         self.normalize=data_cfg.normalize
         self.goal_type=data_cfg.goal_type
@@ -141,7 +143,8 @@ class PilotDataset(Dataset):
         # Load all the trajectories into memory. These should already be loaded, but just in case.
         for traj_name in self.traj_names:
             self._get_trajectory(traj_name)
-            self._get_trajectory(traj_name, target=True)
+            if self.goal_condition:
+                self._get_trajectory(traj_name, target=True)
 
         # TODO: load target trajectories into memory.
 
@@ -177,10 +180,11 @@ class PilotDataset(Dataset):
             properties = self._get_properties(traj_name) ## added
             traj_len = len(traj_data["position"])
             
-            # Check robot and target data lenght is equal
-            target_traj_data = self._get_trajectory(traj_name, target=True)
-            target_traj_len = len(target_traj_data)
-            assert traj_len == target_traj_len, "robot and traget data length not equal"
+            # Check robot and target data length is equal
+            if self.goal_condition:
+                target_traj_data = self._get_trajectory(traj_name, target=True)
+                target_traj_len = len(target_traj_data)
+                assert traj_len == target_traj_len, "robot and traget data length not equal"
 
 
             for goal_time in range(0, traj_len):
@@ -357,30 +361,37 @@ class PilotDataset(Dataset):
         curr_traj_len = len(curr_traj_data["position"])
         assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
 
-
-        # Load current position rel to target. use f_curr and curr_time.
-        curr_target_traj_data = self._get_trajectory(f_curr, target=True)
-        
-        # Take context of target rel pos or only the recent
-        if self.target_context:
-            curr_rel_pos_to_target = torch.cat([
-                torch.as_tensor(curr_target_traj_data[t]["position"][:2], dtype=torch.float32) for f, t in context
-            ])
-        else:
-            curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
-
-        # Load goal position relative to target
-        goal_target_traj_data = self._get_trajectory(f_goal, target=True)
-        goal_target_traj_data_len = len(goal_target_traj_data)
-        assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-        goal_rel_pos_to_target = goal_target_traj_data[goal_time]["position"][:2] # Takes the [x,y] 
-
         # Compute actions
         action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
         
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
         #actions = waypoints, goal_pos = the position at the goal woth relate to current position
         
+        
+        if self.goal_condition:
+            # Load current position rel to target. use f_curr and curr_time.
+
+            curr_target_traj_data = self._get_trajectory(f_curr, target=True)
+
+            # Load goal position relative to target
+
+            goal_target_traj_data = self._get_trajectory(f_goal, target=True)
+            goal_target_traj_data_len = len(goal_target_traj_data)
+            assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
+            goal_rel_pos_to_target = goal_target_traj_data[goal_time]["position"][:2] # Takes the [x,y] 
+        
+        
+            # Take context of target rel pos or only the recent
+            if self.target_context:
+                curr_rel_pos_to_target = torch.cat([
+                    torch.as_tensor(curr_target_traj_data[t]["position"][:2], dtype=torch.float32) for f, t in context
+                ])
+            else:
+                curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
+        else:
+            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2))
+            goal_rel_pos_to_target = np.array([0,0])
+
         # Compute timesteps distances
         if goal_is_negative:
             distance = self.max_dist_cat
