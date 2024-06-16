@@ -79,6 +79,7 @@ datasets:
   robots:
   - nimrod
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture
+  max_depth: 10000
   nimrod:
     train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
     test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod

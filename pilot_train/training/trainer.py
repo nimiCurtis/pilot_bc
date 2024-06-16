@@ -18,7 +18,7 @@ from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
-
+from pilot_utils.transforms import ObservationTransform
 class Trainer:
     """
     A class responsible for managing the training and evaluation processes of pilot model.
@@ -33,7 +33,6 @@ class Trainer:
                 scheduler,
                 dataloader: DataLoader,
                 test_dataloaders: List[DataLoader],
-                transform: transforms ,
                 device,
                 training_cfg: DictConfig,
                 data_cfg: DictConfig, 
@@ -62,7 +61,7 @@ class Trainer:
         self.scheduler = scheduler
         self.dataloader = dataloader
         self.test_dataloaders = test_dataloaders
-        self.transform = transform
+        # self.transform = transform
         self.device = device
         self.training_cfg = training_cfg
         self.data_cfg = data_cfg
@@ -99,6 +98,7 @@ class Trainer:
         self.best_loss = float('inf')
         
         self.logging_manager = LoggingManager(datasets_cfg=datasets_cfg,log_cfg=log_cfg)
+
 
     def train_one_epoch(self, epoch: int)->None:
         """
@@ -511,7 +511,8 @@ class Trainer:
     @staticmethod
     def get_dataloaders(datasets_cfg:DictConfig,
                         data_cfg:DictConfig,
-                        training_cfg:DictConfig)->Tuple:
+                        training_cfg:DictConfig,
+                        transform: ObservationTransform)->Tuple:
         """
         Constructs and returns DataLoaders for training and testing based on provided configurations.
 
@@ -545,7 +546,8 @@ class Trainer:
                             datasets_cfg = datasets_cfg,
                             robot_dataset_cfg = robot_dataset_cfg,
                             dataset_name=robot,
-                            data_split_type=data_split_type
+                            data_split_type=data_split_type,
+                            transform=transform.get_transform(data_split_type)
                         )
                         if data_split_type == "train":
                             train_dataset.append(dataset)

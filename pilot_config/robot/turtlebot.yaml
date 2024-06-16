@@ -13,12 +13,7 @@ turtlebot:
       k3: 0.0
       p1: 0.0
       p2: 0.0
-  max_ang_vel: 2.8
-  max_lin_vel: 0.22
-  mean_ang_vel: 0.0005
-  mean_lin_vel: 0.0116
-  metric_waypoint_spacing: 0.22
-  min_ang_vel: -0.7804
-  min_lin_vel: -0.3125
-  std_ang_vel: 0.1682
-  std_lin_vel: 0.085
+  max_ang_vel: 0.87
+  max_lin_vel: 0.31
+  metric_waypoint_spacing: 0.31
+

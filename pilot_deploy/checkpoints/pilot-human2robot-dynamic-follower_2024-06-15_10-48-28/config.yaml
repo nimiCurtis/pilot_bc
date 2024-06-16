@@ -80,6 +80,7 @@ datasets:
   - nimrod
   - turtlebot
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/all
+  max_depth: 10000
   nimrod:
     train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/nimrod
     test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/nimrod

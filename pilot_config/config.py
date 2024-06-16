@@ -92,6 +92,35 @@ def set_robot_config(robot_name: str, config: dict, file_format: str = 'yaml'):
     print(f"{config_path} was saved.")
 
 
+def set_dataset_config(dataset_name: str, config: dict, file_format: str = 'yaml'):
+    """
+    Save the configuration for a specific dataset based on its name.
+
+    Args:
+    dataset_name (str): The name of the dataset for which to save the configuration.
+    config (dict): The configuration dictionary to be saved.
+    file_format (str): The format to save the configuration file in. Options are 'yaml' or 'json'.
+
+    Raises:
+    ValueError: If the file format is not supported.
+    """
+    if file_format.lower() not in ['json', 'yaml']:
+        raise ValueError("Unsupported file format: Please use 'json' or 'yaml'")
+
+    config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
+                               "datasets",
+                               f"{dataset_name}.{file_format}")
+
+    if file_format.lower() == 'json':
+        with open(config_path, 'w') as file:
+            json.dump(config, file, indent=4)
+    elif file_format.lower() == 'yaml':
+        yaml.add_representer(float, _represent_float)
+        with open(config_path, 'w') as file:
+            yaml.safe_dump(config, file)
+
+    print(f"{config_path} was saved.")
+
 def get_dataset_config(dataset_name: str):
     """
     Retrieve the configuration for a specific dataset based on its name.

@@ -9,7 +9,7 @@ defaults:
   - _self_
   - encoder_model: efficientnet
   - policy_model: vint 
-  - datasets: all
+  - datasets: go_to_the_picture
   # - log: defaults
 
 # training setup
@@ -38,7 +38,7 @@ training:
 device: cuda
 
 data:
-  goal_condition: True # not in use
+  goal_condition: False # not in use
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
   normalize: True
@@ -46,7 +46,7 @@ data:
   context_type: temporal
   target_observation_enable: False
   target_context: True
-  context_size: 5
+  context_size: 8
   distance:
     min_dist_cat: 0
     max_dist_cat: 10

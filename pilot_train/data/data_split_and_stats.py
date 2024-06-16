@@ -5,7 +5,7 @@ import random
 import json
 import numpy as np
 
-from pilot_config.config import get_dataset_config, get_robot_config, set_robot_config, recursive_update
+from pilot_config.config import get_dataset_config, set_dataset_config, recursive_update
 
 PATH = os.path.dirname(__file__)
 
@@ -96,7 +96,6 @@ def main(args: argparse.Namespace):
         
             # TODO:
             # Take dataset stats and push to dataset config 
-            robot_config = get_robot_config(robot_name=robot_name)
             max_lin_vel = []
             min_lin_vel = []
             mean_lin_vel = []
@@ -135,8 +134,8 @@ def main(args: argparse.Namespace):
             tot_mean_ang_vel = np.mean(mean_ang_vel)
             tot_std_ang_vel = np.mean(std_ang_vel)
 
-            robot_config = recursive_update(d=robot_config, u = {robot_name: 
-                                            {"max_lin_vel": float(np.round(tot_max_lin_vel,4)),
+            dataset_config = recursive_update(d=dataset_config, u = {robot_name:   
+                                            {"stats" : {"max_lin_vel": float(np.round(tot_max_lin_vel,4)),
                                             "min_lin_vel": float(np.round(tot_min_lin_vel,4)),
                                             "mean_lin_vel": float(np.round(tot_mean_lin_vel,4)),
                                             "std_lin_vel": float(np.round(tot_std_lin_vel,4)),
@@ -145,10 +144,10 @@ def main(args: argparse.Namespace):
                                             "min_ang_vel": float(np.round(tot_min_ang_vel,4)),
                                             "mean_ang_vel": float(np.round(tot_mean_ang_vel,4)),
                                             "std_ang_vel": float(np.round(tot_std_ang_vel,4)),
-                                            }})
+                                            }}})
             
-            set_robot_config(robot_name=robot_name, config=robot_config)
-            print(f"Update {robot_name} stats")
+            set_dataset_config(dataset_name=args.dataset_name, config=dataset_config)
+            print(f"Update {args.dataset_name} : {robot_name} stats")
 
 if __name__ == "__main__":
     # Set up the command line argument parser

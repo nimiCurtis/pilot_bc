@@ -9,6 +9,7 @@ from omegaconf import DictConfig
 
 import torch
 from torch.utils.data import Dataset
+from torchvision import transforms
 
 from pilot_utils.data.data_utils import (
     img_path_to_data,
@@ -21,6 +22,10 @@ from pilot_utils.utils import (
     get_delta,
     normalize_data
 )
+
+from pilot_utils.transforms import transform_images
+
+
 from pilot_config.config import get_robot_config, get_recording_config
 class PilotDataset(Dataset):
     def __init__(
@@ -29,7 +34,8 @@ class PilotDataset(Dataset):
         datasets_cfg: DictConfig,
         robot_dataset_cfg: DictConfig,
         dataset_name: str,
-        data_split_type: str
+        data_split_type: str,
+        transform: transforms = None
     ):
         """
         Main Pilot dataset class
@@ -72,6 +78,7 @@ class PilotDataset(Dataset):
         self.len_traj_pred=data_cfg.len_traj_pred
         self.target_context=data_cfg.target_context
         self.learn_angle=data_cfg.learn_angle
+        
         if self.learn_angle:
             self.num_action_params = 3
         else:
@@ -103,6 +110,8 @@ class PilotDataset(Dataset):
         self.data_split_folder = data_split_folder
         self.dataset_name = dataset_name
         
+        self.max_depth = datasets_cfg.max_depth
+        
         # Load trajectories names for this robot
         traj_names_file = os.path.join(data_split_folder, "traj_names.txt")
         with open(traj_names_file, "r") as f:
@@ -114,6 +123,10 @@ class PilotDataset(Dataset):
         # Organize data and indexing
         dataset_names = datasets_cfg.robots
         dataset_names.sort()
+        
+        
+        # Tranform
+        self.transform = transform
         
         # use this index to retrieve the dataset name from the dataset config
         self.dataset_index = dataset_names.index(self.dataset_name)
@@ -248,6 +261,7 @@ class PilotDataset(Dataset):
         except TypeError:
             print(f"Failed to load image {image_path}")
 
+        
     def _compute_actions(self, traj_data, curr_time, goal_time, action_stats):
         start_index = curr_time
         end_index = curr_time + self.len_traj_pred * self.waypoint_spacing + 1
@@ -352,9 +366,25 @@ class PilotDataset(Dataset):
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
 
-        obs_image = torch.cat([
-            self._load_image(f, t) for f, t in context
-        ])
+
+
+        # # Transform
+        # obs_image = torch.cat([
+        #         self.transform(self._load_image(f, t)) for f, t in context
+        #     ])
+        
+        obs_image = [
+                self._load_image(f, t) for f, t in context
+            ]
+        
+        obs_image = transform_images(obs_image, self.transform)
+        
+        # obs_image = torch.cat([
+        #         self._load_image(f, t) for f, t in context
+        #     ])
+        # if self.transform:
+        #     obs_image = self.transform(obs_image)
+
 
         # Load other trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
@@ -428,12 +458,12 @@ class PilotDataset(Dataset):
 
     ## added
     def _get_properties(self,trajectory_name):
-        
+
         recording_config = get_recording_config(data_folder=self.data_folder,
                                                 trajectory_name=trajectory_name)
         robot = recording_config['demonstrator']
         frame_rate = recording_config['sync_rate']
-        
+
         robot_properties = get_robot_config(robot)
         lin_vel_lim = robot_properties[robot]['max_lin_vel']
         ang_vel_lim = robot_properties[robot]['max_ang_vel']

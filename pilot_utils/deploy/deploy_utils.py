@@ -5,8 +5,8 @@ from cv_bridge import CvBridge, CvBridgeError
 bridge = CvBridge()
 import cv2
 
-def msg_to_pil(msg: Image) -> PILImage.Image:
-    np_img = image_to_numpy(msg)
+def msg_to_pil(msg: Image, max_depth: int) -> PILImage.Image:
+    np_img = image_to_numpy(msg, max_depth=max_depth)
     pil_image = PILImage.fromarray(np_img)
     return pil_image
 

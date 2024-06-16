@@ -150,7 +150,7 @@ class PilotPlanner(nn.Module):
         model (nn.Module): The policy model to use.
         action_stats (dict): Statistical properties related to actions.
     """
-
+    
     def __init__(self, data_cfg: DictConfig,
                 policy_model_cfg: DictConfig,
                 encoder_model_cfg: DictConfig,
@@ -271,6 +271,8 @@ class PilotPlanner(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Raw normalized actions predicted by the model.
         """
+        
+        
         context_queue = obs_img.unsqueeze(0).to(self.device)
         target_context_queue, goal_to_target = None, None
         

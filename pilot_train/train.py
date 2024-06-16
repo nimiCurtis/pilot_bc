@@ -12,7 +12,7 @@ import torch.backends.cudnn as cudnn
 from pilot_train.training.trainer import Trainer
 from pilot_config.config import get_main_config_dir, split_main_config
 from pilot_utils.utils import tic, toc
-
+from pilot_utils.transforms import ObservationTransform
 
 def train(cfg:DictConfig):
     
@@ -43,10 +43,15 @@ def train(cfg:DictConfig):
         cudnn.deterministic = True
     cudnn.benchmark = True  # good if input sizes don't vary
 
+    
+    # Transform
+    transform = ObservationTransform(data_cfg=data_cfg)
+
     # Training Getters
     train_dataloader, test_dataloaders = Trainer.get_dataloaders(datasets_cfg=datasets_cfg,
                                                                 data_cfg=data_cfg,
-                                                                training_cfg=training_cfg)
+                                                                training_cfg=training_cfg,
+                                                                transform=transform)
     model = Trainer.get_model(
         policy_model_cfg = policy_model_cfg,
         encoder_model_cfg = encoder_model_cfg,
@@ -88,16 +93,17 @@ def train(cfg:DictConfig):
     # Tansform (currently takes place only on the goal image, don't know why) 
     # TODO: refactoring transofrm implemetnation, this is the Vint implementation
     # Not in use in ours !!!!!!!!!!!!!!!!!!!!!!!!
-    if encoder_model_cfg.in_channels == 3:
-        transform = ([
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    elif encoder_model_cfg.in_channels == 1:
-        transform = ([
-            transforms.Normalize(mean=[0.5], std=[0.5]),
-        ])
+    # if encoder_model_cfg.in_channels == 3:
+    #     transform = ([
+    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    #     ])
+    # elif encoder_model_cfg.in_channels == 1:
+    #     transform = ([
+    #         transforms.Normalize(mean=[0.5], std=[0.5]),
+    #     ])
     
-    transform = transforms.Compose(transform)
+    # transform = transforms.Compose(transform)
+
 
     # Multi-GPU
     if device.type == 'cuda' and len(training_cfg.gpu_ids) > 1:
@@ -112,7 +118,6 @@ def train(cfg:DictConfig):
         scheduler=scheduler,
         dataloader=train_dataloader,
         test_dataloaders=test_dataloaders,
-        transform=transform,
         device=device,
         training_cfg=training_cfg,
         data_cfg=data_cfg,
