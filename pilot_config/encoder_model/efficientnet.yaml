@@ -1,4 +1,4 @@
 name: efficientnet
-version: efficientnet-b0 # by default, this is imagenet pretrained
+version: efficientnet-b1 # by default, this is imagenet pretrained
 in_channels: 1
 pretrained: False
