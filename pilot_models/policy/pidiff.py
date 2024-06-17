@@ -9,50 +9,10 @@ import math
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.encoder.model_registry import get_vision_encoder_model
 from pilot_utils.train.train_utils import replace_bn_with_gn
+from diffusion_policy import ConditionalUnet1D
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_seq_len=6):
-        super().__init__()
 
-        # Compute the positional encoding once
-        pos_enc = torch.zeros(max_seq_len, d_model)
-        pos = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pos_enc[:, 0::2] = torch.sin(pos * div_term)
-        pos_enc[:, 1::2] = torch.cos(pos * div_term)
-        pos_enc = pos_enc.unsqueeze(0)
-
-        # Register the positional encoding as a buffer to avoid it being
-        # considered a parameter when saving the model
-        self.register_buffer('pos_enc', pos_enc)
-
-    def forward(self, x):
-        # Add the positional encoding to the input
-        x = x + self.pos_enc[:, :x.size(1), :]
-        return x
-
-class MultiLayerDecoder(nn.Module):
-    def __init__(self, embed_dim=512, seq_len=6, output_layers=[256, 128, 64], nhead=8, num_layers=8, ff_dim_factor=4):
-        super(MultiLayerDecoder, self).__init__()
-        self.positional_encoding = PositionalEncoding(embed_dim, max_seq_len=seq_len)
-        self.sa_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=nhead, dim_feedforward=ff_dim_factor*embed_dim, activation="gelu", batch_first=True, norm_first=True)
-        self.sa_decoder = nn.TransformerEncoder(self.sa_layer, num_layers=num_layers)
-        self.output_layers = nn.ModuleList([nn.Linear(seq_len*embed_dim, embed_dim)])
-        self.output_layers.append(nn.Linear(embed_dim, output_layers[0]))
-        for i in range(len(output_layers)-1):
-            self.output_layers.append(nn.Linear(output_layers[i], output_layers[i+1]))
-
-    def forward(self, x):
-        if self.positional_encoding: x = self.positional_encoding(x)
-        x = self.sa_decoder(x)
-        # currently, x is [batch_size, seq_len, embed_dim]
-        x = x.reshape(x.shape[0], -1)
-        for i in range(len(self.output_layers)):
-            x = self.output_layers[i](x)
-            x = F.relu(x)
-        return x
-
-class ViNT(BaseModel):
+class PiDiff(BaseModel):
     def __init__(
             self,
             policy_model_cfg: DictConfig,
@@ -86,7 +46,7 @@ class ViNT(BaseModel):
         self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
         
-        super(ViNT, self).__init__(policy_model_cfg.name,
+        super(PiDiff, self).__init__(policy_model_cfg.name,
                                 context_size,
                                 len_traj_pred,
                                 self.learn_angle,
@@ -100,7 +60,7 @@ class ViNT(BaseModel):
             seq_len = self.context_size + 1 
         self.vision_encoder = get_vision_encoder_model(encoder_model_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
-        
+
         # Linear input encoder #TODO: modify num_obs_features to be argument
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
         target_context_size = context_size if self.target_context else 0
@@ -134,13 +94,17 @@ class ViNT(BaseModel):
             ff_dim_factor=mha_ff_dim_factor,
         )
 
-
         self.dist_predictor = nn.Sequential(
             nn.Linear(32, 1),
         )
         self.action_predictor = nn.Sequential(
             nn.Linear(32, self.len_trajectory_pred * self.num_action_params),
         )
+        
+        self.noise_predictor = ConditionalUnet1D(
+                input_dim= 3 if self.learn_angle else 2,
+                global_cond_dim=self.obs_encoding_size*self.context_size,
+            )
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
@@ -170,6 +134,10 @@ class ViNT(BaseModel):
             assert lin_encoding.shape[2] == self.lin_encoding_size
             
             return lin_encoding
+
+    def infer_noise_predictor(self, sample, timestep, condition):
+        noise_pred = self.noise_predictor(sample=sample, timestep=timestep, global_cond=condition)
+        return noise_pred
     
     def forward(
             self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
@@ -234,12 +202,11 @@ class ViNT(BaseModel):
             )  # normalize the angle prediction
         return action_pred
 
-    def _compute_losses(
+    def _compute_noise_losses(
         self,
-            action_label: torch.Tensor,
-            action_pred: torch.Tensor,
+            noise_pred: torch.Tensor,
+            noise: torch.Tensor,
             action_mask: torch.Tensor = None,
-            control_magnitude: torch.Tensor = None,
     ):
         """
         Compute losses for distance and action prediction.
@@ -252,41 +219,22 @@ class ViNT(BaseModel):
             assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
             return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 
-        # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
-        # This is the actual losses
-        assert action_pred.shape == action_label.shape, f"{action_pred.shape} != {action_label.shape}"
-        action_loss = action_reduce(F.mse_loss(action_pred, action_label, reduction="none"))
-
-        # Other losses for logger
-        action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
-            action_pred[:, :, :2], action_label[:, :, :2], dim=-1
-        ))
-        multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
-            torch.flatten(action_pred[:, :, :2], start_dim=1),
-            torch.flatten(action_label[:, :, :2], start_dim=1),
-            dim=-1,
-        ))
+        # L2 loss
+        diffusion_loss = action_reduce(F.mse_loss(noise_pred, noise, reduction="none"))
+            
+        # Total loss
+        # loss = alpha * dist_loss + (1-alpha) * diffusion_loss
 
         results = {
-            "action_loss": action_loss,
-            "action_waypts_cos_sim": action_waypts_cos_similairity,
-            "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim,
+            "diffusion_loss": diffusion_loss,
         }
 
-        if self.learn_angle:
-            action_orien_cos_sim = action_reduce(F.cosine_similarity(
-                action_pred[:, :, 2:], action_label[:, :, 2:], dim=-1
-            ))
-            multi_action_orien_cos_sim = action_reduce(F.cosine_similarity(
-                torch.flatten(action_pred[:, :, 2:], start_dim=1),
-                torch.flatten(action_label[:, :, 2:], start_dim=1),
-                dim=-1,
-            )
-            )
-            results["action_orien_cos_sim"] = action_orien_cos_sim
-            results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
-
-        total_loss = action_loss if control_magnitude is None else control_magnitude*action_loss
+        ## For now
+        total_loss = diffusion_loss 
         results["total_loss"] = total_loss
 
         return results
+
+
+
+

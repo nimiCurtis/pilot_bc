@@ -10,7 +10,7 @@ model_registry = {
     # 'dino': Dino
 }
 
-def get_encoder_model(config):
+def get_vision_encoder_model(config):
     """
     Instantiate a model based on the provided configuration.
 
