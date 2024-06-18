@@ -25,3 +25,6 @@ class BaseModel(nn.Module):
         Extract features from an input image or batch of images.
         """
         raise NotImplementedError("Subclasses must implement this method.")
+    
+    def forward(self, img):
+        return self.extract_features(img)

@@ -14,6 +14,10 @@ from torch.optim import Adam, AdamW, SGD
 import torchvision.transforms.functional as TF
 from torchvision.transforms import transforms
 
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.training_utils import EMAModel
+
+
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
@@ -65,7 +69,6 @@ class Trainer:
         self.device = device
         self.training_cfg = training_cfg
         self.data_cfg = data_cfg
-        self.log_cfg = log_cfg
 
         # Log config
         project_log_folder = os.path.join(log_cfg.project_folder,log_cfg.run_name)
@@ -99,7 +102,21 @@ class Trainer:
         
         self.logging_manager = LoggingManager(datasets_cfg=datasets_cfg,log_cfg=log_cfg)
 
+        self.use_ema = training_cfg.use_ema
+        if self.use_ema:
+            self.ema_model = EMAModel(self.model.parameters(), power=0.75)
+            self.ema_model.to(self.device)
 
+        ## Noise scheduler
+        self.noise_scheduler = DDPMScheduler(
+            num_train_timesteps= training_cfg.num_diffusion_iters,
+            beta_schedule=training_cfg.beta_schedule,
+            clip_sample=True,
+            prediction_type='epsilon'
+        )
+        
+        
+        
     def train_one_epoch(self, epoch: int)->None:
         """
         Conducts one epoch of training on the provided data loader and updates the model's parameters.
@@ -155,8 +172,8 @@ class Trainer:
             ) = data
 
             # STATE
-            # visual context
-            obs_images = torch.split(obs_image, 3, dim=1) ## why I need this?
+            # visual context ###TODO: check!!!! >> it seems to do nothing but becarefull
+            obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
             obs_images = [obs_image.to(self.device) for obs_image in obs_images]
@@ -171,32 +188,58 @@ class Trainer:
             # This line is for not corrupt the pipeline of visualization right now
             # TODO: modify it
             viz_goal_image = viz_obs_image
-
-            # Not in use
-            # TODO: remove the transform from the script and from the train.py script
-            #goal_image = self.transform(goal_image).to(self.device)
             
             # ACTION
             action_label = action_label.to(self.device)
             action_mask = action_mask.to(self.device)
-            
+
             # Infer model
-            model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
-            action_pred = model_outputs
+            if self.model.name == "pidiff":
+                # Sample noise to add to actions
+                noise = torch.randn(action_label.shape, device=self.device)
 
+                # Sample a diffusion iteration for each data point
+                timesteps = torch.randint(
+                    0, self.noise_scheduler.config.num_train_timesteps,
+                    (action_label.shape[0],), device=self.device
+                ).long()
+                
+                # Add noise to the clean images according to the noise magnitude at each diffusion iteration
+                noisy_action = self.add_noise(   
+                    action_label, noise, timesteps)
+
+                # Predict the noise residual
+                obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
+                noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, obs_encoding_condition)
+                losses = self._compute_noise_losses(noise_pred=noise_pred,
+                        noise=noise,
+                        action_mask=action_mask)
+            else:
+                model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                action_pred = model_outputs
+
+                losses = self.model._compute_losses(
+                    action_label=action_label,
+                    action_pred=action_pred,
+                    action_mask=action_mask,
+                )
+                
+            
+            # self.print_log_freq
+
+            # Zero Grad
             self.optimizer.zero_grad()
-
-            losses = self.model._compute_losses(
-                action_label=action_label,
-                action_pred=action_pred,
-                action_mask=action_mask,
-            )
-
-            # Backward step
+            # Backward Step
             losses["total_loss"].backward()
+            # Optim Step
             self.optimizer.step()
+            
+            # # Update Exponential Moving Average of the model weights
+            if self.use_ema and self.model.name == "pidiff":
+                self.ema_model.step(self.model.parameters())
+                self.ema_model
 
-            # Appenf to Logger
+            # Append to Logger
             for key, value in losses.items():
                 if key in loggers:
                     logger = loggers[key]
@@ -231,7 +274,9 @@ class Trainer:
             tuple: Tuple containing the average distance loss, action loss, and total loss for the evaluated epoch.
         """
         
-        self.model.eval()
+        
+        eval_model = self.ema_model if self.use_ema else self.model
+        eval_model.eval()
         action_loss_logger = Logger("action_loss", eval_type)
         action_waypts_cos_sim_logger = Logger("action_waypts_cos_sim", eval_type)
         multi_action_waypts_cos_sim_logger = Logger("multi_action_waypts_cos_sim", eval_type)
@@ -289,15 +334,13 @@ class Trainer:
                 # TODO: modify it
                 viz_goal_image = viz_obs_image
 
-                # Not in use
-                # TODO: remove the transform from the script and from the train.py script
-                #goal_image = self.transform(goal_image).to(self.device)
                 
                 # ACTION
                 action_label = action_label.to(self.device)
                 action_mask = action_mask.to(self.device)
                 
                 # Infer model
+                ### TODO: change to eval_model here !!!!
                 model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
                 action_pred = model_outputs
 

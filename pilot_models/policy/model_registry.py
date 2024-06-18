@@ -1,9 +1,11 @@
 from pilot_models.policy.vint import ViNT
+from pilot_models.policy.pidiff import PiDiff
 from omegaconf import DictConfig
 
 # Registry of available models
 model_registry = {
     'vint': ViNT,
+    'pidiff': PiDiff
     # Add new models here as you develop them, e.g., 'resnet': ResNet
 }
 
