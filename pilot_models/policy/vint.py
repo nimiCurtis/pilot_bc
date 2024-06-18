@@ -99,7 +99,7 @@ class ViNT(BaseModel):
         else:
             seq_len = self.context_size + 1 
         self.obs_encoder = get_encoder_model(encoder_model_cfg)
-        self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
+        # self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
         
         # Linear input encoder #TODO: modify num_obs_features to be argument
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)

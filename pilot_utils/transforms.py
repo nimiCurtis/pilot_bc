@@ -64,16 +64,20 @@ class ObservationTransform:
         
         to_tensor = transforms.ToTensor()
         
+        ## TODO: modify it to rgb as well
+        normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([random_crop,
                                             resize,
-                                            to_tensor
+                                            to_tensor,
+                                            normalize
                                         ])
         
         ### EVAL TRANSFORMS ###
         eval_transform =  transforms.Compose([center_crop,
                                                     resize,
-                                                    to_tensor
+                                                    to_tensor,
+                                                    normalize
                                                 ])
 
         return train_transform, eval_transform
@@ -111,16 +115,19 @@ class RandomAspectCrop:
         # Calculate the center
         center_x, center_y = w // 2, h // 2
         
-        # Apply random offset
+        # Apply random offset relate to the x
         offset_x = random.randint(-self.offset, self.offset)
         offset_y = random.randint(-self.offset, self.offset)
         
         # Calculate new crop box
         left = max(0, center_x + offset_x - crop_width // 2)
-        top = max(0, center_y + offset_y - crop_height // 2)
+        # top = max(0, center_y + offset_y - crop_height // 2)
         right = min(w, left + crop_width)
-        bottom = min(h, top + crop_height)
+        # bottom = min(h, top + crop_height)
         
+        # Currently crop only with translation from the center
+        top = 0
+        bottom = top+crop_height
         img = img.crop((left, top, right, bottom))
         return img
 

@@ -56,10 +56,10 @@ data:
   close_far_threshold: 20 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
-  len_traj_pred: 5
+  len_traj_pred: 6
   learn_angle: True
   # dataset specific parameters
-  image_size: [128, 96] # width, height
+  image_size: [96, 96] # width, height
   # image_size: [85, 64] # width, height
   goal_type: "image"
   obs_type: "image"

@@ -4,6 +4,7 @@ nimrod:
   end_slack: 0
   goals_per_obs: 1
   negative_mining: false
+  number_of_bags: 52
   stats:
     max_ang_vel: 0.7791
     max_lin_vel: 0.6062
@@ -14,6 +15,7 @@ nimrod:
     std_ang_vel: 0.1118
     std_lin_vel: 0.091
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod
+  time: 20.7878
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
   waypoint_spacing: 1
 robots:

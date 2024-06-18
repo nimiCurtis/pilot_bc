@@ -156,7 +156,7 @@ class Trainer:
 
             # STATE
             # visual context
-            obs_images = torch.split(obs_image, 3, dim=1)
+            obs_images = torch.split(obs_image, 3, dim=1) ## why I need this?
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
             obs_images = [obs_image.to(self.device) for obs_image in obs_images]
