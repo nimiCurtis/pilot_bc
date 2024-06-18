@@ -146,7 +146,7 @@ def main(cfg:DictConfig):
         wandb.init(
             project=wandb_cfg.setup.project,
             settings=wandb.Settings(start_method="fork"),
-            entity=wandb_cfg.setup.entity
+            entity=wandb_cfg.setup.entity 
         )
         wandb.run.name = wandb_cfg.run.name
         

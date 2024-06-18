@@ -1,6 +1,7 @@
 import os
 import itertools
 
+import copy
 import numpy as np
 import tqdm
 import wandb
@@ -14,7 +15,6 @@ from torch.optim import Adam, AdamW, SGD
 import torchvision.transforms.functional as TF
 from torchvision.transforms import transforms
 
-from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.training_utils import EMAModel
 
 
@@ -104,19 +104,16 @@ class Trainer:
 
         self.use_ema = training_cfg.use_ema
         if self.use_ema:
-            self.ema_model = EMAModel(self.model.parameters(), power=0.75)
+            self.ema = EMAModel(self.model.parameters(), power=0.75)
+            self.ema.to(self.device)
+            self.ema_model = copy.deepcopy(self.model)
             self.ema_model.to(self.device)
+            
+    def to_ema(self):
+        # Weights of the EMA model
+        # is used for inference
+        self.ema.copy_to(self.ema_model.parameters())
 
-        ## Noise scheduler
-        self.noise_scheduler = DDPMScheduler(
-            num_train_timesteps= training_cfg.num_diffusion_iters,
-            beta_schedule=training_cfg.beta_schedule,
-            clip_sample=True,
-            prediction_type='epsilon'
-        )
-        
-        
-        
     def train_one_epoch(self, epoch: int)->None:
         """
         Conducts one epoch of training on the provided data loader and updates the model's parameters.
@@ -154,6 +151,13 @@ class Trainer:
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
+        if self.model.name == "pidiff":
+            diffusion_noise_loss = Logger(
+                "diffusion_noise_loss", "train", window_size=self.print_log_freq
+            )
+            loggers["diffusion_noise_loss"] = diffusion_noise_loss
+
+        
         num_batches = len(self.dataloader)
         tqdm_iter = tqdm.tqdm(
             self.dataloader,
@@ -172,7 +176,7 @@ class Trainer:
             ) = data
 
             # STATE
-            # visual context ###TODO: check!!!! >> it seems to do nothing but becarefull
+            # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
@@ -200,20 +204,24 @@ class Trainer:
 
                 # Sample a diffusion iteration for each data point
                 timesteps = torch.randint(
-                    0, self.noise_scheduler.config.num_train_timesteps,
+                    0, self.model.noise_scheduler.config.num_train_timesteps,
                     (action_label.shape[0],), device=self.device
                 ).long()
                 
                 # Add noise to the clean images according to the noise magnitude at each diffusion iteration
-                noisy_action = self.add_noise(   
+                noisy_action = self.model.noise_scheduler.add_noise(   
                     action_label, noise, timesteps)
 
                 # Predict the noise residual
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
                 noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, obs_encoding_condition)
-                losses = self._compute_noise_losses(noise_pred=noise_pred,
+                losses = self.model._compute_noise_losses(noise_pred=noise_pred,
                         noise=noise,
                         action_mask=action_mask)
+                loss = losses["diffusion_noise_loss"]
+                
+                ## TODO: Change
+                action_pred = None
             else:
                 model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
                 action_pred = model_outputs
@@ -224,21 +232,52 @@ class Trainer:
                     action_mask=action_mask,
                 )
                 
+                loss = losses["total_loss"]
             
             # self.print_log_freq
-
             # Zero Grad
             self.optimizer.zero_grad()
             # Backward Step
-            losses["total_loss"].backward()
+            loss.backward()
             # Optim Step
             self.optimizer.step()
             
-            # # Update Exponential Moving Average of the model weights
-            if self.use_ema and self.model.name == "pidiff":
-                self.ema_model.step(self.model.parameters())
-                self.ema_model
+            # # Update Exponential Moving Average of the model weights after optimizing
+            if self.model.name == "pidiff": ### TODO: add eme implementation
+                # self.ema.step(self.model.parameters())
+                # model = self.model
+                # model = self.ema_model.averaged_model
+                
+                if i % self.print_log_freq == 0 :
+                    pred_horizon = action_label.shape[1]
+                    action_dim = action_label.shape[2]
+                    
+                    # initialize action from Gaussian noise
+                    noisy_diffusion_output = torch.randn(
+                        (len(obs_encoding_condition), pred_horizon, action_dim), device=self.device)
+                    diffusion_output = noisy_diffusion_output
+                    
+                    for k in self.model.noise_scheduler.timesteps[:]:
+                        # predict noise
+                        noise_pred = self.model.infer_noise_predictor(diffusion_output,
+                                                                k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                                                obs_encoding_condition)
 
+                        # inverse diffusion step (remove noise)
+                        diffusion_output = self.model.noise_scheduler.step(
+                            model_output=noise_pred,
+                            timestep=k,
+                            sample=diffusion_output
+                        ).prev_sample
+                    
+                    action_pred = diffusion_output
+                    
+                    action_losses  = self.model._compute_losses(action_label=action_label,
+                                                                        action_pred=action_pred,
+                                                                        action_mask=action_mask,
+                                                                        )
+                    losses.update(action_losses)
+                    
             # Append to Logger
             for key, value in losses.items():
                 if key in loggers:
@@ -275,8 +314,9 @@ class Trainer:
         """
         
         
-        eval_model = self.ema_model if self.use_ema else self.model
-        eval_model.eval()
+        # eval_model = self.ema_model if self.use_ema else self.model
+        # eval_model.eval()
+        self.model.eval()
         action_loss_logger = Logger("action_loss", eval_type)
         action_waypts_cos_sim_logger = Logger("action_waypts_cos_sim", eval_type)
         multi_action_waypts_cos_sim_logger = Logger("multi_action_waypts_cos_sim", eval_type)
@@ -294,6 +334,12 @@ class Trainer:
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
+        if self.model.name == "pidiff":
+            diffusion_noise_loss = Logger(
+                "diffusion_noise_loss", "train", window_size=self.print_log_freq
+            )
+            loggers["diffusion_noise_loss"] = diffusion_noise_loss
+        
         num_batches = len(dataloader)
         num_batches = max(int(num_batches * self.eval_fraction), 1)
 
@@ -340,15 +386,72 @@ class Trainer:
                 action_mask = action_mask.to(self.device)
                 
                 # Infer model
-                ### TODO: change to eval_model here !!!!
-                model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
-                action_pred = model_outputs
+                
+                # Infer model
+                if self.model.name == "pidiff":
+                    # Sample noise to add to actions
+                    noise = torch.randn(action_label.shape, device=self.device)
 
-                losses = self.model._compute_losses(
-                    action_label=action_label,
-                    action_pred=action_pred,
-                    action_mask=action_mask,
-                )
+                    # Sample a diffusion iteration for each data point
+                    timesteps = torch.randint(
+                        0, self.model.noise_scheduler.config.num_train_timesteps,
+                        (action_label.shape[0],), device=self.device
+                    ).long()
+                    
+                    # Add noise to the clean images according to the noise magnitude at each diffusion iteration
+                    noisy_action = self.model.noise_scheduler.add_noise(   
+                        action_label, noise, timesteps)
+
+                    # Predict the noise residual
+                    obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
+                    noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, obs_encoding_condition)
+                    losses = self.model._compute_noise_losses(noise_pred=noise_pred,
+                            noise=noise,
+                            action_mask=action_mask)
+                    
+
+                    if i % self.print_log_freq == 0 :
+                        pred_horizon = action_label.shape[1]
+                        action_dim = action_label.shape[2]
+                        
+                        # initialize action from Gaussian noise
+                        noisy_diffusion_output = torch.randn(
+                            (len(obs_encoding_condition), pred_horizon, action_dim), device=self.device)
+                        diffusion_output = noisy_diffusion_output
+                        
+                        for k in self.model.noise_scheduler.timesteps[:]:
+                            # predict noise
+                            noise_pred = self.model.infer_noise_predictor(diffusion_output,
+                                                                    k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                                                    obs_encoding_condition)
+
+
+                            # inverse diffusion step (remove noise)
+                            diffusion_output = self.model.noise_scheduler.step(
+                                model_output=noise_pred,
+                                timestep=k,
+                                sample=diffusion_output
+                            ).prev_sample
+                        
+                        action_pred = diffusion_output
+                        
+                        action_losses  = self.model._compute_losses(action_label=action_label,
+                                                                            action_pred=action_pred,
+                                                                            action_mask=action_mask,
+                                                                            )
+                        losses.update(action_losses)
+
+                else:
+                    model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                    action_pred = model_outputs
+
+                    losses = self.model._compute_losses(
+                        action_label=action_label,
+                        action_pred=action_pred,
+                        action_mask=action_mask,
+                    )
+                    
+                    loss = losses["total_loss"]
 
                 for key, value in losses.items():
                     if key in loggers:

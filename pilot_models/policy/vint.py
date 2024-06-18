@@ -99,7 +99,7 @@ class ViNT(BaseModel):
         else:
             seq_len = self.context_size + 1 
         self.vision_encoder = get_vision_encoder_model(encoder_model_cfg)
-        self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
+        # self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
         
         # Linear input encoder #TODO: modify num_obs_features to be argument
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
@@ -162,6 +162,8 @@ class ViNT(BaseModel):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
+        return obs_encoding
+    
     def infer_linear_encoder(self, linear_input: torch.tensor):
             lin_encoding = self.lin_encoder(linear_input)
             if len(lin_encoding.shape) == 2:
