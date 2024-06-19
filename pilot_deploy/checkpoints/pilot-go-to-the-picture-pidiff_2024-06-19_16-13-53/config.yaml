@@ -83,7 +83,7 @@ policy_model:
   - 256
   cond_predict_scale: false
   noise_scheduler:
-    num_diffusion_iters: 10
+    num_diffusion_iters: 5
     beta_schedule: squaredcos_cap_v2
 datasets:
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture
