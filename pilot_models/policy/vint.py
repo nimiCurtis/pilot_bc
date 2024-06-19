@@ -98,7 +98,14 @@ class ViNT(BaseModel):
             seq_len = self.context_size + 2
         else:
             seq_len = self.context_size + 1 
-        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg)
+        
+        # pred horizon # TODO: remove dupliactes in refactoring
+        self.pred_horizon = self.len_trajectory_pred
+        # action dom # TODO: remove duplicates. change names in refactoring
+        self.action_dim = self.num_action_params
+        self.action_horizon = data_cfg.action_horizon
+        
+        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg, data_cfg)
         # self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
         
         # Linear input encoder #TODO: modify num_obs_features to be argument
@@ -134,12 +141,13 @@ class ViNT(BaseModel):
             ff_dim_factor=mha_ff_dim_factor,
         )
 
-
-        self.dist_predictor = nn.Sequential(
-            nn.Linear(32, 1),
-        )
+        # NOT in use
+        # self.dist_predictor = nn.Sequential(
+        #     nn.Linear(32, 1),
+        # )
+        
         self.action_predictor = nn.Sequential(
-            nn.Linear(32, self.len_trajectory_pred * self.num_action_params),
+            nn.Linear(32, self.action_horizon * self.action_dim),
         )
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
@@ -224,7 +232,7 @@ class ViNT(BaseModel):
 
         # augment outputs to match labels size-wise
         action_pred = action_pred.reshape(
-            (action_pred.shape[0], self.len_trajectory_pred, self.num_action_params)
+            (action_pred.shape[0], self.action_horizon, self.action_dim)
         )
 
         action_pred[:, :, :2] = torch.cumsum(

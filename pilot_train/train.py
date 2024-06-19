@@ -43,7 +43,6 @@ def train(cfg:DictConfig):
         cudnn.deterministic = True
     cudnn.benchmark = True  # good if input sizes don't vary
 
-    
     # Transform
     transform = ObservationTransform(data_cfg=data_cfg)
 
@@ -89,21 +88,6 @@ def train(cfg:DictConfig):
     #         optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
     #     if scheduler is not None and "scheduler" in latest_checkpoint:
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
-
-    # Tansform (currently takes place only on the goal image, don't know why) 
-    # TODO: refactoring transofrm implemetnation, this is the Vint implementation
-    # Not in use in ours !!!!!!!!!!!!!!!!!!!!!!!!
-    # if encoder_model_cfg.in_channels == 3:
-    #     transform = ([
-    #         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    #     ])
-    # elif encoder_model_cfg.in_channels == 1:
-    #     transform = ([
-    #         transforms.Normalize(mean=[0.5], std=[0.5]),
-    #     ])
-    
-    # transform = transforms.Compose(transform)
-
 
     # Multi-GPU
     if device.type == 'cuda' and len(training_cfg.gpu_ids) > 1:

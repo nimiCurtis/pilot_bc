@@ -49,7 +49,12 @@ class BaseModel(nn.Module):
         # print(table)
         print(f"Total Trainable Params: {total_params / 1e6:.2f}M")
         return total_params
-
+    
+    def to(self, device):
+            self.device = device  # Update the device attribute
+            return super(BaseModel, self).to(device)
+    
+    
     def forward(
         self, obs_img: torch.tensor, goal_img: torch.tensor
     ) -> Tuple[torch.Tensor, torch.Tensor]:

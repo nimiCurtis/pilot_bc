@@ -94,6 +94,7 @@ class Trainer:
         # Data config
         self.normalized=data_cfg.normalize
         self.learn_angle=data_cfg.learn_angle
+        self.action_horizon = data_cfg.action_horizon
         
         assert 0 <= self.alpha <= 1
         self.latest_path = os.path.join(self.project_log_folder, f"latest.pth") # TODO: change
@@ -103,12 +104,12 @@ class Trainer:
         self.logging_manager = LoggingManager(datasets_cfg=datasets_cfg,log_cfg=log_cfg)
 
         self.use_ema = training_cfg.use_ema
-        if self.use_ema:
+        if self.use_ema and self.model.name == "pidiff":
             self.ema = EMAModel(self.model.parameters(), power=0.75)
             self.ema.to(self.device)
             self.ema_model = copy.deepcopy(self.model)
             self.ema_model.to(self.device)
-            
+
     def to_ema(self):
         # Weights of the EMA model
         # is used for inference
@@ -194,23 +195,25 @@ class Trainer:
             viz_goal_image = viz_obs_image
             
             # ACTION
+            action_label_pred = action_label.to(self.device)
+            action_label = action_label[:,:self.action_horizon,:]
             action_label = action_label.to(self.device)
             action_mask = action_mask.to(self.device)
-
+            
             # Infer model
             if self.model.name == "pidiff":
                 # Sample noise to add to actions
-                noise = torch.randn(action_label.shape, device=self.device)
+                noise = torch.randn(action_label_pred.shape, device=self.device)
 
                 # Sample a diffusion iteration for each data point
                 timesteps = torch.randint(
                     0, self.model.noise_scheduler.config.num_train_timesteps,
-                    (action_label.shape[0],), device=self.device
+                    (action_label_pred.shape[0],), device=self.device
                 ).long()
                 
                 # Add noise to the clean images according to the noise magnitude at each diffusion iteration
                 noisy_action = self.model.noise_scheduler.add_noise(   
-                    action_label, noise, timesteps)
+                    action_label_pred, noise, timesteps)
 
                 # Predict the noise residual
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
@@ -220,8 +223,6 @@ class Trainer:
                         action_mask=action_mask)
                 loss = losses["diffusion_noise_loss"]
                 
-                ## TODO: Change
-                action_pred = None
             else:
                 model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
                 action_pred = model_outputs
@@ -249,34 +250,22 @@ class Trainer:
                 # model = self.ema_model.averaged_model
                 
                 if i % self.print_log_freq == 0 :
-                    pred_horizon = action_label.shape[1]
-                    action_dim = action_label.shape[2]
                     
-                    # initialize action from Gaussian noise
-                    noisy_diffusion_output = torch.randn(
-                        (len(obs_encoding_condition), pred_horizon, action_dim), device=self.device)
-                    diffusion_output = noisy_diffusion_output
-                    
-                    for k in self.model.noise_scheduler.timesteps[:]:
-                        # predict noise
-                        noise_pred = self.model.infer_noise_predictor(diffusion_output,
-                                                                k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                                obs_encoding_condition)
-
-                        # inverse diffusion step (remove noise)
-                        diffusion_output = self.model.noise_scheduler.step(
-                            model_output=noise_pred,
-                            timestep=k,
-                            sample=diffusion_output
-                        ).prev_sample
-                    
-                    action_pred = diffusion_output
+                    action_pred = self.model(obs_image) 
                     
                     action_losses  = self.model._compute_losses(action_label=action_label,
                                                                         action_pred=action_pred,
                                                                         action_mask=action_mask,
                                                                         )
                     losses.update(action_losses)
+
+                    # step lr scheduler every batch
+                    # this is different from standard pytorch behavior
+                    self.scheduler.step() # TODO: check
+                    
+                    # update Exponential Moving Average of the model weights
+                    # if self.use_ema:
+                    #     self.ema.step(self.model.parameters())
                     
             # Append to Logger
             for key, value in losses.items():
@@ -380,27 +369,29 @@ class Trainer:
                 # TODO: modify it
                 viz_goal_image = viz_obs_image
 
-                
+
                 # ACTION
+                action_label_pred = action_label.to(self.device)
+                action_label = action_label[:,:self.action_horizon,:]
                 action_label = action_label.to(self.device)
                 action_mask = action_mask.to(self.device)
-                
+
                 # Infer model
                 
                 # Infer model
                 if self.model.name == "pidiff":
                     # Sample noise to add to actions
-                    noise = torch.randn(action_label.shape, device=self.device)
+                    noise = torch.randn(action_label_pred.shape, device=self.device)
 
                     # Sample a diffusion iteration for each data point
                     timesteps = torch.randint(
                         0, self.model.noise_scheduler.config.num_train_timesteps,
-                        (action_label.shape[0],), device=self.device
+                        (action_label_pred.shape[0],), device=self.device
                     ).long()
                     
                     # Add noise to the clean images according to the noise magnitude at each diffusion iteration
                     noisy_action = self.model.noise_scheduler.add_noise(   
-                        action_label, noise, timesteps)
+                        action_label_pred, noise, timesteps)
 
                     # Predict the noise residual
                     obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
@@ -408,32 +399,11 @@ class Trainer:
                     losses = self.model._compute_noise_losses(noise_pred=noise_pred,
                             noise=noise,
                             action_mask=action_mask)
-                    
+
 
                     if i % self.print_log_freq == 0 :
-                        pred_horizon = action_label.shape[1]
-                        action_dim = action_label.shape[2]
-                        
-                        # initialize action from Gaussian noise
-                        noisy_diffusion_output = torch.randn(
-                            (len(obs_encoding_condition), pred_horizon, action_dim), device=self.device)
-                        diffusion_output = noisy_diffusion_output
-                        
-                        for k in self.model.noise_scheduler.timesteps[:]:
-                            # predict noise
-                            noise_pred = self.model.infer_noise_predictor(diffusion_output,
-                                                                    k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                                    obs_encoding_condition)
 
-
-                            # inverse diffusion step (remove noise)
-                            diffusion_output = self.model.noise_scheduler.step(
-                                model_output=noise_pred,
-                                timestep=k,
-                                sample=diffusion_output
-                            ).prev_sample
-                        
-                        action_pred = diffusion_output
+                        action_pred = self.model(obs_image)
                         
                         action_losses  = self.model._compute_losses(action_label=action_label,
                                                                             action_pred=action_pred,

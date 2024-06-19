@@ -6,6 +6,8 @@ late_fusion: False
 obs_encoding_size: 256
 lin_encoding_size: 256
 num_lin_features: 2
+
+
 down_dims: [64, 128, 256]
 cond_predict_scale: False
 noise_scheduler:

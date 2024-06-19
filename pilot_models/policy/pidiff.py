@@ -41,9 +41,9 @@ class PiDiff(BaseModel):
         self.target_context = data_cfg.target_context
         self.goal_condition = data_cfg.goal_condition
         # Policy model
-        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
-        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
-        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
+        # mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
+        # mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
+        # mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
         self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
         
@@ -55,11 +55,19 @@ class PiDiff(BaseModel):
         
         # Final sequence length  = context size +
         #                           current observation (1) + encoded lin observation and target (1) 
+
         if self.goal_condition:
             seq_len = self.context_size + 2
         else:
-            seq_len = self.context_size + 1 
-        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg)
+            seq_len = self.context_size + 1
+        
+        # pred horizon # TODO: remove dupliactes in refactoring
+        self.pred_horizon = self.len_trajectory_pred
+        # action dom # TODO: remove duplicates. change names in refactoring
+        self.action_dim = self.num_action_params
+        self.action_horizon = data_cfg.action_horizon
+        
+        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
         # Linear input encoder #TODO: modify num_obs_features to be argument
@@ -116,7 +124,7 @@ class PiDiff(BaseModel):
             clip_sample=True,
             prediction_type='epsilon'
         )
-
+    
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
         # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
@@ -159,6 +167,46 @@ class PiDiff(BaseModel):
             self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
+        obs_encoding_condition = self.infer_vision_encoder(obs_img)
+
+        # initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (len(obs_encoding_condition), self.pred_horizon, self.action_dim),device=self.device)
+        diffusion_output = noisy_diffusion_output
+        
+        for k in self.noise_scheduler.timesteps[:]:
+            # predict noise
+            noise_pred = self.infer_noise_predictor(diffusion_output,
+                                                    k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                                    obs_encoding_condition)
+
+            # inverse diffusion step (remove noise)
+            diffusion_output = self.noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            ).prev_sample
+        
+        action_pred = diffusion_output
+        
+        # # augment outputs to match labels size-wise
+        # action_pred = action_pred.reshape(
+        #     (action_pred.shape[0], self.len_trajectory_pred, self.num_action_params)
+        # )
+
+        # ## TODO: check if needed
+        # action_pred[:, :, :2] = torch.cumsum(
+        #     action_pred[:, :, :2], dim=1
+        # )  # convert position deltas into waypoints in local coords
+        # if self.learn_angle:
+        #     action_pred[:, :, 2:] = F.normalize(
+        #         action_pred[:, :, 2:].clone(), dim=-1
+        #     )  # normalize the angle prediction
+
+        action = action_pred[:,:self.action_horizon,:]
+        
+        return action
+        
         # # # split the observation into context based on the context size
         # # # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
         # # obs_img = torch.split(obs_img, self.in_channels, dim=1)
@@ -217,7 +265,7 @@ class PiDiff(BaseModel):
         #         action_pred[:, :, 2:].clone(), dim=-1
         #     )  # normalize the angle prediction
         # return action_pred
-        pass
+        
     
     def _compute_noise_losses(
         self,

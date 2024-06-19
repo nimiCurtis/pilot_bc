@@ -2,15 +2,20 @@ from efficientnet_pytorch import EfficientNet as ecn
 from pilot_models.encoder.base_model import BaseModel
 
 class EfficientNet(BaseModel):
-    def __init__(self, version="efficientnet-b0", in_channels=3, pretrained=False) -> None:
+    # def __init__(self, version="efficientnet-b0", in_channels=3, pretrained=False) -> None:
+        
+    def __init__(self, vision_encoder_config, data_config) -> None:
+
+        in_channels = vision_encoder_config.get("in_channels")
+        pretrained = vision_encoder_config.get("pretrained")
         super().__init__(in_channels=in_channels, pretrained=pretrained)
         
-        self.version = version
+        self.version = vision_encoder_config.get("version")
         self.model = ecn.from_name(self.version, in_channels=self.in_channels)  # context
 
     def get_model(self):
         return self.model
-    
+
     def get_in_feateures(self):
         return self.model._fc.in_features
 

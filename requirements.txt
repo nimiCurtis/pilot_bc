@@ -16,3 +16,5 @@ tqdm==4.64.1
 warmup_scheduler==0.3
 wandb==0.14.0
 diffusers==0.29.0
+vit-pytorch==1.7.0
+einops==0.8.0
