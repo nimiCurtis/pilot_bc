@@ -187,21 +187,25 @@ class PiDiff(BaseModel):
                 sample=diffusion_output
             ).prev_sample
         
-        action_pred = diffusion_output
+        # diffusion output should be denoised action deltas
+        action_pred_deltas = diffusion_output
         
-        # # augment outputs to match labels size-wise
-        # action_pred = action_pred.reshape(
-        #     (action_pred.shape[0], self.len_trajectory_pred, self.num_action_params)
-        # )
+        # augment outputs to match labels size-wise
+        action_label_pred_deltas = action_label_pred_deltas.reshape(
+            (action_label_pred_deltas.shape[0], self.len_trajectory_pred, self.num_action_params)
+        )
 
-        # ## TODO: check if needed
-        # action_pred[:, :, :2] = torch.cumsum(
-        #     action_pred[:, :, :2], dim=1
-        # )  # convert position deltas into waypoints in local coords
-        # if self.learn_angle:
-        #     action_pred[:, :, 2:] = F.normalize(
-        #         action_pred[:, :, 2:].clone(), dim=-1
-        #     )  # normalize the angle prediction
+        # Init action traj
+        action_pred = torch.zeros_like(action_label_pred_deltas)
+        
+        ## Cumsum 
+        action_pred[:, :, :2] = torch.cumsum(
+            action_label_pred_deltas[:, :, :2], dim=1
+        )  # convert position deltas into waypoints in local coords
+        if self.learn_angle:
+            action_pred[:, :, 2:] = F.normalize(
+                action_label_pred_deltas[:, :, 2:].clone(), dim=-1
+            )  # normalize the angle prediction
 
         action = action_pred[:,:self.action_horizon,:]
         

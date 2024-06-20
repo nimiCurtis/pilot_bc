@@ -22,6 +22,8 @@ from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
+from pilot_utils.utils import get_delta
+
 from pilot_utils.transforms import ObservationTransform
 class Trainer:
     """
@@ -196,24 +198,31 @@ class Trainer:
             
             # ACTION
             action_label_pred = action_label.to(self.device)
+            # action label pred -> the pred horizon actions. it is already normalize cumsum
+            # so the deltas are normalized
+            action_label_pred_deltas = get_delta(actions=action_label_pred)
+
+            # Take the actions horizon samples for the action loss
             action_label = action_label[:,:self.action_horizon,:]
             action_label = action_label.to(self.device)
+            
+            # Take the action mask. TODO: check
             action_mask = action_mask.to(self.device)
             
             # Infer model
             if self.model.name == "pidiff":
                 # Sample noise to add to actions
-                noise = torch.randn(action_label_pred.shape, device=self.device)
+                noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
                 # Sample a diffusion iteration for each data point
                 timesteps = torch.randint(
                     0, self.model.noise_scheduler.config.num_train_timesteps,
-                    (action_label_pred.shape[0],), device=self.device
+                    (action_label_pred_deltas.shape[0],), device=self.device
                 ).long()
                 
                 # Add noise to the clean images according to the noise magnitude at each diffusion iteration
                 noisy_action = self.model.noise_scheduler.add_noise(   
-                    action_label_pred, noise, timesteps)
+                    action_label_pred_deltas, noise, timesteps)
 
                 # Predict the noise residual
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
@@ -372,8 +381,15 @@ class Trainer:
 
                 # ACTION
                 action_label_pred = action_label.to(self.device)
+                # action label pred -> the pred horizon actions. it is already normalize cumsum
+                # so the deltas are normalized
+                action_label_pred_deltas = get_delta(actions=action_label_pred)
+
+                # Take the actions horizon samples for the action loss
                 action_label = action_label[:,:self.action_horizon,:]
                 action_label = action_label.to(self.device)
+                
+                # Take the action mask. TODO: check
                 action_mask = action_mask.to(self.device)
 
                 # Infer model
@@ -381,17 +397,17 @@ class Trainer:
                 # Infer model
                 if self.model.name == "pidiff":
                     # Sample noise to add to actions
-                    noise = torch.randn(action_label_pred.shape, device=self.device)
+                    noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
                     # Sample a diffusion iteration for each data point
                     timesteps = torch.randint(
                         0, self.model.noise_scheduler.config.num_train_timesteps,
-                        (action_label_pred.shape[0],), device=self.device
+                        (action_label_pred_deltas.shape[0],), device=self.device
                     ).long()
                     
                     # Add noise to the clean images according to the noise magnitude at each diffusion iteration
                     noisy_action = self.model.noise_scheduler.add_noise(   
-                        action_label_pred, noise, timesteps)
+                        action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
                     obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
