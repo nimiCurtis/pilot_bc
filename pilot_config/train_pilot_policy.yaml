@@ -8,7 +8,7 @@ hydra:
 defaults:
   - _self_
   - encoder_model: efficientnet
-  - policy_model: vint       # pidiff | vint | .. 
+  - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: go_to_the_picture
   # - log: defaults
 
@@ -16,7 +16,7 @@ defaults:
 training:
   goal_condition: False # not in use
   batch_size: 16
-  eval_batch_size: 32
+  eval_batch_size: 16
   epochs: 60
   current_epoch: 0
   gpu_ids: [0]
@@ -27,7 +27,7 @@ training:
   max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
   warmup: False 
-  warmup_epochs: 3
+  warmup_epochs: 4
   cyclic_period: 10
   plateau_patience: 3
   plateau_factor: 0.5
@@ -53,12 +53,12 @@ data:
     max_dist_cat: 10
   action:
     min_dist_cat: 0
-    max_dist_cat: 15
-  close_far_threshold: 20 # need to check 
+    max_dist_cat: 20
+  close_far_threshold: 30 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
-  len_traj_pred: 8 # TODO: chang to pred_horizon
-  action_horizon: 5
+  len_traj_pred: 16 # TODO: chang to pred_horizon
+  action_horizon: 6
   learn_angle: True
   # dataset specific parameters
   image_size: [96, 96] # width, height
@@ -75,7 +75,7 @@ log:
   ## =0 turns off
   num_images_log: 4
   print_log_freq: 50 # in iterations
-  image_log_freq: 2 #0 # in iterations
+  image_log_freq: 2 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 10

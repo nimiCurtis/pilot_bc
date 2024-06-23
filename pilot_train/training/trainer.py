@@ -200,7 +200,7 @@ class Trainer:
             action_label_pred = action_label.to(self.device)
             # action label pred -> the pred horizon actions. it is already normalize cumsum
             # so the deltas are normalized
-            action_label_pred_deltas = get_delta(actions=action_label_pred)
+
 
             # Take the actions horizon samples for the action loss
             action_label = action_label[:,:self.action_horizon,:]
@@ -212,6 +212,7 @@ class Trainer:
             # Infer model
             if self.model.name == "pidiff":
                 # Sample noise to add to actions
+                action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:]) # deltas of x,y,cos_yaw, sin_yaw
                 noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
                 # Sample a diffusion iteration for each data point
@@ -275,7 +276,7 @@ class Trainer:
                     # update Exponential Moving Average of the model weights
                     # if self.use_ema:
                     #     self.ema.step(self.model.parameters())
-                    
+
             # Append to Logger
             for key, value in losses.items():
                 if key in loggers:
@@ -295,7 +296,7 @@ class Trainer:
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
                 mode="train",
-                use_latest=True,
+                use_latest=False,
             )
 
     def evaluate_one_epoch(self, dataloader:DataLoader, eval_type:str, epoch:int)->Tuple:
@@ -381,9 +382,7 @@ class Trainer:
 
                 # ACTION
                 action_label_pred = action_label.to(self.device)
-                # action label pred -> the pred horizon actions. it is already normalize cumsum
-                # so the deltas are normalized
-                action_label_pred_deltas = get_delta(actions=action_label_pred)
+                
 
                 # Take the actions horizon samples for the action loss
                 action_label = action_label[:,:self.action_horizon,:]
@@ -396,6 +395,9 @@ class Trainer:
                 
                 # Infer model
                 if self.model.name == "pidiff":
+                    # action label pred -> the pred horizon actions. it is already normalize cumsum
+                    # so the deltas are normalized
+                    action_label_pred_deltas = get_delta(actions=action_label_pred)
                     # Sample noise to add to actions
                     noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 

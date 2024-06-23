@@ -1,0 +1,112 @@
+training:
+  goal_condition: false
+  batch_size: 16
+  eval_batch_size: 16
+  epochs: 60
+  current_epoch: 0
+  gpu_ids:
+  - 0
+  num_workers: 12
+  lr: 1.0e-05
+  optimizer: adamw
+  clipping: false
+  max_norm: 1.0
+  scheduler: cosine
+  warmup: false
+  warmup_epochs: 4
+  cyclic_period: 10
+  plateau_patience: 3
+  plateau_factor: 0.5
+  seed: 42
+  alpha: 0.5
+  beta: 10
+  use_ema: false
+device: cuda
+data:
+  goal_condition: false
+  normalize: true
+  context_type: temporal
+  target_observation_enable: false
+  target_context: true
+  context_size: 6
+  distance:
+    min_dist_cat: 0
+    max_dist_cat: 10
+  action:
+    min_dist_cat: 0
+    max_dist_cat: 20
+  close_far_threshold: 30
+  len_traj_pred: 16
+  action_horizon: 6
+  learn_angle: true
+  image_size:
+  - 96
+  - 96
+  goal_type: image
+  obs_type: image
+  img_type: depth
+log:
+  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
+  run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  num_images_log: 4
+  print_log_freq: 50
+  image_log_freq: 2
+  eval_fraction: 0.25
+  eval_freq: 1
+  save_model_freq: 10
+  wandb:
+    run:
+      enable: true
+      name: ${log.run_name}
+      log_freq: 10
+    setup:
+      project: pilot-release
+      entity: nimrodcurtis
+      mode: online
+encoder_model:
+  name: efficientnet
+  version: efficientnet-b1
+  in_channels: 1
+  pretrained: false
+policy_model:
+  name: pidiff
+  mha_num_attention_heads: 4
+  mha_num_attention_layers: 4
+  mha_ff_dim_factor: 4
+  late_fusion: false
+  obs_encoding_size: 256
+  lin_encoding_size: 256
+  num_lin_features: 2
+  down_dims:
+  - 64
+  - 128
+  - 256
+  cond_predict_scale: false
+  noise_scheduler:
+    type: ddpm
+    num_diffusion_iters_eval: 10
+    num_diffusion_iters_train: 50
+    beta_schedule: squaredcos_cap_v2
+datasets:
+  data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture
+  max_depth: 10000
+  nimrod:
+    end_slack: 0
+    goals_per_obs: 1
+    negative_mining: false
+    number_of_bags: 52
+    stats:
+      max_ang_vel: 0.7791
+      max_lin_vel: 0.6062
+      mean_ang_vel: -0.0004
+      mean_lin_vel: 0.0816
+      min_ang_vel: -0.9489
+      min_lin_vel: -0.4322
+      std_ang_vel: 0.1118
+      std_lin_vel: 0.091
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod
+    time: 20.7878
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
+    waypoint_spacing: 1
+  robots:
+  - nimrod

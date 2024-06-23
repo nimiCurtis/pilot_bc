@@ -286,7 +286,7 @@ class PilotDataset(Dataset):
         assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
         if self.learn_angle:
-            yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw
+            yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw # already a cumsum
             actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1) 
         else:
             actions = waypoints[1:]
@@ -296,7 +296,7 @@ class PilotDataset(Dataset):
             ## only for pos
             actions_deltas = get_delta(actions[:, :2])
             normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
-            actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=1)
+            actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
 
             # goal in local is already the delta from the current pos
             normalized_goal_delta = normalize_data(goal_in_local, action_stats['pos'])
@@ -366,30 +366,18 @@ class PilotDataset(Dataset):
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
 
-
-
-        # # Transform
-        # obs_image = torch.cat([
-        #         self.transform(self._load_image(f, t)) for f, t in context
-        #     ])
-        
+        # Load context images
         obs_image = [
                 self._load_image(f, t) for f, t in context
             ]
         
+        # Transform
         obs_image = transform_images(obs_image, self.transform)
-        
-        # obs_image = torch.cat([
-        #         self._load_image(f, t) for f, t in context
-        #     ])
-        # if self.transform:
-        #     obs_image = self.transform(obs_image)
-
 
         # Load other trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
         curr_traj_len = len(curr_traj_data["position"])
-        assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
+        assert curr_time < curr_traj_len, f"{curr_time} >= {curr_traj_len}"
 
         # Compute actions
         action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added

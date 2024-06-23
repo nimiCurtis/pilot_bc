@@ -41,9 +41,18 @@ def unnormalize_data(ndata, stats):
 
 #Ours
 def get_delta(actions):
-    # append zeros to first action
-    ex_actions = np.concatenate([np.zeros((1, actions.shape[-1])), actions], axis=0)
-    delta = ex_actions[1:,:] - ex_actions[:-1,:]
+    if isinstance(actions, np.ndarray):
+        # Append zeros to the first action for NumPy array
+        ex_actions = np.concatenate([np.zeros((1, actions.shape[-1])), actions], axis=0)
+        delta = ex_actions[1:, :] - ex_actions[:-1, :]
+    elif isinstance(actions, torch.Tensor):
+        # Append zeros to the first action for PyTorch tensor
+        ex_actions = torch.cat([torch.zeros((actions.shape[0],1, actions.shape[-1]), dtype=actions.dtype, device=actions.device), actions], dim=1)
+        delta = ex_actions[:,1:, :] - ex_actions[:,:-1, :]
+    else:
+        raise TypeError("Input must be a NumPy array or a PyTorch tensor")
+
+    
     return delta
 
 

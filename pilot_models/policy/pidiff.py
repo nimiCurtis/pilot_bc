@@ -11,6 +11,7 @@ from pilot_models.encoder.model_registry import get_vision_encoder_model
 from pilot_utils.train.train_utils import replace_bn_with_gn
 from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 
 
 class PiDiff(BaseModel):
@@ -118,13 +119,23 @@ class PiDiff(BaseModel):
         #     )
         
         ## Noise scheduler
-        self.noise_scheduler = DDPMScheduler(
-            num_train_timesteps= policy_model_cfg.noise_scheduler.num_diffusion_iters,
+        self.noise_scheduler_type =  policy_model_cfg.noise_scheduler.type     
+        self.num_diffusion_iters_eval = policy_model_cfg.noise_scheduler.num_diffusion_iters_eval
+        self.num_diffusion_iters_train = policy_model_cfg.noise_scheduler.num_diffusion_iters_train
+        
+        noise_scheduler = {"ddpm": DDPMScheduler,
+                        "ddim": DDIMScheduler,
+        }
+        
+        self.noise_scheduler = noise_scheduler[self.noise_scheduler_type](
+            num_train_timesteps= self.num_diffusion_iters_train,
             beta_schedule=policy_model_cfg.noise_scheduler.beta_schedule,
             clip_sample=True,
             prediction_type='epsilon'
         )
-    
+        
+        
+        
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
         # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
@@ -174,6 +185,7 @@ class PiDiff(BaseModel):
             (len(obs_encoding_condition), self.pred_horizon, self.action_dim),device=self.device)
         diffusion_output = noisy_diffusion_output
         
+        
         for k in self.noise_scheduler.timesteps[:]:
             # predict noise
             noise_pred = self.infer_noise_predictor(diffusion_output,
@@ -191,21 +203,21 @@ class PiDiff(BaseModel):
         action_pred_deltas = diffusion_output
         
         # augment outputs to match labels size-wise
-        action_label_pred_deltas = action_label_pred_deltas.reshape(
-            (action_label_pred_deltas.shape[0], self.len_trajectory_pred, self.num_action_params)
+        action_pred_deltas = action_pred_deltas.reshape(
+            (action_pred_deltas.shape[0], self.len_trajectory_pred, self.num_action_params)
         )
 
         # Init action traj
-        action_pred = torch.zeros_like(action_label_pred_deltas)
+        action_pred = torch.zeros_like(action_pred_deltas)
         
         ## Cumsum 
-        action_pred[:, :, :2] = torch.cumsum(
-            action_label_pred_deltas[:, :, :2], dim=1
+        action_pred[:, :, :] = torch.cumsum(
+            action_pred_deltas[:, :, :], dim=1
         )  # convert position deltas into waypoints in local coords
-        if self.learn_angle:
-            action_pred[:, :, 2:] = F.normalize(
-                action_label_pred_deltas[:, :, 2:].clone(), dim=-1
-            )  # normalize the angle prediction
+        # if self.learn_angle:
+        #     action_pred[:, :, 2:] = F.normalize(
+        #         action_pred_deltas[:, :, 2:].clone(), dim=-1
+        #     )  # normalize the angle prediction
 
         action = action_pred[:,:self.action_horizon,:]
         
@@ -361,79 +373,21 @@ class PiDiff(BaseModel):
 
         return results
 
-def model_output(
-    model: nn.Module,
-    noise_scheduler: DDPMScheduler,
-    batch_obs_images: torch.Tensor,
-    batch_goal_images: torch.Tensor,
-    pred_horizon: int,
-    action_dim: int,
-    num_samples: int,
-    device: torch.device,
-):
-    goal_mask = torch.ones((batch_goal_images.shape[0],)).long().to(device)
-    obs_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, input_goal_mask=goal_mask)
-    # obs_cond = obs_cond.flatten(start_dim=1)
-    obs_cond = obs_cond.repeat_interleave(num_samples, dim=0)
+    def train(self, mode: bool = True):
+        super(PiDiff, self).train(mode)
+        torch.cuda.empty_cache()
+        if mode:
+            self.noise_scheduler.set_timesteps(self.num_diffusion_iters_train)
+            print(f"Diffusion timesteps (train): {len(self.noise_scheduler.timesteps)}")
+        return self
 
-    no_mask = torch.zeros((batch_goal_images.shape[0],)).long().to(device)
-    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, input_goal_mask=no_mask)
-    # obsgoal_cond = obsgoal_cond.flatten(start_dim=1)  
-    obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    def eval(self):
+        super(PiDiff, self).eval()
+        torch.cuda.empty_cache()
+        self.noise_scheduler.set_timesteps(self.num_diffusion_iters_eval)
+        print(f"Diffusion timesteps (eval): {len(self.noise_scheduler.timesteps)}")
 
-    # initialize action from Gaussian noise
-    noisy_diffusion_output = torch.randn(
-        (len(obs_cond), pred_horizon, action_dim), device=device)
-    diffusion_output = noisy_diffusion_output
-
-
-    for k in noise_scheduler.timesteps[:]:
-        # predict noise
-        noise_pred = model(
-            "noise_pred_net",
-            sample=diffusion_output,
-            timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obs_cond
-        )
-
-        # inverse diffusion step (remove noise)
-        diffusion_output = noise_scheduler.step(
-            model_output=noise_pred,
-            timestep=k,
-            sample=diffusion_output
-        ).prev_sample
-
-    uc_actions = get_action(diffusion_output, ACTION_STATS)
-
-    # initialize action from Gaussian noise
-    noisy_diffusion_output = torch.randn(
-        (len(obs_cond), pred_horizon, action_dim), device=device)
-    diffusion_output = noisy_diffusion_output
-
-    for k in noise_scheduler.timesteps[:]:
-        # predict noise
-        noise_pred = model(
-            "noise_pred_net",
-            sample=diffusion_output,
-            timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
-        )
-
-        # inverse diffusion step (remove noise)
-        diffusion_output = noise_scheduler.step(
-            model_output=noise_pred,
-            timestep=k,
-            sample=diffusion_output
-        ).prev_sample
-    obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
-    gc_actions = get_action(diffusion_output, ACTION_STATS)
-    gc_distance = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
-
-    return {
-        'uc_actions': uc_actions,
-        'gc_actions': gc_actions,
-        'gc_distance': gc_distance,
-    }
+        return self
 
 
 

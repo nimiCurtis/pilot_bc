@@ -66,8 +66,9 @@ class ObservationTransform:
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
+        
         ### TRAIN TRANSFORMS ###
-        train_transform =  transforms.Compose([random_crop,
+        train_transform =  transforms.Compose([center_crop,
                                             resize,
                                             to_tensor,
                                             normalize
