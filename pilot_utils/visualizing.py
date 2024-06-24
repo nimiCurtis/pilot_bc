@@ -454,12 +454,13 @@ def gen_bearings_from_waypoints(
         waypoints: np.ndarray,
         mag=0.2,
 ) -> np.ndarray:
-    """Generate bearings from waypoints, (x, y, sin(theta), cos(theta))."""
+    """Generate bearings from waypoints, (x, y, sin(theta), cos(theta)).
+    needs to be (x, y, sin(theta), cos(theta))"""
     bearing = []
     for i in range(0, len(waypoints)):
         if waypoints.shape[1] > 3:  # label is sin/cos repr
             v = waypoints[i, 2:]
-            # normalize v
+            # normalize v -> already normalized but ok
             v = v / np.linalg.norm(v)
             v = v * mag
         else:  # label is radians repr

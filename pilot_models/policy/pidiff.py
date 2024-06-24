@@ -4,7 +4,6 @@ from omegaconf import DictConfig
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.encoder.model_registry import get_vision_encoder_model
@@ -12,6 +11,7 @@ from pilot_utils.train.train_utils import replace_bn_with_gn
 from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
+from pilot_models.policy.common.transformer import MultiLayerDecoder
 
 
 class PiDiff(BaseModel):
@@ -108,7 +108,7 @@ class PiDiff(BaseModel):
         # self.cond_predict_scale = policy_model_cfg.cond_predict_scale
         self.noise_predictor = ConditionalUnet1D(
                 input_dim = 4 if self.learn_angle else 2,
-                global_cond_dim =self.obs_encoding_size*seq_len,
+                global_cond_dim = self.obs_encoding_size*seq_len,
                 down_dims=self.down_dims,
                 # cond_predict_scale=self.cond_predict_scale
             )
@@ -178,11 +178,30 @@ class PiDiff(BaseModel):
             self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        obs_encoding_condition = self.infer_vision_encoder(obs_img)
+        obs_encoding = self.infer_vision_encoder(obs_img)
+        
+        if self.goal_condition:
+            if self.target_obs_enable:
+                linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+            else:
+                # print("here")
+                linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+
+            # lin_encoding = self.lin_encoder(linear_input)
+            # if len(lin_encoding.shape) == 2:
+            #     lin_encoding = lin_encoding.unsqueeze(1)
+            # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+            # assert lin_encoding.shape[2] == self.lin_encoding_size
+            lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
+        
+            final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+        
+        else:       # No Goal condition >> take the obs_encoding as the tokens
+            final_encoded_condition = obs_encoding
 
         # initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(
-            (len(obs_encoding_condition), self.pred_horizon, self.action_dim),device=self.device)
+            (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
         diffusion_output = noisy_diffusion_output
         
         
@@ -190,7 +209,7 @@ class PiDiff(BaseModel):
             # predict noise
             noise_pred = self.infer_noise_predictor(diffusion_output,
                                                     k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                    obs_encoding_condition)
+                                                    final_encoded_condition)
 
             # inverse diffusion step (remove noise)
             diffusion_output = self.noise_scheduler.step(
@@ -211,13 +230,15 @@ class PiDiff(BaseModel):
         action_pred = torch.zeros_like(action_pred_deltas)
         
         ## Cumsum 
-        action_pred[:, :, :] = torch.cumsum(
-            action_pred_deltas[:, :, :], dim=1
-        )  # convert position deltas into waypoints in local coords
-        # if self.learn_angle:
-        #     action_pred[:, :, 2:] = F.normalize(
-        #         action_pred_deltas[:, :, 2:].clone(), dim=-1
-        #     )  # normalize the angle prediction
+        action_pred[:, :, :2] = torch.cumsum(
+            action_pred_deltas[:, :, :2], dim=1
+        )  # convert position and orientation deltas into waypoints in local coords
+        
+        if self.learn_angle:
+            action_pred[:, :, 2:] = F.normalize(
+                action_pred_deltas[:, :, 2:].clone(), dim=-1
+            )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
+
 
         action = action_pred[:,:self.action_horizon,:]
         

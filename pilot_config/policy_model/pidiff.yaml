@@ -11,7 +11,7 @@ num_lin_features: 2
 down_dims: [64, 128, 256]
 cond_predict_scale: False
 noise_scheduler:
-  type: ddim                    # ddpm | ddim
+  type: ddpm                    # ddpm | ddim
   num_diffusion_iters_eval: 10
-  num_diffusion_iters_train: 50
+  num_diffusion_iters_train: 70
   beta_schedule: squaredcos_cap_v2

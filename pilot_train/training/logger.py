@@ -67,11 +67,12 @@ class LoggingManager:
         self.use_wandb = log_cfg.wandb.run.enable
         self.wandb_log_freq=log_cfg.wandb.run.log_freq
         self.print_log_freq=log_cfg.print_log_freq
+        self.eval_log_freq = log_cfg.eval_log_freq
         self.image_log_freq=log_cfg.image_log_freq
         self.num_images_log = log_cfg.num_images_log
         self.visualizer = Visualizer(datasets_cfg=datasets_cfg,
                                     log_cfg=log_cfg)
-        
+
     def log_data(self,
             i,
             epoch,
@@ -92,14 +93,20 @@ class LoggingManager:
         Log data to wandb and print to console.
         """
         data_log = {}
+        
+        if mode == 'train':
+            freq_log = self.print_log_freq
+        else:
+            freq_log = self.eval_log_freq
+            
         for key, logger in loggers.items():
             if use_latest:
                 data_log[logger.full_name()] = logger.latest()
-                if i % self.print_log_freq == 0 and self.print_log_freq != 0:
+                if i % freq_log == 0 and freq_log != 0:
                     print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
             else:
                 data_log[logger.full_name()] = logger.average()
-                if i % self.print_log_freq == 0 and self.print_log_freq != 0:
+                if i % freq_log == 0 and freq_log != 0:
                     print(f"(epoch {epoch}) {logger.full_name()} {logger.average()}")
 
         if self.use_wandb and i % self.wandb_log_freq == 0 and self.wandb_log_freq != 0:

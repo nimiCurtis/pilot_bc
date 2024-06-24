@@ -4,53 +4,11 @@ from omegaconf import DictConfig
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
 
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.encoder.model_registry import get_vision_encoder_model
-from pilot_utils.train.train_utils import replace_bn_with_gn
+from pilot_models.policy.common.transformer import MultiLayerDecoder
 
-class PositionalEncoding(nn.Module):
-    def __init__(self, d_model, max_seq_len=6):
-        super().__init__()
-
-        # Compute the positional encoding once
-        pos_enc = torch.zeros(max_seq_len, d_model)
-        pos = torch.arange(0, max_seq_len, dtype=torch.float).unsqueeze(1)
-        div_term = torch.exp(torch.arange(0, d_model, 2).float() * (-math.log(10000.0) / d_model))
-        pos_enc[:, 0::2] = torch.sin(pos * div_term)
-        pos_enc[:, 1::2] = torch.cos(pos * div_term)
-        pos_enc = pos_enc.unsqueeze(0)
-
-        # Register the positional encoding as a buffer to avoid it being
-        # considered a parameter when saving the model
-        self.register_buffer('pos_enc', pos_enc)
-
-    def forward(self, x):
-        # Add the positional encoding to the input
-        x = x + self.pos_enc[:, :x.size(1), :]
-        return x
-
-class MultiLayerDecoder(nn.Module):
-    def __init__(self, embed_dim=512, seq_len=6, output_layers=[256, 128, 64], nhead=8, num_layers=8, ff_dim_factor=4):
-        super(MultiLayerDecoder, self).__init__()
-        self.positional_encoding = PositionalEncoding(embed_dim, max_seq_len=seq_len)
-        self.sa_layer = nn.TransformerEncoderLayer(d_model=embed_dim, nhead=nhead, dim_feedforward=ff_dim_factor*embed_dim, activation="gelu", batch_first=True, norm_first=True)
-        self.sa_decoder = nn.TransformerEncoder(self.sa_layer, num_layers=num_layers)
-        self.output_layers = nn.ModuleList([nn.Linear(seq_len*embed_dim, embed_dim)])
-        self.output_layers.append(nn.Linear(embed_dim, output_layers[0]))
-        for i in range(len(output_layers)-1):
-            self.output_layers.append(nn.Linear(output_layers[i], output_layers[i+1]))
-
-    def forward(self, x):
-        if self.positional_encoding: x = self.positional_encoding(x)
-        x = self.sa_decoder(x)
-        # currently, x is [batch_size, seq_len, embed_dim]
-        x = x.reshape(x.shape[0], -1)
-        for i in range(len(self.output_layers)):
-            x = self.output_layers[i](x)
-            x = F.relu(x)
-        return x
 
 class ViNT(BaseModel):
     def __init__(
@@ -185,25 +143,6 @@ class ViNT(BaseModel):
             self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
-        # # split the observation into context based on the context size
-        # # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
-        # obs_img = torch.split(obs_img, self.in_channels, dim=1)
-
-        # # Currently obs_img size is [self.context_size+1, batch_size, C, H, W] | for example: [6, 16, 3, 64, 85]
-        # obs_img = torch.concat(obs_img, dim=0)
-
-        # # Currently obs_img size is [batch_size*(self.context_size+1), C, H, W] | for example: [96, 3, 64, 85]
-        # obs_encoding = self.vision_encoder.extract_features(obs_img)
-
-        # # (Encoded) Currently obs_encoding size is [batch_size*(self.context_size+1), source_encoder_out_features] | for example: [96, 1280]
-        # obs_encoding = self.compress_obs_enc(obs_encoding)
-
-        # # (Compressed) Currently obs_encoding size is [batch_size*(self.context_size + 1), self.obs_encoding_size (= a param from config)] | for example: [96, 512]
-        # obs_encoding = obs_encoding.reshape((self.context_size + 1, -1, self.obs_encoding_size))
-        # # (reshaped) Currently obs_encoding is [self.context_size + 1, batch_size, self.obs_encoding_size], note that the order is flipped | for example: [6, 16, 512]
-        # obs_encoding = torch.transpose(obs_encoding, 0, 1)
-        # # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size] | for example: [16, 6, 512]
-        
         obs_encoding =  self.infer_vision_encoder(obs_img=obs_img)
         
         if self.goal_condition:
@@ -228,19 +167,21 @@ class ViNT(BaseModel):
         final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]
-        action_pred = self.action_predictor(final_repr)
+        action_pred_deltas = self.action_predictor(final_repr)
 
         # augment outputs to match labels size-wise
-        action_pred = action_pred.reshape(
-            (action_pred.shape[0], self.action_horizon, self.action_dim)
+        action_pred_deltas = action_pred_deltas.reshape(
+            (action_pred_deltas.shape[0], self.action_horizon, self.action_dim)
         )
 
+        action_pred = torch.zeros_like(action_pred_deltas)
+
         action_pred[:, :, :2] = torch.cumsum(
-            action_pred[:, :, :2], dim=1
+            action_pred_deltas[:, :, :2], dim=1
         )  # convert position deltas into waypoints in local coords
         if self.learn_angle:
             action_pred[:, :, 2:] = F.normalize(
-                action_pred[:, :, 2:].clone(), dim=-1
+                action_pred_deltas[:, :, 2:].clone(), dim=-1
             )  # normalize the angle prediction
         return action_pred
 

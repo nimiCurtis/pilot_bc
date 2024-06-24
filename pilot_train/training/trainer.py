@@ -1,6 +1,6 @@
 import os
 import itertools
-
+import gc
 import copy
 import numpy as np
 import tqdm
@@ -25,6 +25,8 @@ from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
 from pilot_utils.utils import get_delta
 
 from pilot_utils.transforms import ObservationTransform
+
+
 class Trainer:
     """
     A class responsible for managing the training and evaluation processes of pilot model.
@@ -79,6 +81,7 @@ class Trainer:
 
         self.project_log_folder=project_log_folder
         self.print_log_freq=log_cfg.print_log_freq
+        self.eval_log_freq=log_cfg.eval_log_freq
         self.wandb_log_freq = log_cfg.wandb.run.log_freq
         self.image_log_freq=log_cfg.image_log_freq
         self.num_images_log=log_cfg.num_images_log
@@ -89,7 +92,7 @@ class Trainer:
         # Training config
         self.alpha=training_cfg.alpha if training_cfg.goal_condition else 0
         self.beta=training_cfg.beta
-        self.goal_condition = training_cfg.goal_condition
+        
         self.current_epoch=training_cfg.current_epoch
         self.epochs=training_cfg.epochs
         
@@ -97,6 +100,10 @@ class Trainer:
         self.normalized=data_cfg.normalize
         self.learn_angle=data_cfg.learn_angle
         self.action_horizon = data_cfg.action_horizon
+        
+        
+        self.goal_condition = model.goal_condition
+        self.target_obs_enable = model.target_obs_enable
         
         assert 0 <= self.alpha <= 1
         self.latest_path = os.path.join(self.project_log_folder, f"latest.pth") # TODO: change
@@ -160,7 +167,7 @@ class Trainer:
             )
             loggers["diffusion_noise_loss"] = diffusion_noise_loss
 
-        
+
         num_batches = len(self.dataloader)
         tqdm_iter = tqdm.tqdm(
             self.dataloader,
@@ -212,7 +219,11 @@ class Trainer:
             # Infer model
             if self.model.name == "pidiff":
                 # Sample noise to add to actions
-                action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:]) # deltas of x,y,cos_yaw, sin_yaw
+                
+                action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                action_label_pred_rel_orientations = action_label_pred[:,:,2:]
+                action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
+                
                 noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
                 # Sample a diffusion iteration for each data point
@@ -227,7 +238,28 @@ class Trainer:
 
                 # Predict the noise residual
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
-                noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, obs_encoding_condition)
+                
+                if self.goal_condition:
+                    if self.target_obs_enable:
+                        linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                    else:
+                        # print("here")
+                        linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+
+                    # lin_encoding = self.lin_encoder(linear_input)
+                    # if len(lin_encoding.shape) == 2:
+                    #     lin_encoding = lin_encoding.unsqueeze(1)
+                    # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+                    # assert lin_encoding.shape[2] == self.lin_encoding_size
+                    lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
+                
+                    final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                
+                else:       # No Goal condition >> take the obs_encoding as the tokens
+                    final_encoded_condition = obs_encoding_condition
+                
+                
+                noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, final_encoded_condition)
                 losses = self.model._compute_noise_losses(noise_pred=noise_pred,
                         noise=noise,
                         action_mask=action_mask)
@@ -253,6 +285,11 @@ class Trainer:
             # Optim Step
             self.optimizer.step()
             
+            
+            # maintain memory
+            del loss
+            gc.collect()
+            
             # # Update Exponential Moving Average of the model weights after optimizing
             if self.model.name == "pidiff": ### TODO: add eme implementation
                 # self.ema.step(self.model.parameters())
@@ -261,7 +298,7 @@ class Trainer:
                 
                 if i % self.print_log_freq == 0 :
                     
-                    action_pred = self.model(obs_image) 
+                    action_pred = self.model(obs_image,curr_rel_pos_to_target,goal_rel_pos_to_target) 
                     
                     action_losses  = self.model._compute_losses(action_label=action_label,
                                                                         action_pred=action_pred,
@@ -296,7 +333,7 @@ class Trainer:
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
                 mode="train",
-                use_latest=False,
+                use_latest=True,
             )
 
     def evaluate_one_epoch(self, dataloader:DataLoader, eval_type:str, epoch:int)->Tuple:
@@ -335,7 +372,7 @@ class Trainer:
 
         if self.model.name == "pidiff":
             diffusion_noise_loss = Logger(
-                "diffusion_noise_loss", "train", window_size=self.print_log_freq
+                "diffusion_noise_loss", eval_type, window_size=self.eval_log_freq
             )
             loggers["diffusion_noise_loss"] = diffusion_noise_loss
         
@@ -395,6 +432,10 @@ class Trainer:
                 
                 # Infer model
                 if self.model.name == "pidiff":
+                    action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                    action_label_pred_rel_orientations = action_label_pred[:,:,2:]
+                    action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
+                    
                     # action label pred -> the pred horizon actions. it is already normalize cumsum
                     # so the deltas are normalized
                     action_label_pred_deltas = get_delta(actions=action_label_pred)
@@ -413,15 +454,36 @@ class Trainer:
 
                     # Predict the noise residual
                     obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
-                    noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, obs_encoding_condition)
+                    if self.goal_condition:
+                        if self.target_obs_enable:
+                            linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                        else:
+                            # print("here")
+                            linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+
+                        # lin_encoding = self.lin_encoder(linear_input)
+                        # if len(lin_encoding.shape) == 2:
+                        #     lin_encoding = lin_encoding.unsqueeze(1)
+                        # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+                        # assert lin_encoding.shape[2] == self.lin_encoding_size
+                        lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
+                    
+                        final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                    
+                    else:       # No Goal condition >> take the obs_encoding as the tokens
+                        final_encoded_condition = obs_encoding_condition
+                    
+                    
+                    noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, final_encoded_condition)
                     losses = self.model._compute_noise_losses(noise_pred=noise_pred,
                             noise=noise,
                             action_mask=action_mask)
+                    loss = losses["diffusion_noise_loss"]
 
 
-                    if i % self.print_log_freq == 0 :
+                    if i % self.eval_log_freq == 0 :
 
-                        action_pred = self.model(obs_image)
+                        action_pred = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
                         
                         action_losses  = self.model._compute_losses(action_label=action_label,
                                                                             action_pred=action_pred,
@@ -494,6 +556,7 @@ class Trainer:
                                                                                             epoch=epoch)
                 avg_total_test_loss.append(total_eval_loss)
 
+            # for all the dataset_type
             current_avg_loss = np.mean(avg_total_test_loss)
             
             print("\033[33m" +f"Best Test loss: {self.best_loss} | Current epoch Test loss: {current_avg_loss}"+ "\033[0m")

@@ -1,8 +1,8 @@
 training:
-  goal_condition: false
+  goal_condition: true
   batch_size: 16
   eval_batch_size: 32
-  epochs: 60
+  epochs: 25
   current_epoch: 0
   gpu_ids:
   - 0
@@ -13,31 +13,31 @@ training:
   max_norm: 1.0
   scheduler: cosine
   warmup: false
-  warmup_epochs: 3
+  warmup_epochs: 4
   cyclic_period: 10
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
   alpha: 0.5
   beta: 10
-  use_ema: true
+  use_ema: false
 device: cuda
 data:
   goal_condition: false
   normalize: true
   context_type: temporal
-  target_observation_enable: false
+  target_observation_enable: true
   target_context: true
-  context_size: 6
+  context_size: 4
   distance:
     min_dist_cat: 0
     max_dist_cat: 10
   action:
     min_dist_cat: 0
-    max_dist_cat: 15
-  close_far_threshold: 20
+    max_dist_cat: 20
+  close_far_threshold: 30
   len_traj_pred: 8
-  action_horizon: 5
+  action_horizon: 6
   learn_angle: true
   image_size:
   - 96
@@ -50,6 +50,7 @@ log:
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   num_images_log: 4
   print_log_freq: 50
+  eval_log_freq: 5
   image_log_freq: 2
   eval_fraction: 0.25
   eval_freq: 1
@@ -83,7 +84,9 @@ policy_model:
   - 256
   cond_predict_scale: false
   noise_scheduler:
-    num_diffusion_iters: 5
+    type: ddpm
+    num_diffusion_iters_eval: 10
+    num_diffusion_iters_train: 70
     beta_schedule: squaredcos_cap_v2
 datasets:
   data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture

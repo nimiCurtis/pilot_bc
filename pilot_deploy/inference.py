@@ -175,8 +175,7 @@ class PilotPlanner(nn.Module):
         self.model = get_policy_model(policy_model_cfg=policy_model_cfg, encoder_model_cfg=encoder_model_cfg, data_cfg=data_cfg)
         robot_properties = get_robot_config(robot)[robot]
         self.action_stats = self._get_action_stats(robot_properties)
-        
-        
+
     def load(self, model_name):
         """
         Load a pre-trained model.
