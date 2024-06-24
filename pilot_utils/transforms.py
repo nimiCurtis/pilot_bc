@@ -68,7 +68,7 @@ class ObservationTransform:
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
         
         ### TRAIN TRANSFORMS ###
-        train_transform =  transforms.Compose([center_crop,
+        train_transform =  transforms.Compose([random_crop,
                                             resize,
                                             to_tensor,
                                             normalize

@@ -14,10 +14,9 @@ defaults:
 
 # training setup
 training:
-  goal_condition: True # not in use
   batch_size: 16
-  eval_batch_size: 32
-  epochs: 25
+  eval_batch_size: 16
+  epochs: 60
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
