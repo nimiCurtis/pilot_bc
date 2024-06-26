@@ -128,7 +128,7 @@ class PilotDataset(Dataset):
         # Tranform
         self.transform = transform
         
-        # use this index to retrieve the dataset name from the dataset config
+        # Use this index to retrieve the dataset name from the dataset config
         self.dataset_index = dataset_names.index(self.dataset_name)
         self.trajectory_cache = {}
         self.target_trajectory_cache = {}
@@ -206,7 +206,8 @@ class PilotDataset(Dataset):
             begin_time = self.context_size * self.waypoint_spacing
             end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
             for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1) # keep max distance in range 
+                max_goal_distance = min(self.max_dist_cat*self.waypoint_spacing, traj_len - curr_time - 1) # keep max distance in range 
+
                 samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
         return samples_index, goals_index
@@ -217,12 +218,12 @@ class PilotDataset(Dataset):
         Returns: (trajectory_name, goal_time, goal_is_negative)
         """
         
-        goal_offset = np.random.randint(0, max_goal_dist + 1)
+        goal_offset = np.random.randint(0, (max_goal_dist/self.waypoint_spacing) + 1)
         if goal_offset == 0:
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
         else:
-            goal_time = curr_time + int(goal_offset * self.waypoint_spacing)
+            goal_time = curr_time + goal_offset*self.waypoint_spacing
             return trajectory_name, goal_time, False
 
     def _sample_negative(self):
@@ -286,6 +287,7 @@ class PilotDataset(Dataset):
         assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
         if self.learn_angle:
+            # shape reduce from self.len_traj_pred + 1 to self.len_traj_pred
             yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw # already a cumsum
             actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1) 
         else:
@@ -362,6 +364,15 @@ class PilotDataset(Dataset):
                     self.waypoint_spacing,
                 )
             )
+            
+            # context_times = list(
+            #     range(
+            #         curr_time + -self.context_size,
+            #         curr_time + 1,
+            #         1,
+            #     )
+            # )
+            
             context = [(f_curr, t) for t in context_times]
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
@@ -395,17 +406,36 @@ class PilotDataset(Dataset):
 
             goal_target_traj_data = self._get_trajectory(f_goal, target=True)
             goal_target_traj_data_len = len(goal_target_traj_data)
+            # goal_time = min(goal_time, goal_target_traj_data_len-1)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-            goal_rel_pos_to_target = goal_target_traj_data[goal_time]["position"][:2] # Takes the [x,y] 
+            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
         
         
             # Take context of target rel pos or only the recent
             if self.target_context:
-                curr_rel_pos_to_target = torch.cat([
-                    torch.as_tensor(curr_target_traj_data[t]["position"][:2], dtype=torch.float32) for f, t in context
+                np_curr_rel_pos_to_target = np.array([
+                    curr_target_traj_data[t]["position"][:2] for f, t in context
                 ])
+                
+                # Normalizing each column independently
+                max_val_col = np_curr_rel_pos_to_target.max(axis=0)
+                min_val_col = np_curr_rel_pos_to_target.min(axis=0)
+                
+                normalized_array_separate = 2 * (np_curr_rel_pos_to_target - min_val_col) / (max_val_col - min_val_col) - 1
+                
+                normalized_array_separate[:-1] =  normalized_array_separate[:-1] - normalized_array_separate[-1]
+
             else:
-                curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
+                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
+
+            
+            # Take the deltas to the goal relative position to the target
+            goal_rel_pos_to_target = 2 * (goal_rel_pos_to_target - min_val_col) / (max_val_col - min_val_col) - 1
+            goal_rel_pos_to_target = goal_rel_pos_to_target - normalized_array_separate[-1]
+            
+            # Cat and tensor the context of relative positions to target
+            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(normalized_array_separate))
+
         else:
             curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2))
             goal_rel_pos_to_target = np.array([0,0])
@@ -415,7 +445,7 @@ class PilotDataset(Dataset):
             distance = self.max_dist_cat
         else:
             distance = (goal_time - curr_time) // self.waypoint_spacing
-            assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}"
+            assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}, target_traj_len = {goal_target_traj_data_len}"
 
         actions_torch = torch.as_tensor(actions, dtype=torch.float32)
         if self.learn_angle:

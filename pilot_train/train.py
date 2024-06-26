@@ -57,20 +57,24 @@ def train(cfg:DictConfig):
         data_cfg = data_cfg
         )
 
+    
+    ### GRADIENT CLIPPING
+    if training_cfg.clipping:
+        clip_max_norm = training_cfg.clipping_max_norm
+        print("Clipping gradients to", clip_max_norm)
+        for p in model.parameters():
+            if not p.requires_grad:
+                continue
+            p.register_hook(
+                lambda grad: torch.clamp(
+                    grad, -1 * clip_max_norm, clip_max_norm
+                )
+            )
+    
     optimizer = Trainer.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
     scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 
-    ## TODO: check what is it?? 
-    # if config["clipping"]:
-    #     print("Clipping gradients to", config["max_norm"])
-    #     for p in model.parameters():
-    #         if not p.requires_grad:
-    #             continue
-    #         p.register_hook(
-    #             lambda grad: torch.clamp(
-    #                 grad, -1 * config["max_norm"], config["max_norm"]
-    #             )
-    #         )
+
 
     ### TODO: add the load run in the Trainer class
     # if "load_run" in config:

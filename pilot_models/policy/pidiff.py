@@ -11,7 +11,7 @@ from pilot_utils.train.train_utils import replace_bn_with_gn
 from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
-from pilot_models.policy.common.transformer import MultiLayerDecoder
+from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
 
 
 class PiDiff(BaseModel):
@@ -41,10 +41,14 @@ class PiDiff(BaseModel):
         self.target_obs_enable = data_cfg.target_observation_enable
         self.target_context = data_cfg.target_context
         self.goal_condition = data_cfg.goal_condition
+        
+        
         # Policy model
-        # mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
-        # mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
-        # mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
+        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
+        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
+        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
+        
+        
         self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
         
@@ -135,7 +139,27 @@ class PiDiff(BaseModel):
         )
         
         
+        ### Goal masking
         
+        # Initialize positional encoding and self-attention layers
+        self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
+        self.sa_layer = nn.TransformerEncoderLayer(
+            d_model=self.obs_encoding_size, 
+            nhead=mha_num_attention_heads, 
+            dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
+            activation="gelu", 
+            batch_first=True, 
+            norm_first=True
+        )
+        self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+
+        # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
+        self.goal_mask = torch.zeros((1, seq_len), dtype=torch.bool)
+        self.goal_mask[:, -1] = True # Mask out the goal 
+        self.no_mask = torch.zeros((1, seq_len), dtype=torch.bool) 
+        self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
+        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
+
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
         # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
@@ -175,13 +199,19 @@ class PiDiff(BaseModel):
         return noise_pred
     
     def forward(
-            self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
+            self, obs_img: torch.tensor,
+            curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None,
+            input_goal_mask: torch.tensor = None
     ) -> Tuple[torch.Tensor, torch.Tensor]:
 
         obs_encoding = self.infer_vision_encoder(obs_img)
         
+        # Get the input goal mask 
+        if input_goal_mask is not None:
+            goal_mask = input_goal_mask.to(self.device)
+        
         if self.goal_condition:
-            if self.target_obs_enable:
+            if self.target_obs_enable: # Always true for now
                 linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
             else:
                 # print("here")
@@ -196,20 +226,41 @@ class PiDiff(BaseModel):
         
             final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
         
-        else:       # No Goal condition >> take the obs_encoding as the tokens
+        else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
             final_encoded_condition = obs_encoding
 
+        
+        # If a goal mask is provided, mask some of the goal tokens
+        if goal_mask is not None:
+            no_goal_mask = goal_mask.long()
+            src_key_padding_mask = torch.index_select(self.all_masks.to(self.device), 0, no_goal_mask)
+        else:
+            src_key_padding_mask = None
+        
+        # Apply positional encoding 
+        if self.positional_encoding:
+            final_encoded_condition = self.positional_encoding(final_encoded_condition)
+        
+
+        final_encoded_condition_tokens = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
+        
+        
+        if src_key_padding_mask is not None:
+            avg_mask = torch.index_select(self.avg_pool_mask.to(self.device), 0, no_goal_mask).unsqueeze(-1)
+            final_encoded_condition_tokens = final_encoded_condition_tokens * avg_mask
+        
+        final_encoded_condition_tokens = torch.mean(final_encoded_condition_tokens, dim=1)
+        
         # initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(
             (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
         diffusion_output = noisy_diffusion_output
         
-        
         for k in self.noise_scheduler.timesteps[:]:
             # predict noise
             noise_pred = self.infer_noise_predictor(diffusion_output,
                                                     k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                    final_encoded_condition)
+                                                    final_encoded_condition_tokens)
 
             # inverse diffusion step (remove noise)
             diffusion_output = self.noise_scheduler.step(

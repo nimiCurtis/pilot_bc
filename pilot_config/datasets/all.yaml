@@ -17,7 +17,7 @@ nimrod:
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/nimrod
   time: 39.9132
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/nimrod
-  waypoint_spacing: 1
+  waypoint_spacing: 2
 robots:
 - nimrod
 - turtlebot
@@ -38,4 +38,4 @@ turtlebot:
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/turtlebot
   time: 48.8943
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/turtlebot
-  waypoint_spacing: 1
+  waypoint_spacing: 2

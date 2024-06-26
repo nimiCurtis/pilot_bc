@@ -118,6 +118,10 @@ class Trainer:
             self.ema.to(self.device)
             self.ema_model = copy.deepcopy(self.model)
             self.ema_model.to(self.device)
+        
+        self.goal_mask_prob = training_cfg.goal_mask_prob
+        self.goal_mask_prob = torch.clip(torch.tensor(self.goal_mask_prob), 0, 1)
+
 
     def to_ema(self):
         # Weights of the EMA model
@@ -168,6 +172,8 @@ class Trainer:
             loggers["diffusion_noise_loss"] = diffusion_noise_loss
 
 
+        # Generate random goal mask
+        
         num_batches = len(self.dataloader)
         tqdm_iter = tqdm.tqdm(
             self.dataloader,
@@ -184,6 +190,8 @@ class Trainer:
                 dataset_index,
                 action_mask,
             ) = data
+            
+            
 
             # STATE
             # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
@@ -240,8 +248,13 @@ class Trainer:
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
                 
                 if self.goal_condition:
+                    goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+
                     if self.target_obs_enable:
                         linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                
+                
+                    ## Not in use! 
                     else:
                         # print("here")
                         linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
@@ -254,8 +267,13 @@ class Trainer:
                     lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
                 
                     final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+
+                    ####TODO: Add the goal masking section
+
+
                 
                 else:       # No Goal condition >> take the obs_encoding as the tokens
+                    goal_mask = None
                     final_encoded_condition = obs_encoding_condition
                 
                 
@@ -298,7 +316,7 @@ class Trainer:
                 
                 if i % self.print_log_freq == 0 :
                     
-                    action_pred = self.model(obs_image,curr_rel_pos_to_target,goal_rel_pos_to_target) 
+                    action_pred = self.model(obs_image,curr_rel_pos_to_target,goal_rel_pos_to_target, goal_mask) 
                     
                     action_losses  = self.model._compute_losses(action_label=action_label,
                                                                         action_pred=action_pred,
@@ -455,8 +473,16 @@ class Trainer:
                     # Predict the noise residual
                     obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
                     if self.goal_condition:
+                        goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+
                         if self.target_obs_enable:
+                        
                             linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                        
+                        
+
+                        
+                        ## Not in use!!!
                         else:
                             # print("here")
                             linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
@@ -469,7 +495,11 @@ class Trainer:
                         lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
                     
                         final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                    ####TODO: Add the goal masking section
+
                     
+                    
+
                     else:       # No Goal condition >> take the obs_encoding as the tokens
                         final_encoded_condition = obs_encoding_condition
                     
@@ -483,7 +513,7 @@ class Trainer:
 
                     if i % self.eval_log_freq == 0 :
 
-                        action_pred = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                        action_pred = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target, goal_mask)
                         
                         action_losses  = self.model._compute_losses(action_label=action_label,
                                                                             action_pred=action_pred,

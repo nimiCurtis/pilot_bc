@@ -17,6 +17,6 @@ nimrod:
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod
   time: 20.7878
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
-  waypoint_spacing: 1
+  waypoint_spacing: 2 # TODO: check
 robots:
 - nimrod

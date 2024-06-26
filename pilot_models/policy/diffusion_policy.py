@@ -156,7 +156,7 @@ class ConditionalUnet1D(nn.Module):
           in addition to diffusion step embedding. This is usually obs_horizon * obs_dim
         diffusion_step_embed_dim: Size of positional encoding for diffusion iteration k
         down_dims: Channel size for each UNet level.
-          The length of this array determines numebr of levels.
+        The length of this array determines numebr of levels.
         kernel_size: Conv kernel size
         n_groups: Number of groups for GroupNorm
         """
@@ -255,11 +255,11 @@ class ConditionalUnet1D(nn.Module):
         self.down_modules = down_modules
         self.final_conv = final_conv
 
-        print(
-            "number of parameters: {:e}".format(
-                sum(p.numel() for p in self.parameters())
-            )
-        )
+        # print(
+        #     "number of parameters: {:e}".format(
+        #         sum(p.numel() for p in self.parameters())
+        #     )
+        # )
 
     def forward(
         self,
@@ -747,9 +747,9 @@ class TransformerForDiffusion(ModuleAttrMixin):
 
         # init
         self.apply(self._init_weights)
-        logger.info(
-            "number of parameters: %e", sum(p.numel() for p in self.parameters())
-        )
+        # logger.info(
+        #     "number of parameters: %e", sum(p.numel() for p in self.parameters())
+        # )
 
     def _init_weights(self, module):
         ignore_types = (nn.Dropout, 

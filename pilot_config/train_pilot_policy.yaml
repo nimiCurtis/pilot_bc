@@ -9,21 +9,22 @@ defaults:
   - _self_
   - encoder_model: efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: go_to_the_picture # all | go_to_the_picture
+  - datasets: all # all | go_to_the_picture
   # - log: defaults
 
 # training setup
 training:
+  goal_condition: False
   batch_size: 16
   eval_batch_size: 16
-  epochs: 60
+  epochs: 70
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
   lr: 1e-5 # 5e-4 5e-5 1e-5 1e-4  
   optimizer: adamw
-  clipping: False
-  max_norm: 1.
+  clipping: True # Clip gradients
+  clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
   warmup: False 
   warmup_epochs: 4
@@ -34,11 +35,13 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
   use_ema: False # not in use
+  goal_mask_prob: 0.5
 
 device: cuda
 
 data:
-  goal_condition: False
+  goal_condition: True
+  
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
   normalize: True
@@ -49,9 +52,9 @@ data:
   context_size: 4
   distance:
     min_dist_cat: 0
-    max_dist_cat: 10
+    max_dist_cat: 20
   action:
-    min_dist_cat: 0
+    min_dist_cat: 1
     max_dist_cat: 20
   close_far_threshold: 30 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
@@ -73,7 +76,7 @@ log:
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
   num_images_log: 4
-  print_log_freq: 50 # in iterations
+  print_log_freq: 100 # in iterations
   eval_log_freq: 5  # in iterations
   image_log_freq: 2 # # in iterations
   eval_fraction: 0.25

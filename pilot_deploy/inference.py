@@ -142,9 +142,9 @@ class InferenceDataset(PilotDataset):
             torch.as_tensor(action_mask, dtype=torch.float32),
         )
 
-class PilotPlanner(nn.Module):
+class PilotAgent(nn.Module):
     """
-    Planner class that handles policy-based predictions for pilot models.
+    PilotAgent class that handles policy-based predictions for pilot models.
     
     Attributes:
         model (nn.Module): The policy model to use.
@@ -156,7 +156,7 @@ class PilotPlanner(nn.Module):
                 encoder_model_cfg: DictConfig,
                 robot: str, wpt_i: int, frame_rate: float):
         """
-        Initialize the PilotPlanner instance.
+        Initialize the PilotAgent instance.
 
         Args:
             data_cfg (DictConfig): Configuration related to data.
@@ -231,14 +231,14 @@ class PilotPlanner(nn.Module):
             np.ndarray: Calculated waypoint.
         """
 
-        cos_sin_angle = normalized_waypoints[:, 2:][self.wpt_i] # cos_sin is normalized anyway
+        cos_sin_angles = normalized_waypoints[:, 2:] # cos_sin is normalized anyway
         ndeltas = get_delta(normalized_waypoints[:, :2])
         deltas = unnormalize_data(ndeltas, self.action_stats["pos"])
         waypoints = np.cumsum(deltas, axis=0)
-        waypoint = waypoints[self.wpt_i]
-        waypoint = np.concatenate([waypoint, cos_sin_angle])
+        # waypoint = waypoints[self.wpt_i]
+        waypoints = np.concatenate([waypoints, cos_sin_angles],axis=1)
 
-        return waypoint
+        return waypoints
 
     def _get_action_stats(self, properties):
         """
