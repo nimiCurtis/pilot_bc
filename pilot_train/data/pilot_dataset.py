@@ -408,33 +408,25 @@ class PilotDataset(Dataset):
             goal_target_traj_data_len = len(goal_target_traj_data)
             # goal_time = min(goal_time, goal_target_traj_data_len-1)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
+            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2] if goal_target_traj_data[goal_time]["tracking_state"]!=-1 else [-100,-100]) # Takes the [x,y] 
         
         
             # Take context of target rel pos or only the recent
             if self.target_context:
                 np_curr_rel_pos_to_target = np.array([
-                    curr_target_traj_data[t]["position"][:2] for f, t in context
+                    curr_target_traj_data[t]["position"][:2] if curr_target_traj_data[t]["tracking_state"]!=-1 else [-100,-100] for f, t in context
                 ])
                 
-                # Normalizing each column independently
-                max_val_col = np_curr_rel_pos_to_target.max(axis=0)
-                min_val_col = np_curr_rel_pos_to_target.min(axis=0)
-                
-                normalized_array_separate = 2 * (np_curr_rel_pos_to_target - min_val_col) / (max_val_col - min_val_col) - 1
-                
-                normalized_array_separate[:-1] =  normalized_array_separate[:-1] - normalized_array_separate[-1]
+                # np_curr_rel_pos_to_target =  np_curr_rel_pos_to_target[-1] - np_curr_rel_pos_to_target                
 
-            else:
+            else: #NOT int use right now # TODO: modify
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
 
-            
             # Take the deltas to the goal relative position to the target
-            goal_rel_pos_to_target = 2 * (goal_rel_pos_to_target - min_val_col) / (max_val_col - min_val_col) - 1
-            goal_rel_pos_to_target = goal_rel_pos_to_target - normalized_array_separate[-1]
+            # goal_rel_pos_to_target = np_curr_rel_pos_to_target[-1] - goal_rel_pos_to_target
             
             # Cat and tensor the context of relative positions to target
-            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(normalized_array_separate))
+            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_to_target))
 
         else:
             curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2))

@@ -54,3 +54,19 @@ def replace_submodules(
         if predicate(m)]
     assert len(bn_list) == 0
     return root_module
+
+def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.5):
+
+    goal_mask = (torch.sum(goal_rel_pos_to_target==-100*torch.ones_like(goal_rel_pos_to_target),axis=1) == goal_rel_pos_to_target.shape[1]).long()
+    num_ones = torch.sum(goal_mask)
+    total_elements = goal_mask.size(0)
+    beta = num_ones.float() / total_elements
+
+    probability = goal_mask_prob - beta 
+    if probability > 0:
+        zero_indices = (goal_mask == 0).nonzero(as_tuple=True)[0]
+        random_values = torch.rand(zero_indices.size(), device='cuda:0')
+        mask_indices = zero_indices[random_values < probability]
+        goal_mask[mask_indices] = 1
+    
+    return goal_mask

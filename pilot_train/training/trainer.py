@@ -23,7 +23,7 @@ from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
 from pilot_utils.utils import get_delta
-
+from pilot_utils.train.train_utils import get_goal_mask_tensor
 from pilot_utils.transforms import ObservationTransform
 
 
@@ -247,13 +247,13 @@ class Trainer:
                 # Predict the noise residual
                 obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
                 
+                # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
-                    goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
-
+                    # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+                    goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
                     if self.target_obs_enable:
                         linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
-                
-                
+
                     ## Not in use! 
                     else:
                         # print("here")
@@ -269,9 +269,8 @@ class Trainer:
                     final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
                     ####TODO: Add the goal masking section
+                    final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
 
-
-                
                 else:       # No Goal condition >> take the obs_encoding as the tokens
                     goal_mask = None
                     final_encoded_condition = obs_encoding_condition
@@ -473,7 +472,7 @@ class Trainer:
                     # Predict the noise residual
                     obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
                     if self.goal_condition:
-                        goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+                        goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
 
                         if self.target_obs_enable:
                         
@@ -493,12 +492,12 @@ class Trainer:
                         # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                         # assert lin_encoding.shape[2] == self.lin_encoding_size
                         lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
-                    
-                        final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                    ####TODO: Add the goal masking section
 
-                    
-                    
+                        final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                        
+                        ####TODO: Add the goal masking section
+                        final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
+
 
                     else:       # No Goal condition >> take the obs_encoding as the tokens
                         final_encoded_condition = obs_encoding_condition

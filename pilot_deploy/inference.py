@@ -19,6 +19,8 @@ from pilot_config.config import get_inference_model_config, get_robot_config
 # Path to checkpoints folder
 CKPTH_PATH = os.path.join(os.path.dirname(__file__),
                         "checkpoints")
+
+# TODO: need to update
 class InferenceDataset(PilotDataset):
     """
     Dataset class specifically designed for inference, extending the PilotDataset.

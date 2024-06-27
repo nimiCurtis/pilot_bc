@@ -112,7 +112,9 @@ class PiDiff(BaseModel):
         # self.cond_predict_scale = policy_model_cfg.cond_predict_scale
         self.noise_predictor = ConditionalUnet1D(
                 input_dim = 4 if self.learn_angle else 2,
-                global_cond_dim = self.obs_encoding_size*seq_len,
+                global_cond_dim = self.obs_encoding_size,
+                # global_cond_dim = self.obs_encoding_size*seq_len,
+
                 down_dims=self.down_dims,
                 # cond_predict_scale=self.cond_predict_scale
             )
@@ -198,6 +200,31 @@ class PiDiff(BaseModel):
         noise_pred = self.noise_predictor(sample=sample, timestep=timestep, global_cond=obs_cond)
         return noise_pred
     
+    def infer_goal_masking(self,final_encoded_condition, goal_mask):
+        
+        # If a goal mask is provided, mask some of the goal tokens
+        if goal_mask is not None:
+            no_goal_mask = goal_mask.long()
+            
+            # select from all_masks a tensor based on the no_goal_mask tensor
+            src_key_padding_mask = torch.index_select(self.all_masks.to(self.device), 0, no_goal_mask)
+        else:
+            src_key_padding_mask = None
+        
+        # Apply positional encoding 
+        if self.positional_encoding:
+            final_encoded_condition = self.positional_encoding(final_encoded_condition)
+
+        final_encoded_condition = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
+    
+        if src_key_padding_mask is not None:
+            avg_mask = torch.index_select(self.avg_pool_mask.to(self.device), 0, no_goal_mask).unsqueeze(-1)
+            final_encoded_condition = final_encoded_condition * avg_mask
+        
+        final_encoded_condition = torch.mean(final_encoded_condition, dim=1)
+        
+        return final_encoded_condition
+
     def forward(
             self, obs_img: torch.tensor,
             curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None,
@@ -216,41 +243,17 @@ class PiDiff(BaseModel):
             else:
                 # print("here")
                 linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
-
-            # lin_encoding = self.lin_encoder(linear_input)
-            # if len(lin_encoding.shape) == 2:
-            #     lin_encoding = lin_encoding.unsqueeze(1)
-            # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-            # assert lin_encoding.shape[2] == self.lin_encoding_size
+            
             lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
         
             final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-        
+                    
+            final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
+
         else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
             final_encoded_condition = obs_encoding
 
-        
-        # If a goal mask is provided, mask some of the goal tokens
-        if goal_mask is not None:
-            no_goal_mask = goal_mask.long()
-            src_key_padding_mask = torch.index_select(self.all_masks.to(self.device), 0, no_goal_mask)
-        else:
-            src_key_padding_mask = None
-        
-        # Apply positional encoding 
-        if self.positional_encoding:
-            final_encoded_condition = self.positional_encoding(final_encoded_condition)
-        
 
-        final_encoded_condition_tokens = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
-        
-        
-        if src_key_padding_mask is not None:
-            avg_mask = torch.index_select(self.avg_pool_mask.to(self.device), 0, no_goal_mask).unsqueeze(-1)
-            final_encoded_condition_tokens = final_encoded_condition_tokens * avg_mask
-        
-        final_encoded_condition_tokens = torch.mean(final_encoded_condition_tokens, dim=1)
-        
         # initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(
             (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
@@ -260,7 +263,7 @@ class PiDiff(BaseModel):
             # predict noise
             noise_pred = self.infer_noise_predictor(diffusion_output,
                                                     k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                    final_encoded_condition_tokens)
+                                                    final_encoded_condition)
 
             # inverse diffusion step (remove noise)
             diffusion_output = self.noise_scheduler.step(
