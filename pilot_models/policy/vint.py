@@ -145,6 +145,12 @@ class ViNT(BaseModel):
 
         obs_encoding =  self.infer_vision_encoder(obs_img=obs_img)
         
+        
+        #TODO: in one function
+        #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
+        #TODO: cat based on context size
+        #TODO: do this for curr and goal as well
+
         if self.goal_condition:
             if self.target_obs_enable:
                 linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)

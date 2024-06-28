@@ -408,13 +408,13 @@ class PilotDataset(Dataset):
             goal_target_traj_data_len = len(goal_target_traj_data)
             # goal_time = min(goal_time, goal_target_traj_data_len-1)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2] if goal_target_traj_data[goal_time]["tracking_state"]!=-1 else [-100,-100]) # Takes the [x,y] 
-        
-        
+            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
+
+
             # Take context of target rel pos or only the recent
             if self.target_context:
                 np_curr_rel_pos_to_target = np.array([
-                    curr_target_traj_data[t]["position"][:2] if curr_target_traj_data[t]["tracking_state"]!=-1 else [-100,-100] for f, t in context
+                    curr_target_traj_data[t]["position"][:2] for f, t in context
                 ])
                 
                 # np_curr_rel_pos_to_target =  np_curr_rel_pos_to_target[-1] - np_curr_rel_pos_to_target                
@@ -422,8 +422,10 @@ class PilotDataset(Dataset):
             else: #NOT int use right now # TODO: modify
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
 
-            # Take the deltas to the goal relative position to the target
-            # goal_rel_pos_to_target = np_curr_rel_pos_to_target[-1] - goal_rel_pos_to_target
+            #TODO: in one function
+            #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
+            #TODO: cat based on context size
+            #TODO: do this for curr and goal as well
             
             # Cat and tensor the context of relative positions to target
             curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_to_target))

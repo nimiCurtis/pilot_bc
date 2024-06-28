@@ -237,7 +237,6 @@ class PilotAgent(nn.Module):
         ndeltas = get_delta(normalized_waypoints[:, :2])
         deltas = unnormalize_data(ndeltas, self.action_stats["pos"])
         waypoints = np.cumsum(deltas, axis=0)
-        # waypoint = waypoints[self.wpt_i]
         waypoints = np.concatenate([waypoints, cos_sin_angles],axis=1)
 
         return waypoints
