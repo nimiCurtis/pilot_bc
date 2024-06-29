@@ -1,5 +1,5 @@
 training:
-  goal_condition: true
+  goal_condition: false
   batch_size: 16
   eval_batch_size: 16
   epochs: 70
@@ -7,10 +7,10 @@ training:
   gpu_ids:
   - 0
   num_workers: 12
-  lr: 1.0e-05
+  lr: 0.0001
   optimizer: adamw
-  clipping: false
-  max_norm: 1.0
+  clipping: true
+  clipping_max_norm: 1.0
   scheduler: cosine
   warmup: false
   warmup_epochs: 4
@@ -21,6 +21,7 @@ training:
   alpha: 0.5
   beta: 10
   use_ema: false
+  goal_mask_prob: 0.5
 device: cuda
 data:
   goal_condition: true
@@ -31,9 +32,9 @@ data:
   context_size: 4
   distance:
     min_dist_cat: 0
-    max_dist_cat: 10
+    max_dist_cat: 20
   action:
-    min_dist_cat: 0
+    min_dist_cat: 3
     max_dist_cat: 20
   close_far_threshold: 30
   len_traj_pred: 8
@@ -49,7 +50,7 @@ log:
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   num_images_log: 4
-  print_log_freq: 50
+  print_log_freq: 100
   eval_log_freq: 5
   image_log_freq: 2
   eval_fraction: 0.25
@@ -108,7 +109,7 @@ datasets:
     test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/nimrod
     time: 39.9132
     train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/nimrod
-    waypoint_spacing: 1
+    waypoint_spacing: 2
   robots:
   - nimrod
   - turtlebot
@@ -129,4 +130,4 @@ datasets:
     test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/turtlebot
     time: 48.8943
     train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/turtlebot
-    waypoint_spacing: 1
+    waypoint_spacing: 2

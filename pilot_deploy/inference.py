@@ -152,6 +152,9 @@ class PilotAgent(nn.Module):
         model (nn.Module): The policy model to use.
         action_stats (dict): Statistical properties related to actions.
     """
+    # TASK_STATE = {"goal_directed": 1,
+    #             "explore": 0}
+    
     
     def __init__(self, data_cfg: DictConfig,
                 policy_model_cfg: DictConfig,
@@ -274,16 +277,18 @@ class PilotAgent(nn.Module):
         
         
         context_queue = obs_img.unsqueeze(0).to(self.device)
-        target_context_queue, goal_to_target = None, None
+        target_context_queue, goal_to_target, goal_mask = None, None, None
         
         if curr_rel_pos_to_target is not None:
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
-        
+            goal_mask = (torch.sum(target_context_queue==torch.zeros_like(target_context_queue),axis=1) == target_context_queue.shape[1]).long()
+
         if goal_rel_pos_to_target is not None:
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
+
         with torch.no_grad():
-            normalized_actions = self.model(context_queue, target_context_queue, goal_to_target)
+            normalized_actions = self.model(context_queue, target_context_queue, goal_to_target,goal_mask)
 
         return normalized_actions[0]  # no batch dimension
 
@@ -324,7 +329,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
 
     # Initialize the PilotPlanner model with the appropriate configurations
-    model = PilotPlanner(data_cfg=data_cfg,
+    model = PilotAgent(data_cfg=data_cfg,
                         policy_model_cfg=policy_model_cfg,
                         encoder_model_cfg=encoder_model_cfg,
                         robot=robot,
