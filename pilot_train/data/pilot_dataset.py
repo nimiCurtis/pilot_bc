@@ -20,7 +20,8 @@ from pilot_utils.data.data_utils import (
 
 from pilot_utils.utils import (
     get_delta,
-    normalize_data
+    normalize_data,
+    xy_to_d_cos_sin
 )
 
 from pilot_utils.transforms import transform_images
@@ -409,20 +410,23 @@ class PilotDataset(Dataset):
             # goal_time = min(goal_time, goal_target_traj_data_len-1)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
             goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
-
-
+            goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
+            goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min':0.1,'max':self.max_depth/1000})
+            
             # Take context of target rel pos or only the recent
             if self.target_context:
                 np_curr_rel_pos_to_target = np.array([
                     curr_target_traj_data[t]["position"][:2] for f, t in context
                 ])
-                
+
                 # np_curr_rel_pos_to_target =  np_curr_rel_pos_to_target[-1] - np_curr_rel_pos_to_target                
 
             else: #NOT int use right now # TODO: modify
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
 
             #TODO: in one function
+            np_curr_rel_pos_to_target = xy_to_d_cos_sin(np_curr_rel_pos_to_target)
+            np_curr_rel_pos_to_target[:,0] = normalize_data(data=np_curr_rel_pos_to_target[:,0], stats={'min':0.1,'max':self.max_depth/1000}) # max_depth in mm -> meters
             #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
             #TODO: cat based on context size
             #TODO: do this for curr and goal as well
@@ -431,8 +435,8 @@ class PilotDataset(Dataset):
             curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_to_target))
 
         else:
-            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2))
-            goal_rel_pos_to_target = np.array([0,0])
+            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2,0))
+            goal_rel_pos_to_target = np.array([0,0,0])
 
         # Compute timesteps distances
         if goal_is_negative:

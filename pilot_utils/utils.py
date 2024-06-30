@@ -83,3 +83,17 @@ def calculate_sin_cos(waypoints):
         angle_repr = np.stack((cos_angle, sin_angle), axis=1)
         return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
 
+def xy_to_d_cos_sin(xy):
+    
+    if len(xy.shape) == 1:
+        d = np.linalg.norm(xy)
+        angle = np.arctan2(xy[1], xy[0])
+    else:
+        d = np.linalg.norm(xy, axis=1)
+        angle = np.arctan2(xy[:,1], xy[:,0])
+    
+    cos_angle = np.cos(angle)
+    sin_angle = np.sin(angle)
+    d_cos_sin = np.stack((d.T,cos_angle.T,sin_angle.T)).T
+    
+    return d_cos_sin

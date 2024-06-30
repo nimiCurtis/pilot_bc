@@ -57,7 +57,7 @@ def replace_submodules(
 
 def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.5):
 
-    goal_mask = (torch.sum(goal_rel_pos_to_target==-100*torch.ones_like(goal_rel_pos_to_target),axis=1) == goal_rel_pos_to_target.shape[1]).long()
+    goal_mask = (torch.sum(goal_rel_pos_to_target==torch.zeros_like(goal_rel_pos_to_target),axis=1) == goal_rel_pos_to_target.shape[1]).long()
     num_ones = torch.sum(goal_mask)
     total_elements = goal_mask.size(0)
     beta = num_ones.float() / total_elements
