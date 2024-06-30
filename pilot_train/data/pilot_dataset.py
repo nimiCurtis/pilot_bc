@@ -410,9 +410,12 @@ class PilotDataset(Dataset):
             # goal_time = min(goal_time, goal_target_traj_data_len-1)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
             goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
-            goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-            goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min':0.1,'max':self.max_depth/1000})
-            
+            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
+                goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target) 
+                goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min':0.1,'max':self.max_depth/1000})
+            else: 
+                goal_rel_pos_to_target = np.zeros((3,))
+                
             # Take context of target rel pos or only the recent
             if self.target_context:
                 np_curr_rel_pos_to_target = np.array([
@@ -424,18 +427,16 @@ class PilotDataset(Dataset):
             else: #NOT int use right now # TODO: modify
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
 
-            #TODO: in one function
-            np_curr_rel_pos_to_target = xy_to_d_cos_sin(np_curr_rel_pos_to_target)
-            np_curr_rel_pos_to_target[:,0] = normalize_data(data=np_curr_rel_pos_to_target[:,0], stats={'min':0.1,'max':self.max_depth/1000}) # max_depth in mm -> meters
-            #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
-            #TODO: cat based on context size
-            #TODO: do this for curr and goal as well
-            
+            mask = np.sum(np_curr_rel_pos_to_target==np.zeros((2,)),axis=1) == 2
+            np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0],3))
+            np_curr_rel_pos_in_d_theta[~mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~mask])
+            np_curr_rel_pos_in_d_theta[~mask,0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask,0], stats={'min':0.1,'max':self.max_depth/1000}) # max_depth in mm -> meters
+
             # Cat and tensor the context of relative positions to target
-            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_to_target))
+            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_in_d_theta))
 
         else:
-            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],2,0))
+            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],3,0))
             goal_rel_pos_to_target = np.array([0,0,0])
 
         # Compute timesteps distances

@@ -268,7 +268,6 @@ class Trainer:
                 
                     final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
-                    ####TODO: Add the goal masking section
                     final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
 
                 else:       # No Goal condition >> take the obs_encoding as the tokens
@@ -477,10 +476,7 @@ class Trainer:
                         if self.target_obs_enable:
                         
                             linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
-                        
-                        
 
-                        
                         ## Not in use!!!
                         else:
                             # print("here")
@@ -495,7 +491,6 @@ class Trainer:
 
                         final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                         
-                        ####TODO: Add the goal masking section
                         final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
 
 

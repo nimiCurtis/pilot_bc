@@ -5,7 +5,7 @@ from pilot_utils.data.data_utils import IMAGE_ASPECT_RATIO
 from PIL import Image as PILImage
 from PIL import Image
 import random
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
@@ -66,19 +66,19 @@ class ObservationTransform:
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
-        
+
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([random_crop,
                                             resize,
+                                            # normalize,
                                             to_tensor,
-                                            normalize
                                         ])
         
         ### EVAL TRANSFORMS ###
         eval_transform =  transforms.Compose([center_crop,
                                                     resize,
+                                                    # normalize,
                                                     to_tensor,
-                                                    normalize
                                                 ])
 
         return train_transform, eval_transform
