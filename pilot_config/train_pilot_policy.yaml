@@ -35,7 +35,7 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
   use_ema: False # not in use
-  goal_mask_prob: 0.5
+  goal_mask_prob: 0.0
 
 device: cuda
 
