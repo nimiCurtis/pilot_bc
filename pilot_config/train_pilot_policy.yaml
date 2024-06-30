@@ -9,7 +9,7 @@ defaults:
   - _self_
   - encoder_model: efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: follow_in_broadcom_lab # all | go_to_the_picture
+  - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
 
 # training setup

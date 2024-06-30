@@ -1,0 +1,22 @@
+data_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking
+max_depth: 10000
+nimrod:
+  end_slack: 1
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 1
+  stats:
+    max_ang_vel: 1.0075
+    max_lin_vel: 0.167
+    mean_ang_vel: 0.0189
+    mean_lin_vel: -0.0004
+    min_ang_vel: -0.5874
+    min_lin_vel: -0.0869
+    std_ang_vel: 0.1737
+    std_lin_vel: 0.0179
+  test: /home/nimrod/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/nimrod
+  time: 0.9116
+  train: /home/nimrod/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/nimrod
+  waypoint_spacing: 1
+robots:
+- nimrod
