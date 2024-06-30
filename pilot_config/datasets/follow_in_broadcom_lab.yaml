@@ -1,26 +1,22 @@
-robots: ["nimrod"]
-data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab
-
-# Robots 
-nimrod: 
-      # abs path to the dataset folder
-      train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/nimrod
-            # path to train folder with traj_names.txt
-      test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/nimrod
-            # path to test folder with traj_names.txt
-      end_slack: 3 # because many trajectories end in collisions
-      goals_per_obs: 1 # how many goals are sampled per observation
-      negative_mining: False # negative mining from the ViNG paper (Shah et al.)
-      waypoint_spacing: 1
-
-# Robots 
-# turtlebot: 
-#       # abs path to the dataset folder
-#       train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/turtlebot
-#             # path to train folder with traj_names.txt
-#       test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/turtlebot
-#             # path to test folder with traj_names.txt
-#       end_slack: 3 # because many trajectories end in collisions
-#       goals_per_obs: 1 # how many goals are sampled per observation ## modify??
-#       negative_mining: False # negative mining from the ViNG paper (Shah et al.)
-#       waypoint_spacing: 1
+data_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_dataset/follow_in_broadcom_lab
+max_depth: 5000
+nimrod:
+  end_slack: 3
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 5
+  stats:
+    max_ang_vel: 0.9903
+    max_lin_vel: 0.7314
+    mean_ang_vel: -0.0013
+    mean_lin_vel: 0.0093
+    min_ang_vel: -1.0781
+    min_lin_vel: -0.6296
+    std_ang_vel: 0.2448
+    std_lin_vel: 0.2061
+  test: /home/nimrod/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/test/nimrod
+  time: 2.6203
+  train: /home/nimrod/dev/pilot/pilot_bc/pilot_train/dataset/follow_in_broadcom_lab/train/nimrod
+  waypoint_spacing: 1
+robots:
+- nimrod

@@ -75,15 +75,15 @@ class PiDiff(BaseModel):
         self.vision_encoder = get_vision_encoder_model(encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
-        # Linear input encoder #TODO: modify num_obs_features to be argument
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
         target_context_size = context_size if self.target_context else 0
         num_obs_features *= (target_context_size + 1)  # (context+1)
         
+        ## TODO: refactor! 
         if self.target_obs_enable:
-            num_lin_features = num_obs_features + 2 #policy_model_cfg.num_target_features # x y
+            num_lin_features = num_obs_features + policy_model_cfg.num_lin_features #policy_model_cfg.num_target_features # x y
         else:
-            num_lin_features = 2
+            num_lin_features = policy_model_cfg.num_lin_features
         self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
 
         # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
@@ -216,7 +216,7 @@ class PiDiff(BaseModel):
             final_encoded_condition = self.positional_encoding(final_encoded_condition)
 
         final_encoded_condition = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
-    
+
         if src_key_padding_mask is not None:
             avg_mask = torch.index_select(self.avg_pool_mask.to(self.device), 0, no_goal_mask).unsqueeze(-1)
             final_encoded_condition = final_encoded_condition * avg_mask

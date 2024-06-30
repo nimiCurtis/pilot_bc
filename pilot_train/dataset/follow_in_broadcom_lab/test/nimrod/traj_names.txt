@@ -1,11 +1,1 @@
-nimrod_bag-2024-06-13-12-22-12-data
-nimrod_bag-2024-06-13-13-06-01-data
-nimrod_bag-2024-06-13-12-15-58-data
-nimrod_bag-2024-06-13-13-16-46-data
-nimrod_bag-2024-06-13-11-04-04-data
-nimrod_bag-2024-06-13-12-19-49-data
-nimrod_bag-2024-06-13-10-38-15-data
-nimrod_bag-2024-06-13-12-17-13-data
-nimrod_bag-2024-06-13-10-39-13-data
-nimrod_bag-2024-06-13-11-16-07-data
-nimrod_bag-2024-06-13-10-37-21-data
+nimrod_bag-2024-06-10-22-03-35-data
