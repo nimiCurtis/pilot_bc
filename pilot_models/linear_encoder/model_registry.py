@@ -1,9 +1,11 @@
 from pilot_models.linear_encoder.mlp import MLP
+from pilot_models.linear_encoder.tcn import TCN
 from omegaconf import DictConfig, OmegaConf
 
 # Registry of available models
 model_registry = {
     'mlp': MLP,
+    'tcn': TCN,
     # Add new models here as you develop them, e.g., 'resnet': ResNet
     # 'dino': Dino
 }

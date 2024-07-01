@@ -433,8 +433,8 @@ class PilotDataset(Dataset):
             np_curr_rel_pos_in_d_theta[~mask,0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask,0], stats={'min':0.1,'max':self.max_depth/1000}) # max_depth in mm -> meters
 
             # Cat and tensor the context of relative positions to target
-            curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_in_d_theta))
-
+            # curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_in_d_theta))
+            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
         else:
             curr_rel_pos_to_target = np.zeros_like((actions.shape[0],3,0))
             goal_rel_pos_to_target = np.array([0,0,0])

@@ -180,13 +180,11 @@ class PiDiff(BaseModel):
 
         return obs_encoding
 
-    def infer_linear_encoder(self, linear_input: torch.tensor):
-            lin_encoding = self.lin_encoder(linear_input)
+    def infer_linear_encoder(self, curr_rel_pos_to_target, goal_rel_pos_to_target):
+            lin_encoding = self.lin_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
             if len(lin_encoding.shape) == 2:
                 lin_encoding = lin_encoding.unsqueeze(1)
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-            assert lin_encoding.shape[2] == self.lin_encoding_size
-            
             return lin_encoding
 
     def infer_noise_predictor(self, sample, timestep, condition):
@@ -233,28 +231,24 @@ class PiDiff(BaseModel):
         if input_goal_mask is not None:
             goal_mask = input_goal_mask.to(self.device)
         
-        
-        #TODO: in one function
-            #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
-            #TODO: cat based on context size
-            #TODO: do this for curr and goal as well
-            
-            
-        if self.goal_condition:
-            if self.target_obs_enable: # Always true for now
-                linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
-            else:
-                # print("here")
-                linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
-            
-            lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
-        
-            final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                    
-            final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
 
-        else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
-            final_encoded_condition = obs_encoding
+        # if self.goal_condition:
+            # if self.target_obs_enable: # Always true for now
+            #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+            # else:
+            #     # print("here")
+            #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+
+        lin_encoding = self.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
+
+        # lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
+    
+        final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                
+        final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
+
+        # else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
+        #     final_encoded_condition = obs_encoding
 
 
         # initialize action from Gaussian noise

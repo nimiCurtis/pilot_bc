@@ -251,20 +251,20 @@ class Trainer:
                 if self.goal_condition:
                     # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
-                    if self.target_obs_enable:
-                        linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                    # if self.target_obs_enable:
+                    #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
-                    ## Not in use! 
-                    else:
-                        # print("here")
-                        linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+                    # ## Not in use! 
+                    # else:
+                    #     # print("here")
+                    #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
 
                     # lin_encoding = self.lin_encoder(linear_input)
                     # if len(lin_encoding.shape) == 2:
                     #     lin_encoding = lin_encoding.unsqueeze(1)
                     # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                     # assert lin_encoding.shape[2] == self.lin_encoding_size
-                    lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
+                    lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
                 
                     final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
@@ -473,21 +473,22 @@ class Trainer:
                     if self.goal_condition:
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
 
-                        if self.target_obs_enable:
+                        # if self.target_obs_enable:
                         
-                            linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
+                        #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
-                        ## Not in use!!!
-                        else:
-                            # print("here")
-                            linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
+                        # ## Not in use!!!
+                        # else:
+                        #     # print("here")
+                        #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
 
                         # lin_encoding = self.lin_encoder(linear_input)
                         # if len(lin_encoding.shape) == 2:
                         #     lin_encoding = lin_encoding.unsqueeze(1)
                         # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                         # assert lin_encoding.shape[2] == self.lin_encoding_size
-                        lin_encoding = self.model.infer_linear_encoder(linear_input=linear_input)
+                        
+                        lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
 
                         final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                         

@@ -15,17 +15,13 @@ class BaseModel(nn.Module):
         """
         raise NotImplementedError("Subclasses must implement this method.")
 
-    def get_in_features(self):
-        """
-        Retrieve the number of input features.
-        """
-        raise NotImplementedError("Subclasses must implement this method.")
-
     def extract_features(self, x):
         """
         Extract features from an input image or batch of images.
         """
         raise NotImplementedError("Subclasses must implement this method.")
     
-    def forward(self, x):
-        return self.extract_features(x)
+    def forward(self, curr_rel_pos_to_target, goal_rel_pos_to_target):
+        lin_encoding = self.extract_features(curr_rel_pos_to_target, goal_rel_pos_to_target)
+        assert lin_encoding.shape[-1] == self.lin_encoding_size
+        return lin_encoding

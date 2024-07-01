@@ -7,7 +7,7 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: mlp
+  - linear_encoder: tcn       # mlp | tcn | ..
   - vision_encoder: efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: follow_in_broadcom_lab # all | go_to_the_picture
