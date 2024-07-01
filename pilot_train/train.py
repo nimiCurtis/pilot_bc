@@ -17,7 +17,7 @@ from pilot_utils.transforms import ObservationTransform
 def train(cfg:DictConfig):
     
     # Get configs    
-    training_cfg, device_cfg,  data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, log_cfg =  split_main_config(cfg)
+    training_cfg, device_cfg,  data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_model_cfg, log_cfg =  split_main_config(cfg)
 
     # Device management
     if torch.cuda.is_available() and device_cfg == 'cuda':
@@ -53,11 +53,10 @@ def train(cfg:DictConfig):
                                                                 transform=transform)
     model = Trainer.get_model(
         policy_model_cfg = policy_model_cfg,
-        encoder_model_cfg = encoder_model_cfg,
+        vision_encoder_model_cfg = vision_encoder_model_cfg,
         data_cfg = data_cfg
         )
 
-    
     ### GRADIENT CLIPPING
     if training_cfg.clipping:
         clip_max_norm = training_cfg.clipping_max_norm
@@ -70,7 +69,7 @@ def train(cfg:DictConfig):
                     grad, -1 * clip_max_norm, clip_max_norm
                 )
             )
-    
+
     optimizer = Trainer.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
     scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 

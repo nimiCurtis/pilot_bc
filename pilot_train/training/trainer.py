@@ -631,14 +631,14 @@ class Trainer:
     
     @staticmethod
     def get_model(policy_model_cfg:DictConfig,
-                encoder_model_cfg:DictConfig ,
+                vision_encoder_model_cfg:DictConfig ,
                 data_cfg:DictConfig)->nn.Module:
         """
         Constructs and returns a model based on the provided configurations.
 
         Parameters:
             policy_model_cfg (DictConfig): Configuration for the policy part of the model.
-            encoder_model_cfg (DictConfig): Configuration for the encoder part of the model.
+            vision_encoder_model_cfg (DictConfig): Configuration for the encoder part of the model.
             training_cfg (DictConfig): Training configurations.
             data_cfg (DictConfig): Data configurations.
 
@@ -648,7 +648,7 @@ class Trainer:
     
         return get_policy_model(
                 policy_model_cfg = policy_model_cfg,
-                encoder_model_cfg = encoder_model_cfg,
+                vision_encoder_model_cfg = vision_encoder_model_cfg,
                 data_cfg = data_cfg
                 )
 
