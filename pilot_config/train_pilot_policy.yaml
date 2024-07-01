@@ -15,7 +15,7 @@ defaults:
 
 # training setup
 training:
-  goal_condition: False
+  goal_condition: True
   batch_size: 16
   eval_batch_size: 16
   epochs: 70
@@ -36,7 +36,7 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
   use_ema: False # not in use
-  goal_mask_prob: 0.5
+  goal_mask_prob: 0.0
 
 device: cuda
 
@@ -73,8 +73,8 @@ data:
 
 # logging stuff
 log:
-  # project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
-  project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
+  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
+  # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
 
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
