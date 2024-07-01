@@ -3,9 +3,7 @@ mha_num_attention_heads: 4
 mha_num_attention_layers: 4
 mha_ff_dim_factor: 4
 late_fusion: False
-obs_encoding_size: 256
-lin_encoding_size: 256
-num_lin_features: 3
+
 
 
 down_dims: [64, 128, 256]

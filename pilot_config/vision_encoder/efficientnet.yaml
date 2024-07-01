@@ -2,3 +2,4 @@ name: efficientnet
 version: efficientnet-b1 # by default, this is imagenet pretrained
 in_channels: 1
 pretrained: False
+obs_encoding_size: 256

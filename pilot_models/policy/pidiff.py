@@ -7,6 +7,7 @@ import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.vision_encoder.model_registry import get_vision_encoder_model
+from pilot_models.linear_encoder.model_registry import get_linear_encoder_model
 from pilot_utils.train.train_utils import replace_bn_with_gn
 from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
@@ -19,6 +20,7 @@ class PiDiff(BaseModel):
             self,
             policy_model_cfg: DictConfig,
             vision_encoder_model_cfg: DictConfig,
+            linear_encoder_model_cfg: DictConfig,
             data_cfg: DictConfig 
     ) -> None:
         """
@@ -49,7 +51,6 @@ class PiDiff(BaseModel):
         mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
         
         
-        self.obs_encoding_size=policy_model_cfg.obs_encoding_size
         self.late_fusion=policy_model_cfg.late_fusion
         
         super(PiDiff, self).__init__(policy_model_cfg.name,
@@ -72,26 +73,27 @@ class PiDiff(BaseModel):
         self.action_dim = self.num_action_params
         self.action_horizon = data_cfg.action_horizon
         
+        # Linear encoder for time series target position
+        self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
+        
+        # Vision encoder for context images
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
-        num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
-        target_context_size = context_size if self.target_context else 0
-        num_obs_features *= (target_context_size + 1)  # (context+1)
-        
-        ## TODO: refactor! 
-        if self.target_obs_enable:
-            num_lin_features = num_obs_features + policy_model_cfg.num_lin_features #policy_model_cfg.num_target_features # x y
-        else:
-            num_lin_features = policy_model_cfg.num_lin_features
-        self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
+        # num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
+        # target_context_size = context_size if self.target_context else 0
+        # num_obs_features *= (target_context_size + 1)  # (context+1)
+
+        # ## TODO: refactor! 
+        # if self.target_obs_enable:
+        #     num_lin_features = num_obs_features + policy_model_cfg.num_lin_features #policy_model_cfg.num_target_features # x y
+        # else:
+        #     num_lin_features = policy_model_cfg.num_lin_features
+        # self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
 
         # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
 
-        # think of a better encoding
-        self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, self.lin_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
+        self.obs_encoding_size=vision_encoder_model_cfg.obs_encoding_size
 
         self.num_obs_features = self.vision_encoder.get_in_feateures()
         if self.num_obs_features != self.obs_encoding_size:
@@ -119,11 +121,6 @@ class PiDiff(BaseModel):
                 # cond_predict_scale=self.cond_predict_scale
             )
 
-        # self.noise_predictor = ConditionalUnet1D(
-        #         input_dim = 2,
-        #         global_cond_dim =self.obs_encoding_size*self.context_size,
-        #     )
-        
         ## Noise scheduler
         self.noise_scheduler_type =  policy_model_cfg.noise_scheduler.type     
         self.num_diffusion_iters_eval = policy_model_cfg.noise_scheduler.num_diffusion_iters_eval
@@ -142,7 +139,6 @@ class PiDiff(BaseModel):
         
         
         ### Goal masking
-        
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
         self.sa_layer = nn.TransformerEncoderLayer(
@@ -183,7 +179,7 @@ class PiDiff(BaseModel):
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
         return obs_encoding
-    
+
     def infer_linear_encoder(self, linear_input: torch.tensor):
             lin_encoding = self.lin_encoder(linear_input)
             if len(lin_encoding.shape) == 2:

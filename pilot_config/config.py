@@ -156,8 +156,8 @@ def get_recording_config(data_folder: str, trajectory_name: str):
     ValueError: If the configuration file is not in a supported format.
     """
     config_path = os.path.join(data_folder,
-                               trajectory_name,
-                               "metadata.json")
+                            trajectory_name,
+                            "metadata.json")
     return _get_default_config(file_path=config_path)
 
 
@@ -170,12 +170,12 @@ def split_main_config(cfg:DictConfig, rt:bool=False)->Tuple[DictConfig]:
         assert not missings, f"Missing configs: {missings}, please check the main config!"
 
         for key in cfg.keys():
-            assert key in ['training', 'data', 'log', 'vision_encoder', 'policy_model', 'datasets', 'device']\
+            assert key in ['training', 'data', 'log', 'vision_encoder', 'policy_model', 'linear_encoder', 'datasets', 'device']\
             ,f"{key} is missing in config please check the main config!"
 
-        return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.log
+        return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.linear_encoder, cfg.log
     else:
-        return cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.device
+        return cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.linear_encoder, cfg.device
 
 def get_inference_model_config(model_name: str, rt:bool=False):    
     """

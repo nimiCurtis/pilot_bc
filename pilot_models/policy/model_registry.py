@@ -11,6 +11,7 @@ model_registry = {
 
 def get_policy_model(policy_model_cfg: DictConfig,
                     vision_encoder_model_cfg: DictConfig,
+                    linear_encoder_model_cfg: DictConfig,
                     data_cfg: DictConfig):
     """
     Instantiate a policy model based on the provided configurations. The function
@@ -44,6 +45,7 @@ def get_policy_model(policy_model_cfg: DictConfig,
     model = model_class(
         policy_model_cfg=policy_model_cfg,
         vision_encoder_model_cfg=vision_encoder_model_cfg,
+        linear_encoder_model_cfg = linear_encoder_model_cfg,
         data_cfg=data_cfg
     )
     return model
