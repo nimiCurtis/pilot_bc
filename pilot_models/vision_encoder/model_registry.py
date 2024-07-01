@@ -1,6 +1,6 @@
-from pilot_models.encoder.efficientnet import EfficientNet
-from pilot_models.encoder.vit import ViT
-# from pilot_models.encoder.dino import Dino
+from pilot_models.vision_encoder.efficientnet import EfficientNet
+from pilot_models.vision_encoder.vit import ViT
+# from pilot_models.vision_encoder.dino import Dino
 
 from omegaconf import DictConfig, OmegaConf
 

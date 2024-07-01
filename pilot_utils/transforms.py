@@ -36,9 +36,6 @@ def resize_and_aspect_crop(
     resize_img = TF.to_tensor(img)
     return resize_img
 
-
-
-
 class ObservationTransform:
     def __init__(self, data_cfg,
                 img_patch_size=8, img_gaussian_noise=0.0, img_masking_prob=0.0):
@@ -68,14 +65,14 @@ class ObservationTransform:
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
 
         ### TRAIN TRANSFORMS ###
-        train_transform =  transforms.Compose([random_crop,
+        train_transform =  transforms.Compose([#random_crop,
                                             resize,
                                             # normalize,
                                             to_tensor,
                                         ])
         
         ### EVAL TRANSFORMS ###
-        eval_transform =  transforms.Compose([center_crop,
+        eval_transform =  transforms.Compose([#center_crop,
                                                     resize,
                                                     # normalize,
                                                     to_tensor,

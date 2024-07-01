@@ -170,12 +170,12 @@ def split_main_config(cfg:DictConfig, rt:bool=False)->Tuple[DictConfig]:
         assert not missings, f"Missing configs: {missings}, please check the main config!"
 
         for key in cfg.keys():
-            assert key in ['training', 'data', 'log', 'encoder_model', 'policy_model', 'datasets', 'device']\
+            assert key in ['training', 'data', 'log', 'vision_encoder', 'policy_model', 'datasets', 'device']\
             ,f"{key} is missing in config please check the main config!"
 
-        return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.log
+        return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.log
     else:
-        return cfg.data, cfg.datasets, cfg.policy_model, cfg.encoder_model, cfg.device
+        return cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.device
 
 def get_inference_model_config(model_name: str, rt:bool=False):    
     """

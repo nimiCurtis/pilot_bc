@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
-from pilot_models.encoder.model_registry import get_vision_encoder_model
+from pilot_models.vision_encoder.model_registry import get_vision_encoder_model
 from pilot_utils.train.train_utils import replace_bn_with_gn
 from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
@@ -18,7 +18,7 @@ class PiDiff(BaseModel):
     def __init__(
             self,
             policy_model_cfg: DictConfig,
-            encoder_model_cfg: DictConfig,
+            vision_encoder_model_cfg: DictConfig,
             data_cfg: DictConfig 
     ) -> None:
         """
@@ -56,7 +56,7 @@ class PiDiff(BaseModel):
                                 context_size,
                                 len_traj_pred,
                                 self.learn_angle,
-                                encoder_model_cfg.in_channels)
+                                vision_encoder_model_cfg.in_channels)
         
         # Final sequence length  = context size +
         #                           current observation (1) + encoded lin observation and target (1) 
@@ -72,7 +72,7 @@ class PiDiff(BaseModel):
         self.action_dim = self.num_action_params
         self.action_horizon = data_cfg.action_horizon
         
-        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg, data_cfg)
+        self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
         num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)

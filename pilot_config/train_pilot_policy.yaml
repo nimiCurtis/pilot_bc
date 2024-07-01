@@ -7,9 +7,10 @@ hydra:
 
 defaults:
   - _self_
-  - encoder_model: efficientnet
+  # - linear_encoder: mlp
+  - vision_encoder: efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: pilot_target_tracking # all | go_to_the_picture
+  - datasets: follow_in_broadcom_lab # all | go_to_the_picture
   # - log: defaults
 
 # training setup

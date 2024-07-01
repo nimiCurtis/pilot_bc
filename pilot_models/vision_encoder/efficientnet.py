@@ -1,5 +1,5 @@
 from efficientnet_pytorch import EfficientNet as ecn
-from pilot_models.encoder.base_model import BaseModel
+from pilot_models.vision_encoder.base_model import BaseModel
 
 class EfficientNet(BaseModel):
     # def __init__(self, version="efficientnet-b0", in_channels=3, pretrained=False) -> None:

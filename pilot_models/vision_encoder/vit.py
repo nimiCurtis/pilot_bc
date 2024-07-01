@@ -12,7 +12,7 @@ from typing import List, Dict, Optional, Tuple
 from vit_pytorch import SimpleViT
 import pdb
 
-from pilot_models.encoder.base_model import BaseModel
+from pilot_models.vision_encoder.base_model import BaseModel
 
 
 class ViT(BaseModel):

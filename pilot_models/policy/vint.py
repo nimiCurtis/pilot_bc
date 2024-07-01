@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
-from pilot_models.encoder.model_registry import get_vision_encoder_model
+from pilot_models.vision_encoder.model_registry import get_vision_encoder_model
 from pilot_models.policy.common.transformer import MultiLayerDecoder
 
 
@@ -14,7 +14,7 @@ class ViNT(BaseModel):
     def __init__(
             self,
             policy_model_cfg: DictConfig,
-            encoder_model_cfg: DictConfig,
+            vision_encoder_model_cfg: DictConfig,
             data_cfg: DictConfig 
     ) -> None:
         """
@@ -48,7 +48,7 @@ class ViNT(BaseModel):
                                 context_size,
                                 len_traj_pred,
                                 self.learn_angle,
-                                encoder_model_cfg.in_channels)
+                                vision_encoder_model_cfg.in_channels)
         
         # Final sequence length  = context size +
         #                           current observation (1) + encoded lin observation and target (1) 
@@ -63,7 +63,7 @@ class ViNT(BaseModel):
         self.action_dim = self.num_action_params
         self.action_horizon = data_cfg.action_horizon
         
-        self.vision_encoder = get_vision_encoder_model(encoder_model_cfg, data_cfg)
+        self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         # self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
         
         # Linear input encoder #TODO: modify num_obs_features to be argument
