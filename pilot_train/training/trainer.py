@@ -23,7 +23,7 @@ from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
 from pilot_utils.utils import get_delta
-from pilot_utils.train.train_utils import get_goal_mask_tensor
+from pilot_utils.train.train_utils import get_goal_mask_tensor, get_modal_dropout_mask
 from pilot_utils.transforms import ObservationTransform
 
 
@@ -122,6 +122,8 @@ class Trainer:
         self.goal_mask_prob = training_cfg.goal_mask_prob
         self.goal_mask_prob = torch.clip(torch.tensor(self.goal_mask_prob), 0, 1)
 
+        self.modal_dropout_prob = training_cfg.modal_dropout_prob
+        self.modal_dropout_prob = torch.clip(torch.tensor(self.modal_dropout_prob), 0, 1)
 
     def to_ema(self):
         # Weights of the EMA model
@@ -192,7 +194,7 @@ class Trainer:
             ) = data
             
             
-
+            B = action_label.shape[0] #batch size
             # STATE
             # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
             obs_images = torch.split(obs_image, 3, dim=1)
@@ -237,7 +239,7 @@ class Trainer:
                 # Sample a diffusion iteration for each data point
                 timesteps = torch.randint(
                     0, self.model.noise_scheduler.config.num_train_timesteps,
-                    (action_label_pred_deltas.shape[0],), device=self.device
+                    (B,), device=self.device
                 ).long()
                 
                 # Add noise to the clean images according to the noise magnitude at each diffusion iteration
@@ -250,7 +252,7 @@ class Trainer:
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
                     # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
-                    goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
+                    goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
                     # if self.target_obs_enable:
                     #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
@@ -264,10 +266,16 @@ class Trainer:
                     #     lin_encoding = lin_encoding.unsqueeze(1)
                     # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                     # assert lin_encoding.shape[2] == self.lin_encoding_size
-                    lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
-                
-                    final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-
+                    lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target)
+                    
+                    modalities = [obs_encoding_condition, lin_encoding]
+                    modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+                    
+                    fused_modalities_encoding = self.model.fuse_modalities(modalities,mask=modal_dropout_mask)
+                    
+                    goal_encoding = self.model.infer_goal(goal_rel_pos_to_target)
+                    
+                    final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                     final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
 
                 else:       # No Goal condition >> take the obs_encoding as the tokens
@@ -414,6 +422,7 @@ class Trainer:
                     action_mask,
                 ) = data
 
+                B = action_label.shape[0]
                 # STATE
                 # visual context
                 obs_images = torch.split(obs_image, 3, dim=1)
@@ -488,9 +497,17 @@ class Trainer:
                         # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                         # assert lin_encoding.shape[2] == self.lin_encoding_size
                         
-                        lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
+                        lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target)
+                    
+                        modalities = [obs_encoding_condition, lin_encoding]
+                        modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+                        
+                        fused_modalities_encoding = self.model.fuse_modalities(modalities,mask=modal_dropout_mask)
+                        
+                        goal_encoding = self.model.infer_goal(goal_rel_pos_to_target)
+                        
 
-                        final_encoded_condition = torch.cat((obs_encoding_condition, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                         
                         final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
 

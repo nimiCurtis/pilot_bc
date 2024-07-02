@@ -7,10 +7,10 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: tcn       # mlp | tcn | ..
+  - linear_encoder: mlp       # mlp | tcn | ..
   - vision_encoder: efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: follow_in_broadcom_lab # all | go_to_the_picture
+  - datasets: all # all | go_to_the_picture
   # - log: defaults
 
 # training setup
@@ -18,7 +18,7 @@ training:
   goal_condition: True
   batch_size: 16
   eval_batch_size: 16
-  epochs: 70
+  epochs: 60
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -36,7 +36,10 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
   use_ema: False # not in use
-  goal_mask_prob: 0.0
+  goal_mask_prob: 0 # 0 for no mask att all -> task specific
+                      # 1 for mask all -> task agnostic, only explore
+                      # p ~ (0,1) -> task specific with some explorations capabilities
+  modal_dropout_prob: 0.2
 
 device: cuda
 
@@ -73,8 +76,8 @@ data:
 
 # logging stuff
 log:
-  # project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
-  project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
+  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
+  # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
 
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off

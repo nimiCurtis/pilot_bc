@@ -1,6 +1,6 @@
 from typing import Tuple
 from omegaconf import DictConfig
-
+from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -75,11 +75,21 @@ class PiDiff(BaseModel):
         
         # Linear encoder for time series target position
         self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
-        
+
         # Vision encoder for context images
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
+        
+        # TODO: modify
+        num_lin_features = linear_encoder_model_cfg.num_lin_features 
+        lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
+        self.goal_encoder = nn.Sequential(nn.Linear(num_lin_features, lin_encoding_size // 4),
+                                        nn.ReLU(),
+                                        nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
+                                        nn.ReLU(),
+                                        nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+        
         # num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
         # target_context_size = context_size if self.target_context else 0
         # num_obs_features *= (target_context_size + 1)  # (context+1)
@@ -180,10 +190,11 @@ class PiDiff(BaseModel):
 
         return obs_encoding
 
-    def infer_linear_encoder(self, curr_rel_pos_to_target, goal_rel_pos_to_target):
-            lin_encoding = self.lin_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
+    def infer_linear_encoder(self, curr_rel_pos_to_target):
+            lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
             if len(lin_encoding.shape) == 2:
                 lin_encoding = lin_encoding.unsqueeze(1)
+                lin_encoding = lin_encoding.expand(-1, self.context_size + 1, -1)
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
             return lin_encoding
 
@@ -193,6 +204,13 @@ class PiDiff(BaseModel):
         
         noise_pred = self.noise_predictor(sample=sample, timestep=timestep, global_cond=obs_cond)
         return noise_pred
+    
+    def infer_goal(self,goal_rel_pos_to_target):
+        goal_encoding = self.goal_encoder(goal_rel_pos_to_target)
+        if len(goal_encoding.shape) == 2:
+                goal_encoding = goal_encoding.unsqueeze(1)
+            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+        return goal_encoding
     
     def infer_goal_masking(self,final_encoded_condition, goal_mask):
         
@@ -219,6 +237,45 @@ class PiDiff(BaseModel):
         
         return final_encoded_condition
 
+    def fuse_modalities(self, modalities: List[torch.Tensor], mask: torch.Tensor = None):
+    # Ensure the list of tensors is not empty
+        if not modalities:
+            raise ValueError("The list of modalities is empty.")
+        
+        # Check that all tensors have the same shape
+        shape = modalities[0].shape
+        # fused_tensor = torch.zeros_like(modalities[0]) # TODO: fix this
+        for tensor in modalities:
+            if tensor.shape[-1] != shape[-1]:
+                raise ValueError("All tensors must have the same features dim.")
+            # else:
+            #     fused_tensor+=tensor         # Sum all the tensors
+
+        # If mask is provided, ensure it has the correct shape
+        if mask is not None:
+            if mask.shape != (len(modalities[0]), len(modalities)):
+                raise ValueError("The mask must have the shape (batch_size, modalities_size).")
+            
+            # Apply the mask: set masked modalities to zero
+            masked_modalities = []
+            for i, modality in enumerate(modalities):
+                masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
+                masked_modalities.append(masked_modality)
+        else:
+            masked_modalities = modalities
+        
+        # Sum the (possibly masked) tensors
+        fused_tensor = torch.sum(torch.stack(masked_modalities), dim=0)
+        
+        
+        # Apply mask if provided
+        # if mask is not None:
+        #     if mask.shape != fused_tensor.shape:
+        #         raise ValueError("The mask must have the same shape as the fused tensor.")
+        #     fused_tensor = fused_tensor * mask
+    
+        return fused_tensor
+
     def forward(
             self, obs_img: torch.tensor,
             curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None,
@@ -230,7 +287,7 @@ class PiDiff(BaseModel):
         # Get the input goal mask 
         if input_goal_mask is not None:
             goal_mask = input_goal_mask.to(self.device)
-        
+
 
         # if self.goal_condition:
             # if self.target_obs_enable: # Always true for now
@@ -239,11 +296,15 @@ class PiDiff(BaseModel):
             #     # print("here")
             #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
 
-        lin_encoding = self.infer_linear_encoder(curr_rel_pos_to_target, goal_rel_pos_to_target)
+        lin_encoding = self.infer_linear_encoder(curr_rel_pos_to_target)
 
+        modalities = [obs_encoding, lin_encoding]
+        
+        fused_modalities_encoding = self.fuse_modalities(modalities)
         # lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
-    
-        final_encoded_condition = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+        goal_encoding = self.infer_goal(goal_rel_pos_to_target)
+        
+        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                 
         final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
 

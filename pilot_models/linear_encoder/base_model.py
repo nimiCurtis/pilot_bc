@@ -8,7 +8,7 @@ class BaseModel(nn.Module):
         self.name = linear_encoder_cfg.name
         self.num_lin_features = linear_encoder_cfg.num_lin_features
         self.lin_encoding_size = linear_encoder_cfg.lin_encoding_size
-
+        
     def get_model(self):
         """
         Retrieve the underlying model instance.
@@ -21,7 +21,7 @@ class BaseModel(nn.Module):
         """
         raise NotImplementedError("Subclasses must implement this method.")
     
-    def forward(self, curr_rel_pos_to_target, goal_rel_pos_to_target):
-        lin_encoding = self.extract_features(curr_rel_pos_to_target, goal_rel_pos_to_target)
+    def forward(self, curr_rel_pos_to_target):
+        lin_encoding = self.extract_features(curr_rel_pos_to_target)
         assert lin_encoding.shape[-1] == self.lin_encoding_size
         return lin_encoding

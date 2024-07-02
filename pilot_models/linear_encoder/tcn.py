@@ -7,34 +7,24 @@ from pilot_models.linear_encoder.base_model import BaseModel
 class TCN(BaseModel):
 
     def __init__(self, linear_encoder_config, data_config) -> None:
-
         super().__init__(linear_encoder_config)
 
         context_size = data_config.context_size
-        num_inputs = context_size+1
+        num_inputs = self.num_lin_features
         kernel_size = linear_encoder_config.kernel_size
         drop_out = linear_encoder_config.drop_out
-        emb_size = self.lin_encoding_size // 8
+        emb_size = self.lin_encoding_size
         self.tcn_observations = TemporalConvNet(num_inputs=num_inputs,
-                                                num_channels=[self.lin_encoding_size // 16, self.lin_encoding_size // 8],
+                                                num_channels=[emb_size // 4, emb_size],
                                                 emb_size=emb_size,
                                                 kernel_size=kernel_size,
                                                 dropout=drop_out)
 
-        self.fc_goal = nn.Sequential(nn.Linear(self.num_lin_features, self.lin_encoding_size // 8),
-                                        nn.ReLU())
-        self.fc_head = nn.Sequential(nn.Linear(self.lin_encoding_size // 4, self.lin_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
-
     def get_model(self):
         return self
 
-    def extract_features(self, curr_rel_pos_to_target, goal_rel_pos_to_target):
-        curr_obs_encoding = self.tcn_observations(curr_rel_pos_to_target)
-        goal_encoding = self.fc_goal(goal_rel_pos_to_target)
-        linear_input = torch.cat((curr_obs_encoding, goal_encoding), dim=1)
-        linear_features = self.fc_head(linear_input)
+    def extract_features(self, curr_rel_pos_to_target):
+        linear_features = self.tcn_observations(curr_rel_pos_to_target)
         return linear_features
 
 class Chomp1d(nn.Module):
@@ -78,7 +68,7 @@ class TemporalBlock(nn.Module):
         return self.relu(out + res)
 
 class TemporalConvNet(nn.Module):
-    def __init__(self, num_inputs, num_channels,emb_size, kernel_size=2, dropout=0.2):
+    def __init__(self, num_inputs, num_channels, emb_size=256, kernel_size=2, dropout=0.2):
         super(TemporalConvNet, self).__init__()
         layers = []
         num_levels = len(num_channels)
@@ -90,12 +80,10 @@ class TemporalConvNet(nn.Module):
                                      padding=(kernel_size-1) * dilation_size, dropout=dropout)]
 
         self.network = nn.Sequential(*layers)
-        self.global_pooling = nn.AdaptiveAvgPool1d(1)  # Global average pooling
-        self.fc = nn.Linear(num_channels[-1], emb_size)  # Fully connected layer to produce the embedding vector
 
     def forward(self, x):
-        x = self.network(x)
-        x = self.global_pooling(x).squeeze(-1)  # Apply global average pooling and remove the last dimension
-        x = self.fc(x)  # Get the final embedding vector
+        x = self.network(x.transpose(1, 2)).transpose(1, 2)  # Transpose to (batch, channels, seq_len) for Conv1d, then back
         return x
+
+
 
