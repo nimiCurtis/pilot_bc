@@ -8,9 +8,9 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: tcn       # mlp | tcn | ..
-  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
+  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: all # all | go_to_the_picture
+  - datasets: asher # all | go_to_the_picture
   # - log: defaults
 
 # training setup
@@ -18,11 +18,11 @@ training:
   goal_condition: True
   batch_size: 16
   eval_batch_size: 16
-  epochs: 60
+  epochs: 30
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
-  lr: 1e-5 # 5e-4 5e-5 1e-5 1e-4  
+  lr: 1e-4 # 5e-4 5e-5 1e-5 1e-4  
   optimizer: adamw
   clipping: True # Clip gradients
   clipping_max_norm: 1.
@@ -36,7 +36,7 @@ training:
   alpha: 0.5 # not in use
   beta: 10 # not in use
   use_ema: False # not in use
-  goal_mask_prob: 0.5 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
   modal_dropout_prob: 0 # 0 for no no dropout , 1 for dropout one modal anytime
@@ -57,11 +57,11 @@ data:
   context_size: 4
   distance:
     min_dist_cat: 0
-    max_dist_cat: 20
+    max_dist_cat: 10
   action:
     min_dist_cat: 3
-    max_dist_cat: 20
-  close_far_threshold: 30 # need to check 
+    max_dist_cat: 10
+  close_far_threshold: 20 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
   len_traj_pred: 8 # TODO: chang to pred_horizon
@@ -83,9 +83,9 @@ log:
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
   num_images_log: 4
-  print_log_freq: 100 # in iterations
-  eval_log_freq: 5  # in iterations
-  image_log_freq: 2 # # in iterations
+  print_log_freq: 50 # in iterations
+  eval_log_freq: 3  # in iterations
+  image_log_freq: 1 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 10
