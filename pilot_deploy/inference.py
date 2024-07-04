@@ -11,7 +11,8 @@ from pilot_utils.utils import (
     to_numpy,
     unnormalize_data,
     calculate_sin_cos,
-    tic, toc
+    tic, toc,
+    get_goal_mask_tensor
 )
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_config.config import get_inference_model_config, get_robot_config
@@ -158,7 +159,8 @@ class PilotAgent(nn.Module):
     
     def __init__(self, data_cfg: DictConfig,
                 policy_model_cfg: DictConfig,
-                encoder_model_cfg: DictConfig,
+                vision_encoder_cfg: DictConfig,
+                linear_encoder_cfg: DictConfig,
                 robot: str, wpt_i: int, frame_rate: float):
         """
         Initialize the PilotAgent instance.
@@ -177,7 +179,11 @@ class PilotAgent(nn.Module):
         self.wpt_i = wpt_i
         self.frame_rate = frame_rate
         
-        self.model = get_policy_model(policy_model_cfg=policy_model_cfg, encoder_model_cfg=encoder_model_cfg, data_cfg=data_cfg)
+        self.model = get_policy_model(policy_model_cfg=policy_model_cfg,
+                                      vision_encoder_model_cfg=vision_encoder_cfg,
+                                      linear_encoder_model_cfg=linear_encoder_cfg,
+                                      data_cfg=data_cfg)
+        
         robot_properties = get_robot_config(robot)[robot]
         self.action_stats = self._get_action_stats(robot_properties)
 
@@ -280,10 +286,15 @@ class PilotAgent(nn.Module):
         target_context_queue, goal_to_target, goal_mask = None, None, None
         
         if curr_rel_pos_to_target is not None:
+            # print(curr_rel_pos_to_target)
+            # goal_mask = get_goal_mask_tensor(curr_rel_pos_to_target).to(self.device)
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
-            goal_mask = (torch.sum(target_context_queue==torch.zeros_like(target_context_queue),axis=1) == target_context_queue.shape[1]).long()
-
+            goal_mask = torch.sum((torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[0])).long()
+            
+            # print(goal_mask)
+            
         if goal_rel_pos_to_target is not None:
+            # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
 

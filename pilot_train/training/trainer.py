@@ -22,8 +22,7 @@ from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.policy.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
-from pilot_utils.utils import get_delta
-from pilot_utils.train.train_utils import get_goal_mask_tensor, get_modal_dropout_mask
+from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout_mask
 from pilot_utils.transforms import ObservationTransform
 
 
