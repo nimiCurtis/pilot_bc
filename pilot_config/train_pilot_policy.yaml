@@ -7,8 +7,8 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: efficientnet
+  - linear_encoder: tcn       # mlp | tcn | ..
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: all # all | go_to_the_picture
   # - log: defaults
@@ -39,7 +39,8 @@ training:
   goal_mask_prob: 0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.2
+  modal_dropout_prob: 0 # 0 for no no dropout , 1 for dropout one modal anytime
+
 
 device: cuda
 

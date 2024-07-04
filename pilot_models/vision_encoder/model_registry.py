@@ -1,5 +1,6 @@
 from pilot_models.vision_encoder.efficientnet import EfficientNet
 from pilot_models.vision_encoder.vit import ViT
+from pilot_models.vision_encoder.depth_feature_extractor import DepthFeatureExtractor
 # from pilot_models.vision_encoder.dino import Dino
 
 from omegaconf import DictConfig, OmegaConf
@@ -8,6 +9,7 @@ from omegaconf import DictConfig, OmegaConf
 model_registry = {
     'efficientnet': EfficientNet,
     'vit': ViT,
+    'depth_feature_extractor': DepthFeatureExtractor,
     # Add new models here as you develop them, e.g., 'resnet': ResNet
     # 'dino': Dino
 }
