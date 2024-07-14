@@ -21,7 +21,8 @@ from pilot_utils.data.data_utils import (
 from pilot_utils.utils import (
     get_delta,
     normalize_data,
-    xy_to_d_cos_sin
+    xy_to_d_cos_sin,
+    actions_forward_pass
 )
 
 from pilot_utils.transforms import transform_images
@@ -39,27 +40,17 @@ class PilotDataset(Dataset):
         transform: transforms = None
     ):
         """
-        Main Pilot dataset class
+        Initializes the PilotDataset class.
 
         Args:
-            data_folder (string): Directory with all the image data
-            data_split_folder (string): Directory with filepaths.txt, a list of all trajectory names in the dataset split that are each seperated by a newline
-            dataset_name (string): Name of the dataset [recon, go_stanford, scand, tartandrive, etc.]
-            waypoint_spacing (int): Spacing between waypoints
-            min_dist_cat (int): Minimum distance category to use
-            max_dist_cat (int): Maximum distance category to use
-            negative_mining (bool): Whether to use negative mining from the ViNG paper (Shah et al.) (https://arxiv.org/abs/2012.09812)
-            pred_horizon (int): Length of trajectory of waypoints to predict if this is an action dataset
-            learn_angle (bool): Whether to learn the yaw of the robot at each predicted waypoint if this is an action dataset
-            context_size (int): Number of previous observations to use as context
-            context_type (str): Whether to use temporal, randomized, or randomized temporal context
-            end_slack (int): Number of timesteps to ignore at the end of the trajectory
-            goals_per_obs (int): Number of goals to sample per observation
-            normalize (bool): Whether to normalize the distances or actions
-            goal_type (str): What data type to use for the goal. The only one supported is "image" for now.
+            data_cfg (DictConfig): Configuration for the data, including goal conditions, image size, and normalization parameters.
+            datasets_cfg (DictConfig): Configuration for the datasets, including data folders and maximum depth.
+            robot_dataset_cfg (DictConfig): Configuration specific to the robot dataset, including waypoint spacing and negative mining options.
+            dataset_name (str): Name of the dataset (e.g., 'recon', 'go_stanford', 'scand', 'tartandrive').
+            data_split_type (str): Type of data split (e.g., 'train', 'test', 'val').
+            transform (transforms, optional): Transformations to apply to the data. Default is None.
         """
-        
-        
+
         # Robot cfg
         data_split_folder=robot_dataset_cfg[data_split_type]
         self.waypoint_spacing=robot_dataset_cfg.waypoint_spacing
@@ -81,7 +72,7 @@ class PilotDataset(Dataset):
         self.learn_angle=data_cfg.learn_angle
         
         if self.learn_angle:
-            self.num_action_params = 3
+            self.num_action_params = 4
         else:
             self.num_action_params = 2
         self.context_size=data_cfg.context_size
@@ -100,6 +91,7 @@ class PilotDataset(Dataset):
         )
         self.min_dist_cat = self.distance_categories[0]
         self.max_dist_cat = self.distance_categories[-1]
+        ## I dont think it has a meaning
         if self.negative_mining:
             self.distance_categories.append(-1)
         self.min_action_distance=data_cfg.action.min_dist_cat
@@ -137,18 +129,34 @@ class PilotDataset(Dataset):
         self._build_caches()
 
     def __getstate__(self):
+        """
+        Prepares the object's state for serialization.
+
+        Returns:
+            dict: The state of the object.
+        """
         state = self.__dict__.copy() # Make a copy of the object's dictionary.
         state["_image_cache"] = None # Explicitly remove the image cache from the serialized state.
         return state 
     
     def __setstate__(self, state):
+        """
+        Restores the object's state from serialization.
+
+        Args:
+            state (dict): The state to restore.
+        """
         self.__dict__ = state # Restore the serialized state.
         self._build_caches() # Rebuild the image cache after the object has been deserialized.
 
     def _build_caches(self, use_tqdm: bool = True):
         """
-        Build a cache of images for faster loading using LMDB
+        Builds a cache of images for faster loading using LMDB.
+
+        Args:
+            use_tqdm (bool): Whether to use tqdm for progress visualization. Default is True.
         """
+        
         cache_filename = os.path.join(
             self.data_split_folder,
             f"dataset_{self.dataset_name}_context_{self.img_type}.lmdb",
@@ -184,39 +192,58 @@ class PilotDataset(Dataset):
 
     def _build_index(self, use_tqdm: bool = False):
         """
-        Build an index consisting of tuples (trajectory name, time, max goal distance)
+        Builds an index consisting of tuples (trajectory name, time, max goal distance).
+
+        Args:
+            use_tqdm (bool): Whether to use tqdm for progress visualization. Default is False.
+
+        Returns:
+            tuple: Two lists, one for samples index and one for goals index.
         """
+        
         samples_index = []
         goals_index = []
 
+        # Iterate through each trajectory name with optional progress visualization using tqdm
         for traj_name in tqdm.tqdm(self.traj_names, disable=not use_tqdm, dynamic_ncols=True):
+            # Retrieve trajectory data and properties for the current trajectory
             traj_data = self._get_trajectory(traj_name)
-            properties = self._get_properties(traj_name) ## added
+            properties = self._get_properties(traj_name)
             traj_len = len(traj_data["position"])
             
-            # Check robot and target data length is equal
+            # Check that the lengths of robot and target data are equal if goal_condition is true
             if self.goal_condition:
                 target_traj_data = self._get_trajectory(traj_name, target=True)
                 target_traj_len = len(target_traj_data)
-                assert traj_len == target_traj_len, "robot and traget data length not equal"
+                assert traj_len == target_traj_len, "Robot and target data lengths are not equal"
 
-
+            # Add all possible goal times for the current trajectory to the goals index
             for goal_time in range(0, traj_len):
                 goals_index.append((traj_name, goal_time))
 
+            # Define the range for current times based on context size, end slack, and prediction horizon
             begin_time = self.context_size * self.waypoint_spacing
             end_time = traj_len - self.end_slack - self.pred_horizon * self.waypoint_spacing
-            for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat*self.waypoint_spacing, traj_len - curr_time - 1) # keep max distance in range 
 
+            # Add samples to the samples index with their respective max goal distances
+            for curr_time in range(begin_time, end_time):
+                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1)  # Keep max distance in range
                 samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
+        # Return the constructed samples index and goals index
         return samples_index, goals_index
 
     def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
         """
-        Sample a goal from the future in the same trajectory.
-        Returns: (trajectory_name, goal_time, goal_is_negative)
+        Samples a goal from the future in the same trajectory.
+
+        Args:
+            trajectory_name (str): Name of the trajectory.
+            curr_time (int): Current time step.
+            max_goal_dist (int): Maximum goal distance.
+
+        Returns:
+            tuple: The trajectory name, goal time, and a boolean indicating if the goal is negative.
         """
         
         goal_offset = np.random.randint(0, (max_goal_dist/self.waypoint_spacing) + 1)
@@ -229,8 +256,12 @@ class PilotDataset(Dataset):
 
     def _sample_negative(self):
         """
-        Sample a goal from a (likely) different trajectory.
+        Samples a goal from a (likely) different trajectory.
+
+        Returns:
+            tuple: The trajectory name and goal time.
         """
+        
         return self.goals_index[np.random.randint(0, len(self.goals_index))]
 
     def _load_index(self) -> None:
@@ -252,6 +283,17 @@ class PilotDataset(Dataset):
                 json.dump((self.index_to_data, self.goals_index), f)
 
     def _load_image(self, trajectory_name, time):
+        """
+        Loads an image from the cache.
+
+        Args:
+            trajectory_name (str): Name of the trajectory.
+            time (int): Time step.
+
+        Returns:
+            Image: The loaded image.
+        """
+        
         image_path = get_data_path(self.data_folder, self.img_type, trajectory_name, time)
 
         try:
@@ -265,55 +307,81 @@ class PilotDataset(Dataset):
 
         
     def _compute_actions(self, traj_data, curr_time, goal_time, action_stats):
+        """
+        Computes the actions required to reach the goal from the current trajectory data.
+
+        Args:
+            traj_data (dict): Trajectory data.
+            curr_time (int): Current time step.
+            goal_time (int): Goal time step.
+            action_stats (dict): Action statistics for normalization.
+
+        Returns:
+            tuple: Normalized actions and normalized goal position.
+        """
+        
+        # Define the start and end indices for slicing the trajectory data
         start_index = curr_time
         end_index = curr_time + self.pred_horizon * self.waypoint_spacing + 1
+
+        # Extract yaw and position data from the trajectory
         yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
         positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing])
+
+        # Get the goal position, ensuring it does not exceed the length of the trajectory
         goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
 
+        # Handle the case where yaw has an extra dimension
         if len(yaw.shape) == 2:
             yaw = yaw.squeeze(1)
 
+        # Ensure yaw and position arrays have the correct shape by padding if necessary
         if yaw.shape != (self.pred_horizon + 1,):
             const_len = self.pred_horizon + 1 - yaw.shape[0]
             yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
             positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
 
+        # Assertions to ensure the shapes of yaw and positions are correct
         assert yaw.shape == (self.pred_horizon + 1,), f"{yaw.shape} and {(self.pred_horizon + 1,)} should be equal"
         assert positions.shape == (self.pred_horizon + 1, 2), f"{positions.shape} and {(self.pred_horizon + 1, 2)} should be equal"
 
+        # Convert positions and goal to local coordinates
         waypoints = to_local_coords(positions, positions[0], yaw[0])
-        goal_in_local = to_local_coords(goal_pos, positions[0],yaw[0])
-        
+        goal_in_local = to_local_coords(goal_pos, positions[0], yaw[0])
+
+        # Ensure waypoints have the correct shape
         assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
 
         if self.learn_angle:
-            # shape reduce from self.pred_horizon + 1 to self.pred_horizon
-            yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw # already a cumsum
-            actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1) 
+            # Compute relative yaw changes and concatenate with waypoints
+            yaw = yaw[1:] - yaw[0]  # yaw is relative to the initial yaw
+            actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1)
         else:
             actions = waypoints[1:]
 
-        if self.normalize: 
-            #Ours
-            ## only for pos
-            actions_deltas = get_delta(actions[:, :2])
-            normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
-            actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
+        if self.normalize:
+            # Normalize the actions based on provided action statistics
+            normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
 
-            # goal in local is already the delta from the current pos
-            normalized_goal_delta = normalize_data(goal_in_local, action_stats['pos'])
-            goal_pos = normalized_goal_delta
+            # Normalize the goal position in local coordinates
+            normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
 
-            #VinT
-            #actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
-            #goal_pos = self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
+        # Assertion to ensure the shape of normalized actions is correct
+        assert normalized_actions.shape == (self.pred_horizon, self.num_action_params), f"{normalized_actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 
-        assert actions.shape == (self.pred_horizon, self.num_action_params), f"{actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
-
-        return actions, goal_pos
+        return normalized_actions, normalized_goal_pos
     
     def _get_trajectory(self, trajectory_name, target:bool = False):
+        """
+        Retrieves trajectory data from the cache or loads it from disk.
+
+        Args:
+            trajectory_name (str): Name of the trajectory.
+            target (bool): Whether to load target trajectory data. Default is False.
+
+        Returns:
+            dict: Trajectory data.
+        """
         
         if not target:
             if trajectory_name in self.trajectory_cache:
@@ -335,29 +403,35 @@ class PilotDataset(Dataset):
                 return traj_data
 
     def __len__(self) -> int:
+        """
+        Returns the number of samples in the dataset.
+
+        Returns:
+            int: Number of samples.
+        """
         return len(self.index_to_data)
 
     def __getitem__(self, i: int) -> Tuple[torch.Tensor]:
         """
+        Retrieves the i-th sample from the dataset.
+
         Args:
-            i (int): index to ith datapoint
+            i (int): Index of the sample to retrieve.
+
         Returns:
-            Tuple of tensors containing the context, observation, goal, transformed context, transformed observation, transformed goal, distance label, and action label
-                obs_image (torch.Tensor): tensor of shape [3, H, W] containing the image of the robot's observation
-                goal_image (torch.Tensor): tensor of shape [3, H, W] containing the subgoal image 
-                action_label (torch.Tensor): tensor of shape (5, 2) or (5, 4) (if training with angle) containing the action labels from the observation to the goal
-                which_dataset (torch.Tensor): index of the datapoint in the dataset [for identifying the dataset for visualization when using multiple datasets]
+            tuple: A tuple containing the context, observation, goal, transformed context, transformed observation, transformed goal, distance label, and action label.
         """
 
-        # self.index_to_data[i] = (traj_name, curr_time, max_goal_distance)
+        # Retrieve the current trajectory name, properties, current time, and max goal distance from the index
         f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
-        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
-        # goal is negative -> probably a goal pos from another trajectory. 
 
-        # Load images
+        # Sample a goal from the current trajectory or a different trajectory
+        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
+
+        # Initialize the context list
         context = []
         if self.context_type == "temporal":
-            # sample the last self.context_size times from interval [0, curr_time)
+            # Generate a list of context times based on the current time and context size
             context_times = list(
                 range(
                     curr_time + -self.context_size * self.waypoint_spacing,
@@ -365,117 +439,97 @@ class PilotDataset(Dataset):
                     self.waypoint_spacing,
                 )
             )
-            
-            # context_times = list(
-            #     range(
-            #         curr_time + -self.context_size,
-            #         curr_time + 1,
-            #         1,
-            #     )
-            # )
-            
             context = [(f_curr, t) for t in context_times]
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
 
-        # Load context images
-        obs_image = [
-                self._load_image(f, t) for f, t in context
-            ]
-        
-        # Transform
+        # Load images for each context time step
+        obs_image = [self._load_image(f, t) for f, t in context]
+
+        # Apply transformations to the context images
         obs_image = transform_images(obs_image, self.transform)
 
-        # Load other trajectory data
+        # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
         curr_traj_len = len(curr_traj_data["position"])
         assert curr_time < curr_traj_len, f"{curr_time} >= {curr_traj_len}"
 
-        # Compute actions
-        action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
-        
-        actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
-        #actions = waypoints, goal_pos = the position at the goal woth relate to current position
-        
-        
+        # Compute the actions and normalized goal position
+        action_stats = self._get_action_stats(curr_properties, self.waypoint_spacing)
+        normalized_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
+
         if self.goal_condition:
-            # Load current position rel to target. use f_curr and curr_time.
-
+            # Load the current and goal target trajectory data
             curr_target_traj_data = self._get_trajectory(f_curr, target=True)
-
-            # Load goal position relative to target
-
             goal_target_traj_data = self._get_trajectory(f_goal, target=True)
             goal_target_traj_data_len = len(goal_target_traj_data)
-            # goal_time = min(goal_time, goal_target_traj_data_len-1)
-            assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2]) # Takes the [x,y] 
+            assert goal_time < goal_target_traj_data_len, f"{goal_time} and {goal_target_traj_data_len}"
+
+            # Get the goal position relative to the target
+            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2])
             if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
-                goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target) 
-                goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min':0.1,'max':self.max_depth/1000})
-            else: 
+                goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
+                goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+            else:
                 goal_rel_pos_to_target = np.zeros((3,))
-                
-            # Take context of target rel pos or only the recent
+
             if self.target_context:
+                # Get the context of target positions relative to the current trajectory
                 np_curr_rel_pos_to_target = np.array([
                     curr_target_traj_data[t]["position"][:2] for f, t in context
                 ])
+            else:
+                # For now, this is not in use
+                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
 
-                # np_curr_rel_pos_to_target =  np_curr_rel_pos_to_target[-1] - np_curr_rel_pos_to_target                
-
-            else: #NOT int use right now # TODO: modify
-                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2]) # Takes the [x,y] 
-
-            mask = np.sum(np_curr_rel_pos_to_target==np.zeros((2,)),axis=1) == 2
-            np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0],3))
+            mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
+            np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0], 3))
             np_curr_rel_pos_in_d_theta[~mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~mask])
-            np_curr_rel_pos_in_d_theta[~mask,0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask,0], stats={'min':0.1,'max':self.max_depth/1000}) # max_depth in mm -> meters
+            np_curr_rel_pos_in_d_theta[~mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
 
-            # Cat and tensor the context of relative positions to target
-            # curr_rel_pos_to_target = torch.flatten(torch.as_tensor(np_curr_rel_pos_in_d_theta))
+            # Convert the context of relative positions to target into a tensor
             curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
         else:
-            curr_rel_pos_to_target = np.zeros_like((actions.shape[0],3,0))
-            goal_rel_pos_to_target = np.array([0,0,0])
+            # Not in use
+            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], 3, 0))
+            goal_rel_pos_to_target = np.array([0, 0, 0])
 
-        # Compute timesteps distances
+        # Compute the timestep distances
         if goal_is_negative:
             distance = self.max_dist_cat
         else:
             distance = (goal_time - curr_time) // self.waypoint_spacing
             assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}, target_traj_len = {goal_target_traj_data_len}"
 
-        actions_torch = torch.as_tensor(actions, dtype=torch.float32)
-        if self.learn_angle:
-            actions_torch = calculate_sin_cos(actions_torch)
-
-        #TODO: check and modify
+        # Determine if the action should be masked
         action_mask = (
             (distance < self.max_action_distance) and
             (distance > self.min_action_distance) and
             (not goal_is_negative)
         )
 
-        # TODO: modify the return 
+        # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            # STATE : composed from context + current position of the target with relate to the camera
-            torch.as_tensor(obs_image, dtype=torch.float32), # [C*(context+1),H,W]
-            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
-            # GOAL : composed only from the + "desired" position of the target with relate to the camera
-            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
-            # ACTION: composed from the requiered normalized waypoints to reach the desired goal
-            actions_torch,
-            
-            # OTHER: TODO: check what is necassery
-            torch.as_tensor(goal_pos, dtype=torch.float32), # goal_robot_pos_in_local_coords
-            torch.as_tensor(self.dataset_index, dtype=torch.int64), 
+            torch.as_tensor(obs_image, dtype=torch.float32),  # [C*(context+1),H,W]
+            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(normalized_actions, dtype=torch.float32),
+            torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
+            torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
         )
 
-    ## added
     def _get_properties(self,trajectory_name):
+        """
+        Retrieves the properties of the robot for the given trajectory.
 
+        Args:
+            trajectory_name (str): Name of the trajectory.
+
+        Returns:
+            dict: Robot properties.
+        """
+        
         recording_config = get_recording_config(data_folder=self.data_folder,
                                                 trajectory_name=trajectory_name)
         robot = recording_config['demonstrator']
@@ -492,8 +546,17 @@ class PilotDataset(Dataset):
             'max_ang_vel': ang_vel_lim
         }
 
-    ## added
     def _get_action_stats(self,properties, waypoint_spacing):
+        """
+        Retrieves action statistics based on robot properties and waypoint spacing.
+
+        Args:
+            properties (dict): Robot properties.
+            waypoint_spacing (int): Spacing between waypoints.
+
+        Returns:
+            dict: Action statistics.
+        """
         
         frame_rate = properties['frame_rate']
         lin_vel_lim = properties['max_lin_vel']

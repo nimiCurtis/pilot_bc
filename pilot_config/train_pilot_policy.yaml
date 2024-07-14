@@ -56,11 +56,10 @@ data:
   context_size: 4
   distance:
     min_dist_cat: 0
-    max_dist_cat: 10
+    max_dist_cat: 12
   action:
     min_dist_cat: 3
     max_dist_cat: 10
-  close_far_threshold: 20 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
   # len_traj_pred: 8 # TODO: chang to pred_horizon

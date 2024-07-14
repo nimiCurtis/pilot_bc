@@ -114,6 +114,22 @@ def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.0):
     
     return goal_mask
 
+def actions_forward_pass(actions,action_stats, learn_angle):
+    
+    normalized_actions = actions.copy()
+    
+    # Take the delta actions
+    actions_deltas = get_delta(actions[:, :2])
+    
+    # Normalize based on stats
+    normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
+    
+    # Cumsum for normalized trajectory of actions
+    normalized_actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
+    if learn_angle:
+        normalized_actions = calculate_sin_cos(normalized_actions)
+
+    return normalized_actions
 # def get_modal_dropout_mask(batch_size: int, modalities_size: int,curr_rel_pos_to_target:torch.tensor, modal_dropout_prob: float):
     
 #     # modal_mask = (torch.sum(torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=-1),axis=1) == curr_rel_pos_to_target.shape[1]).long()
