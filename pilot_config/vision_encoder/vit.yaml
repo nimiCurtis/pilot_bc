@@ -1,8 +1,6 @@
 
 name: vit
-obs_encoding_size: 256
-# context_size: int = 5,
-# image_size: int = 128,
+vision_encoding_size: 256
 patch_size: 16
 mha_num_attention_heads: 4
 mha_num_attention_layers: 4

@@ -75,7 +75,6 @@ def train(cfg:DictConfig):
     scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 
 
-
     ### TODO: add the load run in the Trainer class
     # if "load_run" in config:
     #     load_project_folder = os.path.join("logs", config["load_run"])

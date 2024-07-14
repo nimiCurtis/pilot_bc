@@ -1,5 +1,6 @@
 name: tcn
-num_lin_features: 3
-lin_encoding_size: 256
+# num_lin_features: 3
+lin_features_dim: 3
+lin_encoding_size: 256 
 kernel_size: 2
 drop_out: 0.2

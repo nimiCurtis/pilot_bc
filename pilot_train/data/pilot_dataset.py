@@ -49,7 +49,7 @@ class PilotDataset(Dataset):
             min_dist_cat (int): Minimum distance category to use
             max_dist_cat (int): Maximum distance category to use
             negative_mining (bool): Whether to use negative mining from the ViNG paper (Shah et al.) (https://arxiv.org/abs/2012.09812)
-            len_traj_pred (int): Length of trajectory of waypoints to predict if this is an action dataset
+            pred_horizon (int): Length of trajectory of waypoints to predict if this is an action dataset
             learn_angle (bool): Whether to learn the yaw of the robot at each predicted waypoint if this is an action dataset
             context_size (int): Number of previous observations to use as context
             context_type (str): Whether to use temporal, randomized, or randomized temporal context
@@ -76,7 +76,7 @@ class PilotDataset(Dataset):
         self.goal_type=data_cfg.goal_type
         self.obs_type = data_cfg.obs_type
         self.img_type = data_cfg.img_type 
-        self.len_traj_pred=data_cfg.len_traj_pred
+        self.pred_horizon=data_cfg.pred_horizon
         self.target_context=data_cfg.target_context
         self.learn_angle=data_cfg.learn_angle
         
@@ -205,7 +205,7 @@ class PilotDataset(Dataset):
                 goals_index.append((traj_name, goal_time))
 
             begin_time = self.context_size * self.waypoint_spacing
-            end_time = traj_len - self.end_slack - self.len_traj_pred * self.waypoint_spacing
+            end_time = traj_len - self.end_slack - self.pred_horizon * self.waypoint_spacing
             for curr_time in range(begin_time, end_time):
                 max_goal_distance = min(self.max_dist_cat*self.waypoint_spacing, traj_len - curr_time - 1) # keep max distance in range 
 
@@ -266,7 +266,7 @@ class PilotDataset(Dataset):
         
     def _compute_actions(self, traj_data, curr_time, goal_time, action_stats):
         start_index = curr_time
-        end_index = curr_time + self.len_traj_pred * self.waypoint_spacing + 1
+        end_index = curr_time + self.pred_horizon * self.waypoint_spacing + 1
         yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
         positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing])
         goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
@@ -274,21 +274,21 @@ class PilotDataset(Dataset):
         if len(yaw.shape) == 2:
             yaw = yaw.squeeze(1)
 
-        if yaw.shape != (self.len_traj_pred + 1,):
-            const_len = self.len_traj_pred + 1 - yaw.shape[0]
+        if yaw.shape != (self.pred_horizon + 1,):
+            const_len = self.pred_horizon + 1 - yaw.shape[0]
             yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
             positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
 
-        assert yaw.shape == (self.len_traj_pred + 1,), f"{yaw.shape} and {(self.len_traj_pred + 1,)} should be equal"
-        assert positions.shape == (self.len_traj_pred + 1, 2), f"{positions.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
+        assert yaw.shape == (self.pred_horizon + 1,), f"{yaw.shape} and {(self.pred_horizon + 1,)} should be equal"
+        assert positions.shape == (self.pred_horizon + 1, 2), f"{positions.shape} and {(self.pred_horizon + 1, 2)} should be equal"
 
         waypoints = to_local_coords(positions, positions[0], yaw[0])
         goal_in_local = to_local_coords(goal_pos, positions[0],yaw[0])
         
-        assert waypoints.shape == (self.len_traj_pred + 1, 2), f"{waypoints.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
+        assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
 
         if self.learn_angle:
-            # shape reduce from self.len_traj_pred + 1 to self.len_traj_pred
+            # shape reduce from self.pred_horizon + 1 to self.pred_horizon
             yaw = yaw[1:] - yaw[0] # yaw is relative to the current yaw # already a cumsum
             actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1) 
         else:
@@ -309,7 +309,7 @@ class PilotDataset(Dataset):
             #actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing # TODO: depend on data
             #goal_pos = self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
 
-        assert actions.shape == (self.len_traj_pred, self.num_action_params), f"{actions.shape} and {(self.len_traj_pred, self.num_action_params)} should be equal"
+        assert actions.shape == (self.pred_horizon, self.num_action_params), f"{actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 
         return actions, goal_pos
     

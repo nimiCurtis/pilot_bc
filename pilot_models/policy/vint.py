@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
-from pilot_models.vision_encoder.model_registry import get_vision_encoder_model
+from pilot_models.model_registry import get_vision_encoder_model
 from pilot_models.policy.common.transformer import MultiLayerDecoder
 
 

@@ -8,8 +8,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
-import torchvision.transforms as transforms
-from typing import Callable
+import torchvision.transforms.v2 as transforms
 
 # Check vectorized operations
 def transform_images(pil_imgs: List[PILImage.Image],
@@ -24,10 +23,6 @@ def transform_images(pil_imgs: List[PILImage.Image],
         transf_img = transform(pil_img)
         transf_imgs.append(transf_img)
     return torch.cat(transf_imgs)
-
-# obs_image = torch.cat([
-        #         self.transform(self._load_image(f, t)) for f, t in context
-        #     ])
 
 def resize_and_aspect_crop(
     img: Image.Image, image_resize_size: Tuple[int, int], aspect_ratio: float = IMAGE_ASPECT_RATIO
@@ -51,31 +46,56 @@ class ObservationTransform:
                         "test": eval_transform}
 
     def _define_transforms(self):
+
+        to_image = transforms.ToImage()
+        to_uint8 = transforms.ToDtype(torch.uint8,scale=True)
+        to_float32 = transforms.ToDtype(torch.float32,scale=True)
+        resize = transforms.Resize((self.width, self.height),
+                                interpolation=transforms.InterpolationMode.BILINEAR,
+                                antialias=True)
+        
+        random_erasing = transforms.RandomErasing(p=0.1,
+                                                scale=(0.02, 0.02),
+                                                ratio=(1., 2.))
+        random_erasing = transforms.RandomApply(transforms=[random_erasing], p=0.1)
         
         random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
         center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
-        resize = transforms.Resize((self.width, self.height), interpolation=transforms.InterpolationMode.BILINEAR)
         
-        #gaussian_noise = GaussianNoise(self.img_gaussian_noise)
-        #patch_masks = MaskImage(img_patch_size=16, img_masking_prob=0.3)
+        random_mask = MaskImage(img_patch_size=16, img_masking_prob=0.015)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
         
-        to_tensor = transforms.ToTensor()
+        random_rotation = transforms.RandomRotation(degrees=3)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.1)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
 
         ### TRAIN TRANSFORMS ###
-        train_transform =  transforms.Compose([#random_crop,
+        train_transform =  transforms.Compose([
+                                            ## start of pipline
+                                            to_image,
+                                            to_uint8,
                                             resize,
-                                            # normalize,
-                                            to_tensor,
+                                            ## main transforms
+                                            # TODO: try to run with transforms
+                                            # random_erasing,
+                                            # random_rotation,
+                                            # random_mask,
+                                            # end of pipeline
+                                            to_float32,
+                                            normalize
                                         ])
         
         ### EVAL TRANSFORMS ###
-        eval_transform =  transforms.Compose([#center_crop,
-                                                    resize,
-                                                    # normalize,
-                                                    to_tensor,
+        eval_transform =  transforms.Compose([
+                                            ## start of pipline
+                                            to_image,
+                                            to_uint8,
+                                            resize,
+                                            ## end of pipeline
+                                            to_float32,
+                                            normalize
                                                 ])
 
         return train_transform, eval_transform
@@ -139,15 +159,21 @@ class GaussianNoise(nn.Module):
         noise = torch.randn(img.size()) * self.stddev
         return img + noise
 
-class MaskImage:
+# Custom MaskImage transform for v2
+class MaskImage(nn.Module):
     def __init__(self, img_patch_size: int, img_masking_prob: float):
+        super(MaskImage, self).__init__()
         self.img_patch_size = img_patch_size
         self.img_masking_prob = img_masking_prob
 
-    def __call__(self, x):
-        img_patch = x.unfold(1, self.img_patch_size, self.img_patch_size).unfold(2, self.img_patch_size, self.img_patch_size)
-        mask = torch.rand((x.shape[0], x.shape[1] // self.img_patch_size, x.shape[2] // self.img_patch_size)) < self.img_masking_prob
-        mask = mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1).expand_as(img_patch)
-        x = x.clone()
-        x.unfold(1, self.img_patch_size, self.img_patch_size).unfold(2, self.img_patch_size, self.img_patch_size)[mask] = 0
-        return x.contiguous()
+    def forward(self, x):
+        if x.ndim == 3 and x.shape[0] == 1:  # Ensure the input is (1, H, W)
+            x = x.squeeze(0)  # Remove the channel dimension for unfolding
+            img_patch = x.unfold(0, self.img_patch_size, self.img_patch_size).unfold(1, self.img_patch_size, self.img_patch_size)
+            mask = torch.rand((x.shape[0] // self.img_patch_size, x.shape[1] // self.img_patch_size)) < self.img_masking_prob
+            mask = mask.unsqueeze(-1).unsqueeze(-1).expand_as(img_patch)
+            x = x.clone()
+            x.unfold(0, self.img_patch_size, self.img_patch_size).unfold(1, self.img_patch_size, self.img_patch_size)[mask] = 0
+            x = x.contiguous()
+            x = x.unsqueeze(0)  # Add the channel dimension back
+        return x

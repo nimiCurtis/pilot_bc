@@ -1,16 +1,14 @@
 import torch
 import torch.nn as nn
 from prettytable import PrettyTable
-
-from typing import List, Dict, Optional, Tuple
-
+from typing import Optional
 
 class BaseModel(nn.Module):
     def __init__(
         self,
         name: str,
         context_size: int = 5,
-        len_traj_pred: Optional[int] = 5,
+        pred_horizon: Optional[int] = 5,
         learn_angle: Optional[bool] = True,
         in_channels: int = 1,
     ) -> None:
@@ -18,19 +16,18 @@ class BaseModel(nn.Module):
         Base Model main class
         Args:
             context_size (int): how many previous observations to used for context
-            len_traj_pred (int): how many waypoints to predict in the future
+            pred_horizon (int): how many waypoints to predict in the future
             learn_angle (bool): whether to predict the yaw of the robot
         """
         super(BaseModel, self).__init__()
         self.name = name
         self.context_size = context_size
         self.learn_angle = learn_angle
-        self.len_trajectory_pred = len_traj_pred
+        self.pred_horizon = pred_horizon
         if self.learn_angle:
-            self.num_action_params = 4  # last two dims are the cos and sin of the angle
+            self.action_dim = 4  # last two dims are the cos and sin of the angle
         else:
-            self.num_action_params = 2
-        
+            self.action_dim = 2
         self.in_channels = in_channels
 
     def flatten(self, z: torch.Tensor) -> torch.Tensor:
@@ -53,28 +50,12 @@ class BaseModel(nn.Module):
     def to(self, device):
             self.device = device  # Update the device attribute
             return super(BaseModel, self).to(device)
-    
-    
+
     def forward(
-        self, obs_img: torch.tensor, goal_img: torch.tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        self, func_name, **kwargs
+    ):
         """
-        Forward pass of the model
-        Args:
-            obs_img (torch.Tensor): batch of observations
-            goal_img (torch.Tensor): batch of goals
-        Returns:
-            dist_pred (torch.Tensor): predicted distance to goal
-            action_pred (torch.Tensor): predicted action
+
         """
         raise NotImplementedError
     
-    def _compute_losses(
-        self,
-            dist_label: torch.Tensor,
-            action_label: torch.Tensor,
-            dist_pred: torch.Tensor,
-            action_pred: torch.Tensor,
-            action_mask: torch.Tensor = None,
-    ):
-        raise NotImplementedError

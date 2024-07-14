@@ -6,7 +6,7 @@ class BaseModel(nn.Module):
     def __init__(self, linear_encoder_cfg):
         super().__init__()
         self.name = linear_encoder_cfg.name
-        self.num_lin_features = linear_encoder_cfg.num_lin_features
+        self.lin_features_dim = linear_encoder_cfg.lin_features_dim
         self.lin_encoding_size = linear_encoder_cfg.lin_encoding_size
         
     def get_model(self):

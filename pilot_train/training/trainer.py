@@ -20,9 +20,11 @@ from diffusers.training_utils import EMAModel
 
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
-from pilot_models.policy.model_registry import get_policy_model
+from pilot_models.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
 from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout_mask
+from pilot_utils.train.train_utils import compute_losses, compute_noise_losses
+
 from pilot_utils.transforms import ObservationTransform
 
 
@@ -88,23 +90,17 @@ class Trainer:
         self.eval_fraction=log_cfg.eval_fraction
         self.save_model_freq = log_cfg.save_model_freq 
         
-        # Training config
-        self.alpha=training_cfg.alpha if training_cfg.goal_condition else 0
-        self.beta=training_cfg.beta
-        
+        # Training and Model config
         self.current_epoch=training_cfg.current_epoch
         self.epochs=training_cfg.epochs
         
         # Data config
+        self.goal_condition = data_cfg.goal_condition
+        self.target_obs_enable = data_cfg.target_observation_enable
         self.normalized=data_cfg.normalize
         self.learn_angle=data_cfg.learn_angle
         self.action_horizon = data_cfg.action_horizon
-        
-        
-        self.goal_condition = model.goal_condition
-        self.target_obs_enable = model.target_obs_enable
-        
-        assert 0 <= self.alpha <= 1
+
         self.latest_path = os.path.join(self.project_log_folder, f"latest.pth") # TODO: change
 
         self.best_loss = float('inf')
@@ -246,7 +242,7 @@ class Trainer:
                     action_label_pred_deltas, noise, timesteps)
 
                 # Predict the noise residual
-                obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
+                obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
                 
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
@@ -265,34 +261,46 @@ class Trainer:
                     #     lin_encoding = lin_encoding.unsqueeze(1)
                     # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                     # assert lin_encoding.shape[2] == self.lin_encoding_size
-                    lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target)
+                    lin_encoding = self.model("linear_encoder",
+                                            curr_rel_pos_to_target=curr_rel_pos_to_target)
                     
                     modalities = [obs_encoding_condition, lin_encoding]
                     modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                     
-                    fused_modalities_encoding = self.model.fuse_modalities(modalities,mask=modal_dropout_mask)
+                    fused_modalities_encoding = self.model("fuse_modalities",
+                                                        modalities=modalities,
+                                                        mask=modal_dropout_mask)
                     
-                    goal_encoding = self.model.infer_goal(goal_rel_pos_to_target)
+                    goal_encoding = self.model("goal_encoder",
+                                            goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
                     final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                    final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
+                    final_encoded_condition = self.model("goal_masking",
+                                                        final_encoded_condition=final_encoded_condition,
+                                                        goal_mask = goal_mask)
 
                 else:       # No Goal condition >> take the obs_encoding as the tokens
                     goal_mask = None
                     final_encoded_condition = obs_encoding_condition
+
+                noise_pred = self.model("noise_pred",
+                                        noisy_action=noisy_action,
+                                        timesteps=timesteps,
+                                        final_encoded_condition=final_encoded_condition)
                 
-                
-                noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, final_encoded_condition)
-                losses = self.model._compute_noise_losses(noise_pred=noise_pred,
+                losses = compute_noise_losses(noise_pred=noise_pred,
                         noise=noise,
                         action_mask=action_mask)
                 loss = losses["diffusion_noise_loss"]
                 
             else:
-                model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                model_outputs = self.model("action_pred",
+                                        obs_img=obs_image,
+                                        curr_rel_pos_to_target=curr_rel_pos_to_target,
+                                        goal_rel_pos_to_target=goal_rel_pos_to_target)
                 action_pred = model_outputs
 
-                losses = self.model._compute_losses(
+                losses = compute_losses(
                     action_label=action_label,
                     action_pred=action_pred,
                     action_mask=action_mask,
@@ -321,9 +329,12 @@ class Trainer:
                 
                 if i % self.print_log_freq == 0 :
                     
-                    action_pred = self.model(obs_image,curr_rel_pos_to_target,goal_rel_pos_to_target, goal_mask) 
+                    action_pred = self.model("action_pred",obs_img=obs_image,
+                                        curr_rel_pos_to_target=curr_rel_pos_to_target,
+                                        goal_rel_pos_to_target=goal_rel_pos_to_target,
+                                        goal_mask=goal_mask) 
                     
-                    action_losses  = self.model._compute_losses(action_label=action_label,
+                    action_losses  = compute_losses(action_label=action_label,
                                                                         action_pred=action_pred,
                                                                         action_mask=action_mask,
                                                                         )
@@ -477,15 +488,16 @@ class Trainer:
                         action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
-                    obs_encoding_condition = self.model.infer_vision_encoder(obs_image)
+                    obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
+                    
+                    # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                     if self.goal_condition:
-                        goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob)
-
+                        # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+                        goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
                         # if self.target_obs_enable:
-                        
                         #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
-                        # ## Not in use!!!
+                        # ## Not in use! 
                         # else:
                         #     # print("here")
                         #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
@@ -495,48 +507,61 @@ class Trainer:
                         #     lin_encoding = lin_encoding.unsqueeze(1)
                         # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
                         # assert lin_encoding.shape[2] == self.lin_encoding_size
+                        lin_encoding = self.model("linear_encoder",
+                                                curr_rel_pos_to_target=curr_rel_pos_to_target)
                         
-                        lin_encoding = self.model.infer_linear_encoder(curr_rel_pos_to_target)
-                    
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                         
-                        fused_modalities_encoding = self.model.fuse_modalities(modalities,mask=modal_dropout_mask)
+                        fused_modalities_encoding = self.model("fuse_modalities",
+                                                            modalities=modalities,
+                                                            mask=modal_dropout_mask)
                         
-                        goal_encoding = self.model.infer_goal(goal_rel_pos_to_target)
+                        goal_encoding = self.model("goal_encoder",
+                                                goal_rel_pos_to_target=goal_rel_pos_to_target)
                         
-
                         final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                        
-                        final_encoded_condition = self.model.infer_goal_masking(final_encoded_condition, goal_mask)
+                        final_encoded_condition = self.model("goal_masking",
+                                                            final_encoded_condition=final_encoded_condition,
+                                                            goal_mask = goal_mask)
 
 
+                    ## TODO: Not in use
                     else:       # No Goal condition >> take the obs_encoding as the tokens
                         final_encoded_condition = obs_encoding_condition
                     
                     
-                    noise_pred = self.model.infer_noise_predictor(noisy_action, timesteps, final_encoded_condition)
-                    losses = self.model._compute_noise_losses(noise_pred=noise_pred,
+                    noise_pred = self.model("noise_pred",
+                                        noisy_action=noisy_action,
+                                        timesteps=timesteps,
+                                        final_encoded_condition=final_encoded_condition)
+                
+                    losses = compute_noise_losses(noise_pred=noise_pred,
                             noise=noise,
                             action_mask=action_mask)
                     loss = losses["diffusion_noise_loss"]
 
-
                     if i % self.eval_log_freq == 0 :
-
-                        action_pred = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target, goal_mask)
+                        action_pred = self.model("action_pred",
+                                            obs_img=obs_image,
+                                            curr_rel_pos_to_target=curr_rel_pos_to_target,
+                                            goal_rel_pos_to_target=goal_rel_pos_to_target,
+                                            goal_mask=goal_mask)
                         
-                        action_losses  = self.model._compute_losses(action_label=action_label,
+                        action_losses  = compute_losses(action_label=action_label,
                                                                             action_pred=action_pred,
                                                                             action_mask=action_mask,
                                                                             )
                         losses.update(action_losses)
 
                 else:
-                    model_outputs = self.model(obs_image, curr_rel_pos_to_target, goal_rel_pos_to_target)
+                    model_outputs = model_outputs = self.model("action_pred",
+                                            obs_img=obs_image,
+                                            curr_rel_pos_to_target=curr_rel_pos_to_target,
+                                            goal_rel_pos_to_target=goal_rel_pos_to_target)
                     action_pred = model_outputs
 
-                    losses = self.model._compute_losses(
+                    losses = compute_losses(
                         action_label=action_label,
                         action_pred=action_pred,
                         action_mask=action_mask,

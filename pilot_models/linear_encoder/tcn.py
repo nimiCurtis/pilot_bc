@@ -10,7 +10,7 @@ class TCN(BaseModel):
         super().__init__(linear_encoder_config)
 
         context_size = data_config.context_size
-        num_inputs = self.num_lin_features
+        num_inputs = self.lin_features_dim
         kernel_size = linear_encoder_config.kernel_size
         drop_out = linear_encoder_config.drop_out
         emb_size = self.lin_encoding_size

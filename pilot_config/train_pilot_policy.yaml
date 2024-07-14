@@ -1,9 +1,7 @@
 
-####### modify
 hydra:
   run:
     dir: ${log.project_folder}/${log.run_name}/configs
-    # dir: ./
 
 defaults:
   - _self_
@@ -13,9 +11,13 @@ defaults:
   - datasets: asher # all | go_to_the_picture
   # - log: defaults
 
+
+# device setup
+device: cuda
+
 # training setup
 training:
-  goal_condition: True
+  # goal_condition: True
   batch_size: 16
   eval_batch_size: 16
   epochs: 30
@@ -33,8 +35,6 @@ training:
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  alpha: 0.5 # not in use
-  beta: 10 # not in use
   use_ema: False # not in use
   goal_mask_prob: 0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
@@ -42,8 +42,7 @@ training:
   modal_dropout_prob: 0 # 0 for no no dropout , 1 for dropout one modal anytime
 
 
-device: cuda
-
+# data config
 data:
   goal_condition: True
   
@@ -64,7 +63,8 @@ data:
   close_far_threshold: 20 # need to check 
   # distance threshold used to seperate the close and the far subgoals that are sampled per datapoint
   # action output params
-  len_traj_pred: 8 # TODO: chang to pred_horizon
+  # len_traj_pred: 8 # TODO: chang to pred_horizon
+  pred_horizon: 8 # TODO: chang to pred_horizon
   action_horizon: 6
   learn_angle: True
   # dataset specific parameters
@@ -75,7 +75,7 @@ data:
   img_type: "depth" # if obs_type = image->  depth (1) | rgb (3) 
                     # do not forget to change the in_channels param in encoder_model as well
 
-# logging stuff
+# logging config
 log:
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
