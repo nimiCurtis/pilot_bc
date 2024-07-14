@@ -4,19 +4,69 @@ import time
 import random
 
 def tic():
+    """
+    Returns the current time.
+    """
     return time.time()
 
 def toc(t):
+    """
+    Returns the elapsed time since the input time t.
+    
+    Args:
+        t (float): The starting time.
+    
+    Returns:
+        float: The elapsed time.
+    """
     return float(tic()) - float(t)
 
 def to_numpy(tensor: torch.Tensor) -> np.ndarray:
+    """
+    Converts a PyTorch tensor to a NumPy array.
+
+    Args:
+        tensor (torch.Tensor): The tensor to convert.
+
+    Returns:
+        np.ndarray: The converted NumPy array.
+    """
     return tensor.detach().cpu().numpy()
 
 def from_numpy(array: np.ndarray) -> torch.Tensor:
+    """
+    Converts a NumPy array to a PyTorch tensor.
+
+    Args:
+        array (np.ndarray): The array to convert.
+
+    Returns:
+        torch.Tensor: The converted tensor.
+    """
     return torch.from_numpy(array).float()
 
-# normalize data
+def is_tensor(x):
+    """
+    Checks if the input is a PyTorch tensor.
+
+    Args:
+        x: The input to check.
+
+    Returns:
+        bool: True if the input is a PyTorch tensor, False otherwise.
+    """
+    return torch.is_tensor(x)
+
 def get_data_stats(data):
+    """
+    Computes the minimum and maximum values of the data.
+
+    Args:
+        data (np.ndarray): The data to compute stats for.
+
+    Returns:
+        dict: A dictionary containing the min and max values of the data.
+    """
     data = data.reshape(-1, data.shape[-1])
     stats = {
         'min': np.min(data, axis=0),
@@ -25,22 +75,49 @@ def get_data_stats(data):
     return stats
 
 def normalize_data(data, stats):
-    # nomalize to [0,1]
+    """
+    Normalizes the data to the range [-1, 1].
+
+    Args:
+        data (np.ndarray): The data to normalize.
+        stats (dict): The statistics for normalization.
+
+    Returns:
+        np.ndarray: The normalized data.
+    """
+    # Normalize to [0,1]
     ndata = (data - stats['min']) / (stats['max'] - stats['min'])
-    # normalize to [-1, 1]
+    # Normalize to [-1, 1]
     ndata = ndata * 2 - 1
     return ndata
 
-
 def unnormalize_data(ndata, stats):
-    # back to [0, 1]
+    """
+    Unnormalizes the data from the range [-1, 1] back to its original range.
+
+    Args:
+        ndata (np.ndarray): The normalized data.
+        stats (dict): The statistics used for unnormalization.
+
+    Returns:
+        np.ndarray: The unnormalized data.
+    """
+    # Back to [0, 1]
     ndata = (ndata + 1) / 2
-    # back to [min, max] 
+    # Back to [min, max]
     data = ndata * (stats['max'] - stats['min']) + stats['min']
     return data
 
-#Ours
 def get_delta(actions):
+    """
+    Computes the delta (difference) between consecutive actions.
+
+    Args:
+        actions (np.ndarray or torch.Tensor): The actions to compute deltas for.
+
+    Returns:
+        np.ndarray or torch.Tensor: The computed deltas.
+    """
     if isinstance(actions, np.ndarray):
         # Append zeros to the first action for NumPy array
         ex_actions = np.concatenate([np.zeros((1, actions.shape[-1])), actions], axis=0)
@@ -62,7 +139,7 @@ def calculate_sin_cos(waypoints):
 
     Args:
         waypoints: A NumPy array or PyTorch tensor of waypoints. Expected shape is [N, 3] where
-                   the last dimension contains [x, y, angle].
+                the last dimension contains [x, y, angle].
 
     Returns:
         A NumPy array or PyTorch tensor (matching the input type) of waypoints with sin and cos
@@ -84,7 +161,15 @@ def calculate_sin_cos(waypoints):
         return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
 
 def xy_to_d_cos_sin(xy):
-    
+    """
+    Converts XY coordinates to distance, cosine, and sine of the angle.
+
+    Args:
+        xy (np.ndarray): The XY coordinates to convert.
+
+    Returns:
+        np.ndarray: The distance, cosine, and sine of the angle.
+    """
     if len(xy.shape) == 1:
         d = np.linalg.norm(xy)
         angle = np.arctan2(xy[1], xy[0])
@@ -99,7 +184,16 @@ def xy_to_d_cos_sin(xy):
     return d_cos_sin
 
 def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.0):
+    """
+    Generates a goal mask tensor with a specified probability.
 
+    Args:
+        goal_rel_pos_to_target (torch.Tensor): Relative positions to target.
+        goal_mask_prob (float): Probability of masking the goal.
+
+    Returns:
+        torch.Tensor: The generated goal mask tensor.
+    """
     goal_mask = (torch.sum(goal_rel_pos_to_target==torch.zeros_like(goal_rel_pos_to_target),axis=1) == goal_rel_pos_to_target.shape[1]).long()
     num_ones = torch.sum(goal_mask)
     total_elements = goal_mask.size(0)
@@ -115,6 +209,17 @@ def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.0):
     return goal_mask
 
 def actions_forward_pass(actions,action_stats, learn_angle):
+    """
+    Forward pass for actions, normalizing and converting deltas to trajectory.
+
+    Args:
+        actions (np.ndarray): Actions to process.
+        action_stats (dict): Statistics for normalization.
+        learn_angle (bool): Whether to learn the angle.
+
+    Returns:
+        torch.Tensor or np.ndarray: Normalized actions.
+    """
     
     normalized_actions = actions.copy()
     
@@ -130,45 +235,25 @@ def actions_forward_pass(actions,action_stats, learn_angle):
         normalized_actions = calculate_sin_cos(normalized_actions)
 
     return normalized_actions
-# def get_modal_dropout_mask(batch_size: int, modalities_size: int,curr_rel_pos_to_target:torch.tensor, modal_dropout_prob: float):
-    
-#     # modal_mask = (torch.sum(torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=-1),axis=1) == curr_rel_pos_to_target.shape[1]).long()
-#     # num_ones = torch.sum(modal_mask)
-#     # total_elements = modal_mask.size(0)
-#     # beta = (num_ones.float() / total_elements).cpu()
-
-#     # probability = modal_dropout_prob - beta 
-#     # if probability > 0:
-#     #     zero_indices = (modal_mask == 0).nonzero(as_tuple=True)[0]
-#     #     random_values = torch.rand(zero_indices.size())
-#     #     mask_indices = zero_indices[random_values < probability]
-#     #     modal_mask[mask_indices] = 1
-
-#     # Initialize the mask tensor with ones
-#     mask = torch.ones(batch_size, modalities_size, dtype=torch.int)
-    
-#     # Determine how many tensors to drop
-#     num_to_drop = int(batch_size * modal_dropout_prob)
-    
-#     # Randomly select the indices of the tensors to drop
-#     drop_indices = random.sample(range(batch_size), num_to_drop)
-    
-#     # For each selected tensor, randomly select one modality to mask
-#     for idx in drop_indices:
-#         modality_to_mask = random.randint(0, modalities_size - 1)
-#         mask[idx, modality_to_mask] = 0
-    
-#     return mask
 
 def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_to_target: torch.Tensor, modal_dropout_prob: float):
+    """
+    Generates a dropout mask for modalities.
+
+    Args:
+        batch_size (int): The size of the batch.
+        modalities_size (int): The number of modalities.
+        curr_rel_pos_to_target (torch.Tensor): Current relative positions to target.
+        modal_dropout_prob (float): Probability of dropping a modality.
+
+    Returns:
+        torch.Tensor: The generated dropout mask.
+    """
     # Initialize the mask tensor with ones
     mask = torch.ones(batch_size, modalities_size, dtype=torch.int)
     
     # Check for tensors that are entirely zero and set the corresponding mask value
-    is_zero_tensor = torch.sum((curr_rel_pos_to_target == 0).all(axis=-1).long(),axis=-1)
-    
-    # Not in use!! #TODO: check
-    # mask[:, 1] = 1 - is_zero_tensor  # Mask the second modality if the tensor is entirely zero
+    is_zero_tensor = torch.sum((curr_rel_pos_to_target == 0).all(axis=-1).long(), axis=-1)
     
     # Calculate the adjusted modal dropout probability
     num_zeros = torch.sum(is_zero_tensor)

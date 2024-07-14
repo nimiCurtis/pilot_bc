@@ -263,7 +263,7 @@ class PiDiff(BaseModel):
         goal_encoding = self.infer_goal(goal_rel_pos_to_target)
         
         final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                
+
         final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
 
         # else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
@@ -302,7 +302,7 @@ class PiDiff(BaseModel):
         action_pred[:, :, :2] = torch.cumsum(
             action_pred_deltas[:, :, :2], dim=1
         )  # convert position and orientation deltas into waypoints in local coords
-        
+
         if self.learn_angle:
             action_pred[:, :, 2:] = F.normalize(
                 action_pred_deltas[:, :, 2:].clone(), dim=-1

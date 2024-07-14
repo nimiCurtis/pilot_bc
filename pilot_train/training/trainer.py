@@ -17,7 +17,6 @@ from torchvision.transforms import transforms
 
 from diffusers.training_utils import EMAModel
 
-
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.model_registry import get_policy_model
@@ -26,7 +25,6 @@ from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout
 from pilot_utils.train.train_utils import compute_losses, compute_noise_losses
 
 from pilot_utils.transforms import ObservationTransform
-
 
 class Trainer:
     """
@@ -63,8 +61,7 @@ class Trainer:
             log_cfg (DictConfig): Logging and visualization configurations.
             datasets_cfg (DictConfig): Dataset configurations.
         """
-        
-        
+
         self.model = model
         self.optimizer = optimizer
         self.scheduler = scheduler
@@ -217,8 +214,6 @@ class Trainer:
             # Take the actions horizon samples for the action loss
             action_label = action_label[:,:self.action_horizon,:]
             action_label = action_label.to(self.device)
-            
-            # Take the action mask. TODO: check
             action_mask = action_mask.to(self.device)
             
             # Infer model
@@ -237,7 +232,7 @@ class Trainer:
                     (B,), device=self.device
                 ).long()
                 
-                # Add noise to the clean images according to the noise magnitude at each diffusion iteration
+                # Add noise to the "clean" action_label_pred_deltas
                 noisy_action = self.model.noise_scheduler.add_noise(   
                     action_label_pred_deltas, noise, timesteps)
 
@@ -248,19 +243,7 @@ class Trainer:
                 if self.goal_condition:
                     # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
-                    # if self.target_obs_enable:
-                    #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
-                    # ## Not in use! 
-                    # else:
-                    #     # print("here")
-                    #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
-
-                    # lin_encoding = self.lin_encoder(linear_input)
-                    # if len(lin_encoding.shape) == 2:
-                    #     lin_encoding = lin_encoding.unsqueeze(1)
-                    # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-                    # assert lin_encoding.shape[2] == self.lin_encoding_size
                     lin_encoding = self.model("linear_encoder",
                                             curr_rel_pos_to_target=curr_rel_pos_to_target)
                     
@@ -279,7 +262,7 @@ class Trainer:
                                                         final_encoded_condition=final_encoded_condition,
                                                         goal_mask = goal_mask)
 
-                else:       # No Goal condition >> take the obs_encoding as the tokens
+                else:      # TODO: next refactoring # No Goal condition >> take the obs_encoding as the tokens
                     goal_mask = None
                     final_encoded_condition = obs_encoding_condition
 
@@ -323,10 +306,7 @@ class Trainer:
             
             # # Update Exponential Moving Average of the model weights after optimizing
             if self.model.name == "pidiff": ### TODO: add eme implementation
-                # self.ema.step(self.model.parameters())
-                # model = self.model
-                # model = self.ema_model.averaged_model
-                
+
                 if i % self.print_log_freq == 0 :
                     
                     action_pred = self.model("action_pred",obs_img=obs_image,
@@ -342,11 +322,7 @@ class Trainer:
 
                     # step lr scheduler every batch
                     # this is different from standard pytorch behavior
-                    self.scheduler.step() # TODO: check
-                    
-                    # update Exponential Moving Average of the model weights
-                    # if self.use_ema:
-                    #     self.ema.step(self.model.parameters())
+                    self.scheduler.step()
 
             # Append to Logger
             for key, value in losses.items():
@@ -483,7 +459,7 @@ class Trainer:
                         (action_label_pred_deltas.shape[0],), device=self.device
                     ).long()
                     
-                    # Add noise to the clean images according to the noise magnitude at each diffusion iteration
+                    # Add noise to the "clean" action_label_pred_deltas
                     noisy_action = self.model.noise_scheduler.add_noise(   
                         action_label_pred_deltas, noise, timesteps)
 
@@ -494,19 +470,7 @@ class Trainer:
                     if self.goal_condition:
                         # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
-                        # if self.target_obs_enable:
-                        #     linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
 
-                        # ## Not in use! 
-                        # else:
-                        #     # print("here")
-                        #     linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
-
-                        # lin_encoding = self.lin_encoder(linear_input)
-                        # if len(lin_encoding.shape) == 2:
-                        #     lin_encoding = lin_encoding.unsqueeze(1)
-                        # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-                        # assert lin_encoding.shape[2] == self.lin_encoding_size
                         lin_encoding = self.model("linear_encoder",
                                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
                         
@@ -526,11 +490,10 @@ class Trainer:
                                                             goal_mask = goal_mask)
 
 
-                    ## TODO: Not in use
+                    ## TODO: next refactoring
                     else:       # No Goal condition >> take the obs_encoding as the tokens
                         final_encoded_condition = obs_encoding_condition
-                    
-                    
+
                     noise_pred = self.model("noise_pred",
                                         noisy_action=noisy_action,
                                         timesteps=timesteps,
