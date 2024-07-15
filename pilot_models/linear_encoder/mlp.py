@@ -73,27 +73,27 @@ class MlpModel(torch.nn.Module):
 
 # Test script for MlpModel
 
-# Define the model parameters
-input_size = 10
-hidden_sizes = [20, 30]
-output_size = 5
+# # Define the model parameters
+# input_size = 10
+# hidden_sizes = [20, 30]
+# output_size = 5
 
-# Initialize the model
-model = MlpModel(input_size=input_size, hidden_sizes=hidden_sizes, output_size=output_size)
+# # Initialize the model
+# model = MlpModel(input_size=input_size, hidden_sizes=hidden_sizes, output_size=output_size)
 
-# Print the model architecture
-print("Model architecture:\n", model)
+# # Print the model architecture
+# print("Model architecture:\n", model)
 
-# Create a random input tensor with batch size 8 and the specified input size
-batch_size = 8
-random_input = torch.randn(batch_size, input_size)
+# # Create a random input tensor with batch size 8 and the specified input size
+# batch_size = 8
+# random_input = torch.randn(batch_size, input_size)
 
-# Perform inference
-output = model(random_input)
+# # Perform inference
+# output = model(random_input)
 
-# Print the input and output shapes to verify
-print("Input shape:", random_input.shape)
-print("Output shape:", output.shape)
+# # Print the input and output shapes to verify
+# print("Input shape:", random_input.shape)
+# print("Output shape:", output.shape)
 
-# Print the output
-print("Output:\n", output)
+# # Print the output
+# print("Output:\n", output)

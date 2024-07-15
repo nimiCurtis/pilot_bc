@@ -276,3 +276,39 @@ def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_t
             mask[idx, modality_to_mask] = 0
     
     return mask
+
+def get_action_stats(properties, waypoint_spacing):
+        """
+        Retrieves action statistics based on robot properties and waypoint spacing.
+
+        Args:
+            properties (dict): Robot properties.
+            waypoint_spacing (int): Spacing between waypoints.
+
+        Returns:
+            dict: Action statistics.
+        """
+        
+        frame_rate = properties['frame_rate']
+        lin_vel_lim = properties['max_lin_vel']
+        ang_vel_lim = properties['max_ang_vel']
+        
+        return {'pos': {'max': (lin_vel_lim / frame_rate)*waypoint_spacing,
+                        'min': -(lin_vel_lim /frame_rate)*waypoint_spacing},
+                'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
+                        'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}
+
+def clip_angle(theta: float) -> float:
+    """
+    Clips an angle to the range [-π, π].
+
+    Args:
+        theta (float): Input angle in radians.
+
+    Returns:
+        float: Clipped angle within the range [-π, π].
+    """
+    theta %= 2 * np.pi
+    if -np.pi < theta < np.pi:
+        return theta
+    return theta - 2 * np.pi

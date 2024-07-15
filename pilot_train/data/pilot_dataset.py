@@ -13,7 +13,6 @@ from torchvision import transforms
 
 from pilot_utils.data.data_utils import (
     img_path_to_data,
-    calculate_sin_cos,
     get_data_path,
     to_local_coords,
 )
@@ -22,7 +21,8 @@ from pilot_utils.utils import (
     get_delta,
     normalize_data,
     xy_to_d_cos_sin,
-    actions_forward_pass
+    actions_forward_pass,
+    get_action_stats
 )
 
 from pilot_utils.transforms import transform_images
@@ -455,7 +455,7 @@ class PilotDataset(Dataset):
         assert curr_time < curr_traj_len, f"{curr_time} >= {curr_traj_len}"
 
         # Compute the actions and normalized goal position
-        action_stats = self._get_action_stats(curr_properties, self.waypoint_spacing)
+        action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
         normalized_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
 
         if self.goal_condition:
@@ -546,23 +546,3 @@ class PilotDataset(Dataset):
             'max_ang_vel': ang_vel_lim
         }
 
-    def _get_action_stats(self,properties, waypoint_spacing):
-        """
-        Retrieves action statistics based on robot properties and waypoint spacing.
-
-        Args:
-            properties (dict): Robot properties.
-            waypoint_spacing (int): Spacing between waypoints.
-
-        Returns:
-            dict: Action statistics.
-        """
-        
-        frame_rate = properties['frame_rate']
-        lin_vel_lim = properties['max_lin_vel']
-        ang_vel_lim = properties['max_ang_vel']
-        
-        return {'pos': {'max': (lin_vel_lim / frame_rate)*waypoint_spacing,
-                        'min': -(lin_vel_lim /frame_rate)*waypoint_spacing},
-                'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
-                        'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}

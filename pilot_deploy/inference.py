@@ -4,17 +4,25 @@ import torch
 from torch import nn
 import numpy as np
 from typing import Tuple
+from torchvision import transforms
 
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_utils.utils import (
     get_delta,
-    to_numpy,
+    normalize_data,
+    xy_to_d_cos_sin,
     unnormalize_data,
-    calculate_sin_cos,
+    # actions_forward_pass,
     tic, toc,
-    get_goal_mask_tensor
+    to_numpy,
+    # get_goal_mask_tensor,
+    get_action_stats,
+    clip_angle
 )
-from pilot_models.policy.model_registry import get_policy_model
+
+from pilot_utils.transforms import transform_images, ObservationTransform
+
+from pilot_models.model_registry import get_policy_model
 from pilot_config.config import get_inference_model_config, get_robot_config
 
 # Path to checkpoints folder
@@ -34,11 +42,15 @@ class InferenceDataset(PilotDataset):
         data_split_type (str): Specifies which data split to use (e.g., 'train', 'test').
     """
 
-    def __init__(self, data_cfg: DictConfig,
-                datasets_cfg: DictConfig,
-                robot_dataset_cfg: DictConfig,
-                dataset_name: str,
-                data_split_type: str):
+    def __init__(
+            self,
+            data_cfg: DictConfig,
+            datasets_cfg: DictConfig,
+            robot_dataset_cfg: DictConfig,
+            dataset_name: str,
+            data_split_type: str,
+            transform: transforms = None
+                ):
         """
         Initialize the InferenceDataset instance.
 
@@ -49,27 +61,34 @@ class InferenceDataset(PilotDataset):
             dataset_name (str): Dataset name.
             data_split_type (str): Type of data split.
         """
-        super().__init__(data_cfg, datasets_cfg, robot_dataset_cfg, dataset_name, data_split_type)
+        super().__init__(data_cfg,
+                        datasets_cfg,
+                        robot_dataset_cfg,
+                        dataset_name,
+                        data_split_type,
+                        transform)
 
     def __getitem__(self, i: int) -> Tuple[torch.Tensor]:
         """
-        Retrieve a specific data sample by index.
+        Retrieves the i-th sample from the dataset.
 
         Args:
-            i (int): Index of the data sample.
+            i (int): Index of the sample to retrieve.
 
         Returns:
-            Tuple[torch.Tensor]: A tuple containing tensors for observation image, 
-                                relative positions, actions, etc.
+            tuple: A tuple containing the context, observation, goal, transformed context, transformed observation, transformed goal, distance label, and action label.
         """
-        # Access the data at index `i`
+
+        # Retrieve the current trajectory name, properties, current time, and max goal distance from the index
         f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
+
+        # Sample a goal from the current trajectory or a different trajectory
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
 
-        # Load images for the observation context
+        # Initialize the context list
         context = []
         if self.context_type == "temporal":
-            # sample the last self.context_size times from interval [0, curr_time)
+            # Generate a list of context times based on the current time and context size
             context_times = list(
                 range(
                     curr_time + -self.context_size * self.waypoint_spacing,
@@ -81,69 +100,82 @@ class InferenceDataset(PilotDataset):
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
 
-        obs_image = torch.cat([
-            self._load_image(f, t) for f, t in context
-        ])
+        # Load images for each context time step
+        obs_image = [self._load_image(f, t) for f, t in context]
 
-        # Load other trajectory data
+        # Apply transformations to the context images
+        obs_image = transform_images(obs_image, self.transform)
+
+        # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
         curr_traj_len = len(curr_traj_data["position"])
-        assert curr_time < curr_traj_len, f"{curr_time} and {curr_traj_len}"
+        assert curr_time < curr_traj_len, f"{curr_time} >= {curr_traj_len}"
 
+        # Compute the actions and normalized goal position
+        action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
+        normalized_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
 
-        # Load current position rel to target. use f_curr and curr_time.
-        curr_target_traj_data = self._get_trajectory(f_curr, target=True)
-        
-        # Take context of target rel pos or only the recent
-        if self.target_context:
-            curr_rel_pos_to_target = torch.cat([
-                torch.as_tensor(curr_target_traj_data[t]["position"][:2], dtype=torch.float32) for f, t in context
-            ])
+        if self.goal_condition:
+            # Load the current and goal target trajectory data
+            curr_target_traj_data = self._get_trajectory(f_curr, target=True)
+            goal_target_traj_data = self._get_trajectory(f_goal, target=True)
+            goal_target_traj_data_len = len(goal_target_traj_data)
+            assert goal_time < goal_target_traj_data_len, f"{goal_time} and {goal_target_traj_data_len}"
+
+            # Get the goal position relative to the target
+            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2])
+            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
+                goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
+                goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+            else:
+                goal_rel_pos_to_target = np.zeros((3,))
+
+            if self.target_context:
+                # Get the context of target positions relative to the current trajectory
+                np_curr_rel_pos_to_target = np.array([
+                    curr_target_traj_data[t]["position"][:2] for f, t in context
+                ])
+            else:
+                # For now, this is not in use
+                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
+
+            mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
+            np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0], 3))
+            np_curr_rel_pos_in_d_theta[~mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~mask])
+            np_curr_rel_pos_in_d_theta[~mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+
+            # Convert the context of relative positions to target into a tensor
+            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
         else:
-            curr_rel_pos_to_target = curr_target_traj_data[curr_time]["position"][:2] # Takes the [x,y] 
+            # Not in use
+            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], 3, 0))
+            goal_rel_pos_to_target = np.array([0, 0, 0])
 
-        # Load goal position relative to target
-        goal_target_traj_data = self._get_trajectory(f_goal, target=True)
-        goal_target_traj_data_len = len(goal_target_traj_data)
-        assert goal_time < goal_target_traj_data_len, f"{goal_time} an {goal_target_traj_data_len}"
-        goal_rel_pos_to_target = goal_target_traj_data[goal_time]["position"][:2] # Takes the [x,y]
-
-        # Compute actions
-        action_stats = self._get_action_stats(curr_properties,self.waypoint_spacing) ## added
-        actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
-        
-        # Compute timesteps distances
+        # Compute the timestep distances
         if goal_is_negative:
             distance = self.max_dist_cat
         else:
             distance = (goal_time - curr_time) // self.waypoint_spacing
-            assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}"
+            assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}, target_traj_len = {goal_target_traj_data_len}"
 
-        actions_torch = torch.as_tensor(actions, dtype=torch.float32)
-        if self.learn_angle:
-            actions_torch = calculate_sin_cos(actions_torch)
-
-        #TODO: check and modify
+        # Determine if the action should be masked
         action_mask = (
             (distance < self.max_action_distance) and
             (distance > self.min_action_distance) and
             (not goal_is_negative)
         )
 
-        # TODO: modify the return 
+        # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            # STATE : composed from context + current position of the target with relate to the camera
-            torch.as_tensor(obs_image, dtype=torch.float32), # [C*(context+1),H,W]
-            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
-            # GOAL : composed only from the + "desired" position of the target with relate to the camera
-            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32), # change to goal_rel_pos_to_target
-            # ACTION: composed from the requiered normalized waypoints to reach the desired goal
-            actions_torch,
-            # OTHER: TODO: check what is necassery
-            torch.as_tensor(goal_pos, dtype=torch.float32), # goal_robot_pos_in_local_coords
-            torch.as_tensor(self.dataset_index, dtype=torch.int64), 
+            torch.as_tensor(obs_image, dtype=torch.float32),  # [C*(context+1),H,W]
+            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(normalized_actions, dtype=torch.float32),
+            torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
+            torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
         )
+
 
 class PilotAgent(nn.Module):
     """
@@ -161,7 +193,7 @@ class PilotAgent(nn.Module):
                 policy_model_cfg: DictConfig,
                 vision_encoder_cfg: DictConfig,
                 linear_encoder_cfg: DictConfig,
-                robot: str, wpt_i: int, frame_rate: float):
+                robot: str, wpt_i: int, frame_rate: float, waypoint_spacing: int = 2):
         """
         Initialize the PilotAgent instance.
 
@@ -178,14 +210,14 @@ class PilotAgent(nn.Module):
         
         self.wpt_i = wpt_i
         self.frame_rate = frame_rate
-        
         self.model = get_policy_model(policy_model_cfg=policy_model_cfg,
-                                      vision_encoder_model_cfg=vision_encoder_cfg,
-                                      linear_encoder_model_cfg=linear_encoder_cfg,
-                                      data_cfg=data_cfg)
+                                    vision_encoder_model_cfg=vision_encoder_cfg,
+                                    linear_encoder_model_cfg=linear_encoder_cfg,
+                                    data_cfg=data_cfg)
         
         robot_properties = get_robot_config(robot)[robot]
-        self.action_stats = self._get_action_stats(robot_properties)
+        robot_properties.update({'frame_rate':self.frame_rate})
+        self.action_stats = get_action_stats(properties=robot_properties, waypoint_spacing=waypoint_spacing)
 
     def load(self, model_name):
         """
@@ -199,7 +231,6 @@ class PilotAgent(nn.Module):
 
         state_dict = checkpoint["model_state_dict"]
         self.model.load_state_dict(state_dict, strict=False)
-
         self.model.eval()
 
     def to(self, device):
@@ -250,23 +281,6 @@ class PilotAgent(nn.Module):
 
         return waypoints
 
-    def _get_action_stats(self, properties):
-        """
-        Retrieve the statistical properties for the actions.
-
-        Args:
-            properties (dict): Robot properties including velocity limits.
-
-        Returns:
-            dict: Action statistics for position and yaw.
-        """
-
-        frame_rate = self.frame_rate
-        lin_vel_lim = properties['max_lin_vel']
-        ang_vel_lim = properties['max_ang_vel']
-
-        return {'pos': {'max': lin_vel_lim / frame_rate, 'min': -lin_vel_lim / frame_rate},
-                'yaw': {'max': ang_vel_lim / frame_rate, 'min': -ang_vel_lim / frame_rate}}
 
     def predict_raw(self, obs_img: torch.Tensor, curr_rel_pos_to_target: torch.Tensor, goal_rel_pos_to_target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
@@ -299,7 +313,11 @@ class PilotAgent(nn.Module):
 
 
         with torch.no_grad():
-            normalized_actions = self.model(context_queue, target_context_queue, goal_to_target,goal_mask)
+            normalized_actions = self.model("action_pred",
+                                            obs_img=context_queue,
+                                            curr_rel_pos_to_target=target_context_queue,
+                                            goal_rel_pos_to_target=goal_to_target,
+                                            goal_mask=goal_mask)
 
         return normalized_actions[0]  # no batch dimension
 
@@ -316,7 +334,34 @@ def get_inference_config(model_name):
     model_source_dir = os.path.join(CKPTH_PATH, model_name)
     return get_inference_model_config(model_source_dir, rt=True)
 
+def position_error(predicted: np.ndarray, target: np.ndarray) -> float:
+    """
+    Calculate the Mean Squared Error (MSE) loss between two numpy arrays.
 
+    Args:
+        predicted (np.ndarray): Predicted values.
+        target (np.ndarray): Ground truth values.
+
+    Returns:
+        float: MSE loss.
+    """
+    return np.mean(np.linalg.norm(predicted-target,axis=1))
+
+def angle_error(predicted: np.ndarray, target: np.ndarray) -> float:
+    """
+    Calculate the average angular error between predicted and target angles.
+
+    Args:
+        predicted (np.ndarray): Predicted angle values.
+        target (np.ndarray): Ground truth angle values.
+
+    Returns:
+        float: The mean angular error.
+    """
+    
+    error_arr = [clip_angle(predicted[i]) - clip_angle(target[i]) for i in range(len(predicted))]
+    
+    return np.mean(error_arr)
 
 def main():
     """
@@ -324,13 +369,12 @@ def main():
     Loads the model, sets up the dataset, and evaluates the predictions.
     """
     # Set the name of the model to load and evaluate
-    model_name = "pilot-turtle-static-follower_2024-05-02_12-38-32"
+    model_name = "pilot-target-tracking_2024-07-14_17-47-20"
 
     # Retrieve the model's inference configuration
-    data_cfg, datasets_cfg, policy_model_cfg, encoder_model_cfg, device = get_inference_config(model_name=model_name)
-
+    data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
-    robot = "turtlebot"
+    robot = "nimrod"
     robot_dataset_cfg = datasets_cfg[robot]
 
     # Specify the type of data split to use for testing
@@ -340,28 +384,39 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
 
     # Initialize the PilotPlanner model with the appropriate configurations
+    wpt_i = 2
+    frame_rate = 7
     model = PilotAgent(data_cfg=data_cfg,
-                        policy_model_cfg=policy_model_cfg,
-                        encoder_model_cfg=encoder_model_cfg,
-                        robot=robot,
-                        wpt_i=2,
-                        frame_rate=6)
+                                policy_model_cfg=policy_model_cfg,
+                                vision_encoder_cfg=vision_encoder_cfg,
+                                linear_encoder_cfg=linear_encoder_cfg,
+                                robot=robot,
+                                wpt_i=wpt_i,
+                                frame_rate=frame_rate)
 
     # Load the pre-trained model and move to the specified device 
     model.load(model_name=model_name)
     model.to(device=device)
 
+    # Initialize transform for test
+    transform = ObservationTransform(data_cfg=data_cfg).get_transform("test")
+    
     # Initialize the dataset for inference with the desired configuration
     dataset = InferenceDataset(data_cfg=data_cfg,
                             datasets_cfg=datasets_cfg,
                             robot_dataset_cfg=robot_dataset_cfg,
                             dataset_name=robot,
-                            data_split_type=data_split_type)
+                            data_split_type=data_split_type,
+                            transform=transform)
 
     # Initialize variables for calculating average inference time
     dt_sum = 0
     size = 2000
-
+    size = min(size,len(dataset))
+    action_horizon = data_cfg.action_horizon
+    pos_tot_err = 0
+    yaw_tot_err = 0
+    
     # Loop through the dataset, performing inference and timing each prediction
     for i in range(0, size):
         # Retrieve relevant data for inference, including context, ground truth actions, etc.
@@ -369,8 +424,9 @@ def main():
         
         # Convert the ground truth actions into waypoints
         gt_waypoints = to_numpy(gt_actions_normalized)
-        gt_waypoint = model.get_waypoint(gt_waypoints)
-
+        gt_waypoints = model.get_waypoint(gt_waypoints)
+        gt_waypoints = gt_waypoints[:action_horizon,:]
+        
         # Start timing the inference process
         t = tic()
         
@@ -380,11 +436,24 @@ def main():
         # Measure the elapsed time for inference
         dt = toc(t)
 
+        pos_error = position_error(predicted=predicted_waypoint[:,:2],target=gt_waypoints[:,:2])
+        pos_tot_err+=pos_error
+        
+        hx_gt, hy_gt = gt_waypoints[:,2], gt_waypoints[:,3]
+        hx_predicted, hy_predicted = predicted_waypoint[:,2], predicted_waypoint[:,3]
+        
+        yaw_gt = np.arctan2(hy_gt, hx_gt)
+        yaw_predicted = np.arctan2(hy_predicted, hx_predicted)
+        
+        yaw_error = angle_error(predicted=yaw_predicted,target=yaw_gt)
+        yaw_tot_err+=yaw_error
         # Output the predictions and their corresponding ground truth values
         print(f"infer: dataset index: {dataset_index} | sample: {i}")
-        print(f"wpt predicted: {np.round(predicted_waypoint, 5)}")
-        print(f"wpt gt: {np.round(gt_waypoint, 5)}")
+        print(f"wpt predicted: {np.round(predicted_waypoint[wpt_i], 5)}")
+        print(f"wpt gt: {np.round(gt_waypoints[wpt_i], 5)}")
         print(f"inference time: {dt}[sec]")
+        print(f"Position Error: {pos_error}")
+        print(f"Yaw Error: {yaw_error} [rad] | {np.rad2deg(yaw_error)} [deg]")
         print()
 
         # Skip the first iteration (as a warmup), then accumulate the inference times
@@ -393,7 +462,12 @@ def main():
 
     # Compute the average inference time, excluding the first sample (warmup)
     dt_avg = dt_sum / (size - 1)
+    pos_avg_err = pos_tot_err/size
+    yaw_avg_err = yaw_tot_err/size
+    
     print(f"inference time avg: {dt_avg}[sec]")
+    print(f"Position average MSE Error: {pos_avg_err}")
+    print(f"Yaw average Error: {yaw_avg_err} [rad] | {np.rad2deg(yaw_avg_err)} [deg]")
 
 # Entry point for the script to execute the main function
 if __name__ == "__main__":
