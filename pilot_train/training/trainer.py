@@ -14,6 +14,7 @@ from warmup_scheduler import GradualWarmupScheduler
 from torch.optim import Adam, AdamW, SGD
 import torchvision.transforms.functional as TF
 from torchvision.transforms import transforms
+import torch.nn.functional as F
 
 from diffusers.training_utils import EMAModel
 
@@ -21,9 +22,9 @@ from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
 from pilot_models.model_registry import get_policy_model
 from pilot_utils.data.data_utils import VISUALIZATION_IMAGE_SIZE
-from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout_mask
+from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout_mask, deltas_to_actions
 from pilot_utils.train.train_utils import compute_losses, compute_noise_losses
-
+from pilot_models.policy.pidiff import DiffuserScheduler
 from pilot_utils.transforms import ObservationTransform
 
 class Trainer:
@@ -63,6 +64,7 @@ class Trainer:
         """
 
         self.model = model
+        self.model_name = self.model.module.name if hasattr(self.model, "module") else self.model.name
         self.optimizer = optimizer
         self.scheduler = scheduler
         self.dataloader = dataloader
@@ -90,27 +92,33 @@ class Trainer:
         # Training and Model config
         self.current_epoch=training_cfg.current_epoch
         self.epochs=training_cfg.epochs
-        
+
         # Data config
         self.goal_condition = data_cfg.goal_condition
         self.target_obs_enable = data_cfg.target_observation_enable
         self.normalized=data_cfg.normalize
         self.learn_angle=data_cfg.learn_angle
         self.action_horizon = data_cfg.action_horizon
+        self.pred_horizon=data_cfg.pred_horizon
 
-        self.latest_path = os.path.join(self.project_log_folder, f"latest.pth") # TODO: change
+        self.latest_path = os.path.join(self.project_log_folder, f"latest.pth")
 
         self.best_loss = float('inf')
         
         self.logging_manager = LoggingManager(datasets_cfg=datasets_cfg,log_cfg=log_cfg)
 
         self.use_ema = training_cfg.use_ema
-        if self.use_ema and self.model.name == "pidiff":
-            self.ema = EMAModel(self.model.parameters(), power=0.75)
-            self.ema.to(self.device)
-            self.ema_model = copy.deepcopy(self.model)
-            self.ema_model.to(self.device)
-        
+        if self.model_name == "pidiff":
+            noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
+            self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
+            
+            # TODO: Implement and modify
+            if self.use_ema: 
+                self.ema = EMAModel(self.model.parameters(), power=0.75)
+                self.ema.to(self.device)
+                self.ema_model = copy.deepcopy(self.model)
+                self.ema_model.to(self.device)
+
         self.goal_mask_prob = training_cfg.goal_mask_prob
         self.goal_mask_prob = torch.clip(torch.tensor(self.goal_mask_prob), 0, 1)
 
@@ -134,6 +142,8 @@ class Trainer:
         """
         
         self.model.train()
+        self.noise_scheduler.train()
+        
         action_loss_logger = Logger("action_loss", "train", window_size=self.print_log_freq)
         action_waypts_cos_sim_logger = Logger(
             "action_waypts_cos_sim", "train", window_size=self.print_log_freq
@@ -159,7 +169,7 @@ class Trainer:
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
-        if self.model.name == "pidiff":
+        if self.model_name == "pidiff":
             diffusion_noise_loss = Logger(
                 "diffusion_noise_loss", "train", window_size=self.print_log_freq
             )
@@ -187,6 +197,7 @@ class Trainer:
             
             
             B = action_label.shape[0] #batch size
+            action_dim = action_label.shape[-1]
             # STATE
             # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
             obs_images = torch.split(obs_image, 3, dim=1)
@@ -217,7 +228,7 @@ class Trainer:
             action_mask = action_mask.to(self.device)
             
             # Infer model
-            if self.model.name == "pidiff":
+            if self.model_name == "pidiff":
                 # Sample noise to add to actions
                 
                 action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
@@ -228,13 +239,15 @@ class Trainer:
 
                 # Sample a diffusion iteration for each data point
                 timesteps = torch.randint(
-                    0, self.model.noise_scheduler.config.num_train_timesteps,
+                    0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
                     (B,), device=self.device
                 ).long()
                 
                 # Add noise to the "clean" action_label_pred_deltas
-                noisy_action = self.model.noise_scheduler.add_noise(   
-                    action_label_pred_deltas, noise, timesteps)
+                noisy_action = self.noise_scheduler.add_noise(   
+                    actions_labels=action_label_pred_deltas,
+                    noise=noise,
+                    timesteps=timesteps)
 
                 # Predict the noise residual
                 obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
@@ -305,15 +318,40 @@ class Trainer:
             gc.collect()
             
             # # Update Exponential Moving Average of the model weights after optimizing
-            if self.model.name == "pidiff": ### TODO: add eme implementation
+            if self.model_name == "pidiff": ### TODO: add eme implementation
 
                 if i % self.print_log_freq == 0 :
                     
-                    action_pred = self.model("action_pred",obs_img=obs_image,
-                                        curr_rel_pos_to_target=curr_rel_pos_to_target,
-                                        goal_rel_pos_to_target=goal_rel_pos_to_target,
-                                        goal_mask=goal_mask) 
+                    # action_pred = self.model("action_pred",obs_img=obs_image,
+                    #                     curr_rel_pos_to_target=curr_rel_pos_to_target,
+                    #                     goal_rel_pos_to_target=goal_rel_pos_to_target,
+                    #                     goal_mask=goal_mask)
                     
+                    # initialize action from Gaussian noise
+                    noisy_diffusion_output = torch.randn(
+                        (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
+                    diffusion_output = noisy_diffusion_output
+                    
+                    for k in self.noise_scheduler.timesteps():
+                        # predict noise
+                        noise_pred = self.model("noise_pred",
+                                        noisy_action=diffusion_output,
+                                        timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                        final_encoded_condition=final_encoded_condition)
+
+                        # inverse diffusion step (remove noise)
+                        diffusion_output = self.noise_scheduler.step(
+                            model_output=noise_pred,
+                            timestep=k,
+                            sample=diffusion_output
+                        )
+
+                    # action_pred = action_pred[:,:self.action_horizon,:]
+                    action_pred = deltas_to_actions(deltas=diffusion_output,
+                                                    pred_horizon=self.pred_horizon,
+                                                    action_horizon=self.action_horizon,
+                                                    learn_angle=self.learn_angle)
+
                     action_losses  = compute_losses(action_label=action_label,
                                                                         action_pred=action_pred,
                                                                         action_mask=action_mask,
@@ -322,7 +360,13 @@ class Trainer:
 
                     # step lr scheduler every batch
                     # this is different from standard pytorch behavior
-                    self.scheduler.step()
+                    # TODO: check
+                    if self.scheduler is not None:
+                        # scheduler calls based on the type of scheduler
+                        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                            self.scheduler.step(action_losses)
+                        else:
+                            self.scheduler.step()
 
             # Append to Logger
             for key, value in losses.items():
@@ -363,6 +407,8 @@ class Trainer:
         # eval_model = self.ema_model if self.use_ema else self.model
         # eval_model.eval()
         self.model.eval()
+        self.noise_scheduler.eval()
+        
         action_loss_logger = Logger("action_loss", eval_type)
         action_waypts_cos_sim_logger = Logger("action_waypts_cos_sim", eval_type)
         multi_action_waypts_cos_sim_logger = Logger("multi_action_waypts_cos_sim", eval_type)
@@ -380,7 +426,7 @@ class Trainer:
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
-        if self.model.name == "pidiff":
+        if self.model_name == "pidiff":
             diffusion_noise_loss = Logger(
                 "diffusion_noise_loss", eval_type, window_size=self.eval_log_freq
             )
@@ -409,6 +455,7 @@ class Trainer:
                 ) = data
 
                 B = action_label.shape[0]
+                action_dim = action_label.shape[-1]
                 # STATE
                 # visual context
                 obs_images = torch.split(obs_image, 3, dim=1)
@@ -442,7 +489,7 @@ class Trainer:
                 # Infer model
                 
                 # Infer model
-                if self.model.name == "pidiff":
+                if self.model_name == "pidiff":
                     action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
                     action_label_pred_rel_orientations = action_label_pred[:,:,2:]
                     action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
@@ -455,12 +502,12 @@ class Trainer:
 
                     # Sample a diffusion iteration for each data point
                     timesteps = torch.randint(
-                        0, self.model.noise_scheduler.config.num_train_timesteps,
+                        0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
                         (action_label_pred_deltas.shape[0],), device=self.device
                     ).long()
                     
                     # Add noise to the "clean" action_label_pred_deltas
-                    noisy_action = self.model.noise_scheduler.add_noise(   
+                    noisy_action = self.noise_scheduler.add_noise(   
                         action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
@@ -505,18 +552,38 @@ class Trainer:
                     loss = losses["diffusion_noise_loss"]
 
                     if i % self.eval_log_freq == 0 :
-                        action_pred = self.model("action_pred",
-                                            obs_img=obs_image,
-                                            curr_rel_pos_to_target=curr_rel_pos_to_target,
-                                            goal_rel_pos_to_target=goal_rel_pos_to_target,
-                                            goal_mask=goal_mask)
+
+                        # initialize action from Gaussian noise
+                        noisy_diffusion_output = torch.randn(
+                            (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
+                        diffusion_output = noisy_diffusion_output
+                        
+                        for k in self.noise_scheduler.timesteps():
+                            # predict noise
+                            noise_pred = self.model("noise_pred",
+                                            noisy_action=diffusion_output,
+                                            timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                            final_encoded_condition=final_encoded_condition)
+
+                            # inverse diffusion step (remove noise)
+                            diffusion_output = self.noise_scheduler.step(
+                                model_output=noise_pred,
+                                timestep=k,
+                                sample=diffusion_output
+                            )
+
+                        action_pred = deltas_to_actions(deltas=diffusion_output,
+                                                        pred_horizon=self.pred_horizon,
+                                                        action_horizon=self.action_horizon,
+                                                        learn_angle=self.learn_angle)
                         
                         action_losses  = compute_losses(action_label=action_label,
-                                                                            action_pred=action_pred,
-                                                                            action_mask=action_mask,
+                                                                                action_pred=action_pred,
+                                                                                action_mask=action_mask,
                                                                             )
                         losses.update(action_losses)
 
+                # Not in use -> TODO: refactor for another models
                 else:
                     model_outputs = model_outputs = self.model("action_pred",
                                             obs_img=obs_image,
@@ -565,11 +632,11 @@ class Trainer:
         Returns:
             None
         """
-        
+         
         for epoch in range(self.current_epoch, self.current_epoch + self.epochs):
             print()
             print(
-                f"Start {self.model.name} Model Training Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
+                f"Start {self.model_name} Model Training Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
             )
             
             self.train_one_epoch(epoch=epoch)
@@ -577,7 +644,7 @@ class Trainer:
             avg_total_test_loss = []
             for dataset_type in self.test_dataloaders:
                 print(
-                    f"Start {dataset_type} {self.model.name} Testing Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
+                    f"Start {dataset_type} {self.model_name} Testing Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
                 )
                 loader = self.test_dataloaders[dataset_type]
                 test_action_loss, total_eval_loss = self.evaluate_one_epoch(eval_type=dataset_type,
@@ -590,35 +657,26 @@ class Trainer:
             
             print("\033[33m" +f"Best Test loss: {self.best_loss} | Current epoch Test loss: {current_avg_loss}"+ "\033[0m")
             # Update best loss and save the model if current average loss is the new best
+            
             if current_avg_loss < self.best_loss:
                 best_model_path = os.path.join(self.project_log_folder, "best_model.pth")
                 print("\033[32m" + f"Test loss {self.best_loss} decreasing >> {current_avg_loss}\nSaving best model to {best_model_path}" + "\033[0m")
                 self.best_loss = current_avg_loss
-                checkpoint = {
-                    "epoch": epoch,
-                    "model_state_dict": self.model.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
-                    "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
-                    "avg_total_test_loss": current_avg_loss
-                }
-                torch.save(checkpoint, best_model_path)
+                self.save_checkpoint(epoch=epoch,
+                                    current_avg_loss=current_avg_loss,
+                                    path=best_model_path)
 
-            checkpoint = {
-                    "epoch": epoch,
-                    "model_state_dict": self.model.state_dict(),
-                    "optimizer_state_dict": self.optimizer.state_dict(),
-                    "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
-                    "avg_total_test_loss": current_avg_loss
-            }
-            # log average eval loss
             wandb.log({}, commit=False)
 
-            if self.scheduler is not None:
-                # scheduler calls based on the type of scheduler
-                if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                    self.scheduler.step(current_avg_loss)
-                else:
-                    self.scheduler.step()
+            
+            ## TODO:check
+            # if self.scheduler is not None:
+            #     # scheduler calls based on the type of scheduler
+            #     if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+            #         self.scheduler.step(current_avg_loss)
+            #     else:
+            #         self.scheduler.step()
+            
             wandb.log({
                 "avg_total_test_loss": current_avg_loss,
                 "lr": self.optimizer.param_groups[0]["lr"],
@@ -627,13 +685,30 @@ class Trainer:
             numbered_path = os.path.join(self.project_log_folder, f"{epoch}.pth")
             
             if epoch % self.save_model_freq == 0:
-                torch.save(checkpoint, self.latest_path)
-                torch.save(checkpoint, numbered_path)  # keep track of model at every epoch
+                self.save_checkpoint(epoch=epoch,
+                                    current_avg_loss=current_avg_loss,
+                                    path=numbered_path)
 
+            # keep track of model at every epoch
+            self.save_checkpoint(epoch=epoch,
+                                    current_avg_loss=current_avg_loss,
+                                    path=self.latest_path)
         # Flush the last set of eval logs
         wandb.log({})
         print()
     
+    def save_checkpoint(self,epoch, current_avg_loss, path):
+        # DataParallel wrappers keep raw model object in .module attribute
+        raw_model = self.model.module if hasattr(self.model, "module") else self.model
+        checkpoint = {
+                    "epoch": epoch,
+                    "model_state_dict": raw_model.state_dict(),
+                    "optimizer_state_dict": self.optimizer.state_dict(),
+                    "scheduler_state_dict": self.scheduler.state_dict() if self.scheduler else None,
+                    "avg_total_test_loss": current_avg_loss
+                }
+        torch.save(checkpoint, path)
+        
     @staticmethod
     def get_model(policy_model_cfg:DictConfig,
                 vision_encoder_model_cfg:DictConfig ,

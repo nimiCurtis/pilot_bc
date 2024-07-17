@@ -2,6 +2,7 @@ import torch
 import numpy as np
 import time
 import random
+import torch.nn.functional as F
 
 def tic():
     """
@@ -236,6 +237,7 @@ def actions_forward_pass(actions,action_stats, learn_angle):
 
     return normalized_actions
 
+
 def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_to_target: torch.Tensor, modal_dropout_prob: float):
     """
     Generates a dropout mask for modalities.
@@ -312,3 +314,29 @@ def clip_angle(theta: float) -> float:
     if -np.pi < theta < np.pi:
         return theta
     return theta - 2 * np.pi
+
+def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
+    # diffusion output should be denoised action deltas
+    action_pred_deltas = deltas
+    
+    # augment outputs to match labels size-wise
+    action_pred_deltas = action_pred_deltas.reshape(
+        (action_pred_deltas.shape[0], pred_horizon, action_pred_deltas.shape[-1])
+    )
+
+    # Init action traj
+    action_pred = torch.zeros_like(action_pred_deltas)
+
+    ## Cumsum 
+    action_pred[:, :, :2] = torch.cumsum(
+        action_pred_deltas[:, :, :2], dim=1
+    )  # convert position and orientation deltas into waypoints in local coords
+
+    if learn_angle:
+        action_pred[:, :, 2:] = F.normalize(
+            action_pred_deltas[:, :, 2:].clone(), dim=-1
+        )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
+
+    action_pred = action_pred[:,:action_horizon,:]
+    
+    return action_pred

@@ -3,6 +3,16 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+
+def get_gpu_memory_usage(device_id):
+    """
+    Returns the memory usage of the specified GPU in terms of total memory
+    and allocated memory as a percentage.
+    """
+    total_memory = torch.cuda.get_device_properties(device_id).total_memory
+    allocated_memory = torch.cuda.memory_allocated(device_id)
+    return allocated_memory / total_memory
+
 # Utils for Group Norm
 def replace_bn_with_gn(
     root_module: nn.Module,

@@ -13,6 +13,7 @@ from pilot_train.training.trainer import Trainer
 from pilot_config.config import get_main_config_dir, split_main_config
 from pilot_utils.utils import tic, toc
 from pilot_utils.transforms import ObservationTransform
+from pilot_utils.train.train_utils import get_gpu_memory_usage
 
 def train(cfg:DictConfig):
     
@@ -21,18 +22,33 @@ def train(cfg:DictConfig):
 
     # Device management
     if torch.cuda.is_available() and device_cfg == 'cuda':
-        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-        if "gpu_ids" not in training_cfg:
-            OmegaConf.update(training_cfg, "gpu_ids",[0], force_add = True)
-        elif type(training_cfg.gpu_ids) == int:
-            OmegaConf.update(training_cfg, "gpu_ids",[training_cfg.gpu_ids])
-        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
-            [str(x) for x in training_cfg.gpu_ids]
-        )
-        print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
+        available_gpus = list(range(torch.cuda.device_count()))
+        print("Available GPU IDs:", available_gpus)
         
-        first_gpu_id = training_cfg.gpu_ids[0]
-        device = torch.device(f"cuda:{first_gpu_id}")
+        os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+        
+        if "gpu_ids" not in training_cfg:
+            OmegaConf.update(training_cfg, "gpu_ids", [0], force_add=True)
+        elif isinstance(training_cfg.gpu_ids, int):
+            OmegaConf.update(training_cfg, "gpu_ids", [training_cfg.gpu_ids])
+
+        # Check if gpu_ids are valid and meet the memory requirement
+        valid_gpu_ids = []
+        for gpu_id in training_cfg.gpu_ids:
+            if gpu_id in available_gpus:
+                memory_usage = get_gpu_memory_usage(gpu_id)
+                if memory_usage <= 0.25:
+                    valid_gpu_ids.append(gpu_id)
+        
+        if not valid_gpu_ids:
+            print("No valid gpu. Exit!")
+            exit()
+        else:
+            os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(x) for x in valid_gpu_ids])
+            print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
+            
+            first_gpu_id = valid_gpu_ids[0] if valid_gpu_ids else 0
+            device = torch.device(f"cuda:{first_gpu_id}")
     else:
         print("Using cpu")
         device = torch.device("cpu")
@@ -57,6 +73,8 @@ def train(cfg:DictConfig):
         linear_encoder_model_cfg = linear_encoder_model_cfg,
         data_cfg = data_cfg
         )
+    print(f"Model Type: {model.name}")
+    model.count_parameters()
 
     ### GRADIENT CLIPPING
     if training_cfg.clipping:
@@ -93,11 +111,10 @@ def train(cfg:DictConfig):
     #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
 
     # Multi-GPU
+    model = model.to(device)
     if device.type == 'cuda' and len(training_cfg.gpu_ids) > 1:
         model = nn.DataParallel(model, device_ids=training_cfg.gpu_ids)
-    model = model.to(device)
-    print(f"Model Type: {model.name}")
-    model.count_parameters()
+        model = model.to(device)
 
     ##  Set Pilot Trainer  ## 
     pilot_trainer = Trainer(model=model,

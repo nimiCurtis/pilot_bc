@@ -59,3 +59,6 @@ class BaseModel(nn.Module):
         """
         raise NotImplementedError
     
+
+    def get_config(self):
+        return self.config

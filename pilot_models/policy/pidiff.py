@@ -92,20 +92,7 @@ class PiDiff(BaseModel):
             )
 
         ## Noise scheduler ##
-        self.noise_scheduler_type =  policy_model_cfg.noise_scheduler.type     
-        self.num_diffusion_iters_eval = policy_model_cfg.noise_scheduler.num_diffusion_iters_eval
-        self.num_diffusion_iters_train = policy_model_cfg.noise_scheduler.num_diffusion_iters_train
-        
-        noise_scheduler = {"ddpm": DDPMScheduler,
-                        "ddim": DDIMScheduler,
-        }
-        
-        self.noise_scheduler = noise_scheduler[self.noise_scheduler_type](
-            num_train_timesteps= self.num_diffusion_iters_train,
-            beta_schedule=policy_model_cfg.noise_scheduler.beta_schedule,
-            clip_sample=True,
-            prediction_type='epsilon'
-        )
+        self.noise_scheduler_config = policy_model_cfg.noise_scheduler
 
         ### Goal masking
         mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
@@ -130,6 +117,9 @@ class PiDiff(BaseModel):
         self.no_mask = torch.zeros((1, seq_len), dtype=torch.bool) 
         self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
+
+    def get_scheduler_config(self):
+        return self.noise_scheduler_config
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
@@ -286,7 +276,7 @@ class PiDiff(BaseModel):
                 timestep=k,
                 sample=diffusion_output
             ).prev_sample
-        
+
         # diffusion output should be denoised action deltas
         action_pred_deltas = diffusion_output
         
@@ -346,16 +336,16 @@ class PiDiff(BaseModel):
     def train(self, mode: bool = True):
         super(PiDiff, self).train(mode)
         torch.cuda.empty_cache()
-        if mode:
-            self.noise_scheduler.set_timesteps(self.num_diffusion_iters_train)
-            print(f"Diffusion timesteps (train): {len(self.noise_scheduler.timesteps)}")
+        # if mode:
+        #     self.noise_scheduler.set_timesteps(self.num_diffusion_iters_train)
+        #     print(f"Diffusion timesteps (train): {len(self.noise_scheduler.timesteps)}")
         return self
 
     def eval(self):
         super(PiDiff, self).eval()
         torch.cuda.empty_cache()
-        self.noise_scheduler.set_timesteps(self.num_diffusion_iters_eval)
-        print(f"Diffusion timesteps (eval): {len(self.noise_scheduler.timesteps)}")
+        # self.noise_scheduler.set_timesteps(self.num_diffusion_iters_eval)
+        # print(f"Diffusion timesteps (eval): {len(self.noise_scheduler.timesteps)}")
 
         return self
     
@@ -370,5 +360,43 @@ class PiDiff(BaseModel):
         self.avg_pool_mask = self.avg_pool_mask.to(self.device)
         return self
 
+class DiffuserScheduler:
+    
+    def __init__(self, scheduler_config) -> None:
+        ## Noise scheduler ##
+        self.noise_scheduler_type =  scheduler_config.type     
+        self.num_diffusion_iters_eval = scheduler_config.num_diffusion_iters_eval
+        self.num_diffusion_iters_train = scheduler_config.num_diffusion_iters_train
+        
+        noise_scheduler = {"ddpm": DDPMScheduler,
+                        "ddim": DDIMScheduler,
+        }
 
+        self.noise_scheduler = noise_scheduler[self.noise_scheduler_type](
+            num_train_timesteps= self.num_diffusion_iters_train,
+            beta_schedule=scheduler_config.beta_schedule,
+            clip_sample=True,
+            prediction_type='epsilon'
+        )
 
+    def train(self):
+        self.noise_scheduler.set_timesteps(self.num_diffusion_iters_train)
+        print(f"Diffusion timesteps (train): {len(self.noise_scheduler.timesteps)}")
+    
+    def eval(self):
+        self.noise_scheduler.set_timesteps(self.num_diffusion_iters_eval)
+        print(f"Diffusion timesteps (eval): {len(self.noise_scheduler.timesteps)}")
+
+    def timesteps(self):
+        return self.noise_scheduler.timesteps[:]
+    
+    def step(self,model_output,timestep,sample):
+        return self.noise_scheduler.step(
+                                        model_output=model_output,
+                                        timestep=timestep,
+                                        sample=sample
+                                    ).prev_sample
+    
+    def add_noise(self, actions_labels, noise, timesteps):
+        return self.noise_scheduler.add_noise(   
+                    actions_labels, noise, timesteps)
