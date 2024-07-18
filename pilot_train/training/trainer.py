@@ -108,7 +108,6 @@ class Trainer:
             noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
             self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
 
-        # TODO: Implement and modify
         self.ema_model = None
         if self.use_ema: 
             

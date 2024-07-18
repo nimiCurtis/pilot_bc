@@ -43,8 +43,8 @@ training:
 
   debug:
     # steps per epoch
-    max_train_steps: 5
-    max_val_steps: 2
+    max_train_steps: 3
+    max_val_steps: 3
 
 
 # data config
@@ -65,7 +65,7 @@ data:
   action:
     min_dist_cat: 3
     max_dist_cat: 10
-    
+
   # action output params
   pred_horizon: 8 # TODO: chang to pred_horizon
   action_horizon: 6
@@ -80,7 +80,7 @@ data:
 
 # logging config
 log:
-  desc: ""
+  desc: "test_inference"
   # desc: batch_experiment_b${training.batch_size}_
   
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs

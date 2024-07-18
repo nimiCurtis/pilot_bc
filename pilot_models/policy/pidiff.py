@@ -246,8 +246,11 @@ class PiDiff(BaseModel):
             output = self.infer_goal(kwargs["goal_rel_pos_to_target"])
         
         elif func_name == "fuse_modalities":
-            output = self.fuse_modalities(kwargs["modalities"],kwargs["mask"])
-        
+            if "mask" in kwargs:
+                output = self.fuse_modalities(kwargs["modalities"],kwargs["mask"])
+            else:
+                output = self.fuse_modalities(kwargs["modalities"])
+
         elif func_name == "goal_masking":
             output = self.infer_goal_masking(kwargs["final_encoded_condition"], kwargs["goal_mask"])
 

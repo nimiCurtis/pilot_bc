@@ -6,6 +6,7 @@ import numpy as np
 from typing import Tuple
 from torchvision import transforms
 
+import torch.nn.functional as F
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_utils.utils import (
     get_delta,
@@ -24,6 +25,8 @@ from pilot_utils.transforms import transform_images, ObservationTransform
 
 from pilot_models.model_registry import get_policy_model
 from pilot_config.config import get_inference_model_config, get_robot_config
+
+from pilot_models.policy.pidiff import DiffuserScheduler
 
 # Path to checkpoints folder
 CKPTH_PATH = os.path.join(os.path.dirname(__file__),
@@ -215,6 +218,14 @@ class PilotAgent(nn.Module):
                                     linear_encoder_model_cfg=linear_encoder_cfg,
                                     data_cfg=data_cfg)
         
+        self.learn_angle = data_cfg.learn_angle
+        self.pred_horizon = data_cfg.pred_horizon
+        self.action_dim = 4 if self.learn_angle else 2
+        self.action_horizon = data_cfg.action_horizon
+        # For now we use only pidiff model 
+        noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
+        self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
+        
         robot_properties = get_robot_config(robot)[robot]
         robot_properties.update({'frame_rate':self.frame_rate})
         self.action_stats = get_action_stats(properties=robot_properties, waypoint_spacing=waypoint_spacing)
@@ -232,6 +243,7 @@ class PilotAgent(nn.Module):
         state_dict = checkpoint["model_state_dict"]
         self.model.load_state_dict(state_dict, strict=False)
         self.model.eval()
+        self.noise_scheduler.eval()
 
     def to(self, device):
         """
@@ -311,15 +323,86 @@ class PilotAgent(nn.Module):
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
-
         with torch.no_grad():
-            normalized_actions = self.model("action_pred",
-                                            obs_img=context_queue,
-                                            curr_rel_pos_to_target=target_context_queue,
-                                            goal_rel_pos_to_target=goal_to_target,
-                                            goal_mask=goal_mask)
+            normalized_actions = self.infer_actions(
+                obs_img=context_queue,
+                curr_rel_pos_to_target=target_context_queue,
+                goal_rel_pos_to_target=goal_to_target,
+                input_goal_mask=goal_mask
+            )
 
         return normalized_actions[0]  # no batch dimension
+    
+    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask):
+        
+        obs_encoding = self.model("vision_encoder",
+                                obs_img=obs_img)
+        
+        # Get the input goal mask 
+        if input_goal_mask is not None:
+            goal_mask = input_goal_mask.to(self.device)
+
+        # TODO: add if else condition on goal_condition
+        
+        lin_encoding = self.model("linear_encoder",
+                                curr_rel_pos_to_target=curr_rel_pos_to_target)
+
+        modalities = [obs_encoding, lin_encoding]
+        fused_modalities_encoding = self.model("fuse_modalities", modalities=modalities)
+        
+        goal_encoding = self.model("goal_encoder",
+                                goal_rel_pos_to_target=goal_rel_pos_to_target)
+        
+        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+
+        final_encoded_condition = self.model("goal_masking",final_encoded_condition=final_encoded_condition, goal_mask=goal_mask)
+
+        # else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
+        #     final_encoded_condition = obs_encoding
+
+        # initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
+        diffusion_output = noisy_diffusion_output
+        
+        for k in self.noise_scheduler.timesteps():
+            # predict noise
+            noise_pred = self.model("noise_pred",
+                                        noisy_action= diffusion_output,
+                                        timesteps = k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                        final_encoded_condition = final_encoded_condition)
+
+            # inverse diffusion step (remove noise)
+            diffusion_output = self.noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            )
+        
+        # diffusion output should be denoised action deltas
+        action_pred_deltas = diffusion_output
+        
+        # augment outputs to match labels size-wise
+        action_pred_deltas = action_pred_deltas.reshape(
+            (action_pred_deltas.shape[0], self.pred_horizon, self.action_dim)
+        )
+
+        # Init action traj
+        action_pred = torch.zeros_like(action_pred_deltas)
+        
+        ## Cumsum 
+        action_pred[:, :, :2] = torch.cumsum(
+            action_pred_deltas[:, :, :2], dim=1
+        )  # convert position and orientation deltas into waypoints in local coords
+
+        if self.model.learn_angle:
+            action_pred[:, :, 2:] = F.normalize(
+                action_pred_deltas[:, :, 2:].clone(), dim=-1
+            )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
+            
+        action = action_pred[:,:self.action_horizon,:]
+        
+        return action
 
 def get_inference_config(model_name):
     """
