@@ -1,4 +1,4 @@
-data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/asher
+data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking
 max_depth: 10000
 nimrod:
   end_slack: 0

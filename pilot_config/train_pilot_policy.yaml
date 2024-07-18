@@ -5,10 +5,10 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: tcn       # mlp | tcn | ..
-  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
+  - linear_encoder: mlp       # mlp | tcn | ..
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: asher # all | go_to_the_picture
+  - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
 
 
@@ -20,7 +20,7 @@ training:
   # goal_condition: True
   batch_size: 16
   eval_batch_size: 16
-  epochs: 30
+  epochs: 5
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -43,8 +43,8 @@ training:
 
   debug:
     # steps per epoch
-    max_train_steps: null
-    max_val_steps: null
+    max_train_steps: 5
+    max_val_steps: 2
 
 
 # data config

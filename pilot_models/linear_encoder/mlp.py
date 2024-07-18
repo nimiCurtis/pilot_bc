@@ -9,7 +9,7 @@ class MLP(BaseModel):
         super().__init__(linear_encoder_config)
 
         context_size = data_config.context_size
-        obs_num_lin_features = self.num_lin_features*(context_size+1)
+        obs_num_lin_features = self.lin_features_dim*(context_size+1)
 
         self.fc = nn.Sequential(nn.Linear(obs_num_lin_features, self.lin_encoding_size // 4),
                                         nn.ReLU(),
