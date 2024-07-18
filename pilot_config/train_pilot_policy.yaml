@@ -35,7 +35,7 @@ training:
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  use_ema: True # not in use
+  use_ema: True 
   goal_mask_prob: 0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
@@ -80,12 +80,14 @@ data:
 
 # logging config
 log:
+  desc: ""
+  # desc: batch_experiment_b${training.batch_size}_
+  
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
   # project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
 
-
-  run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
   num_images_log: 4
   print_log_freq: 300 # in iterations

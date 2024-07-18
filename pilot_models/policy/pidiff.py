@@ -170,7 +170,7 @@ class PiDiff(BaseModel):
         # If a goal mask is provided, mask some of the goal tokens
         if goal_mask is not None:
             no_goal_mask = goal_mask.long()
-            
+            self.all_masks = self.all_masks.to(no_goal_mask.device)
             # select from all_masks a tensor based on the no_goal_mask tensor
             # src_key_padding_mask = torch.index_select(self.all_masks.to(self.device), 0, no_goal_mask)
             src_key_padding_mask = torch.index_select(self.all_masks, 0, no_goal_mask)
@@ -186,6 +186,7 @@ class PiDiff(BaseModel):
 
         if src_key_padding_mask is not None:
             # avg_mask = torch.index_select(self.avg_pool_mask.to(self.device), 0, no_goal_mask).unsqueeze(-1)
+            self.avg_pool_mask = self.avg_pool_mask.to(no_goal_mask.device)
             avg_mask = torch.index_select(self.avg_pool_mask, 0, no_goal_mask).unsqueeze(-1)
 
             final_encoded_condition = final_encoded_condition * avg_mask
@@ -233,76 +234,6 @@ class PiDiff(BaseModel):
     
         return fused_tensor
 
-    def infer_actions(self,
-            obs_img: torch.tensor,
-            curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None,
-            input_goal_mask: torch.tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-    
-        obs_encoding = self.infer_vision_encoder(obs_img)
-        
-        # Get the input goal mask 
-        if input_goal_mask is not None:
-            goal_mask = input_goal_mask.to(self.device)
-
-        # TODO: add if else condition on goal_condition
-        
-        lin_encoding = self.infer_linear_encoder(curr_rel_pos_to_target)
-        modalities = [obs_encoding, lin_encoding]
-        fused_modalities_encoding = self.fuse_modalities(modalities)
-        goal_encoding = self.infer_goal(goal_rel_pos_to_target)
-        
-        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-
-        final_encoded_condition = self.infer_goal_masking(final_encoded_condition, goal_mask)
-
-        # else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
-        #     final_encoded_condition = obs_encoding
-
-        # initialize action from Gaussian noise
-        noisy_diffusion_output = torch.randn(
-            (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
-        diffusion_output = noisy_diffusion_output
-        
-        for k in self.noise_scheduler.timesteps[:]:
-            # predict noise
-            noise_pred = self.infer_noise_predictor(diffusion_output,
-                                                    k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                                    final_encoded_condition)
-
-            # inverse diffusion step (remove noise)
-            diffusion_output = self.noise_scheduler.step(
-                model_output=noise_pred,
-                timestep=k,
-                sample=diffusion_output
-            ).prev_sample
-
-        # diffusion output should be denoised action deltas
-        action_pred_deltas = diffusion_output
-        
-        # augment outputs to match labels size-wise
-        action_pred_deltas = action_pred_deltas.reshape(
-            (action_pred_deltas.shape[0], self.pred_horizon, self.action_dim)
-        )
-
-        # Init action traj
-        action_pred = torch.zeros_like(action_pred_deltas)
-        
-        ## Cumsum 
-        action_pred[:, :, :2] = torch.cumsum(
-            action_pred_deltas[:, :, :2], dim=1
-        )  # convert position and orientation deltas into waypoints in local coords
-
-        if self.learn_angle:
-            action_pred[:, :, 2:] = F.normalize(
-                action_pred_deltas[:, :, 2:].clone(), dim=-1
-            )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
-
-
-        action = action_pred[:,:self.action_horizon,:]
-        
-        return action
-
     def forward(self, func_name, **kwargs):
         
         if func_name == "vision_encoder" :
@@ -323,11 +254,6 @@ class PiDiff(BaseModel):
         elif func_name == "noise_pred":
             output = self.infer_noise_predictor(kwargs["noisy_action"], kwargs["timesteps"], kwargs["final_encoded_condition"])
 
-        elif func_name == "action_pred":
-            output = self.infer_actions(kwargs["obs_img"],
-                                        kwargs["curr_rel_pos_to_target"],
-                                        kwargs["goal_rel_pos_to_target"], 
-                                        kwargs["goal_mask"])
         else:
             raise NotImplementedError
         

@@ -1,6 +1,6 @@
 bags_folder: "/media/roblab20/Expansion/pilot/zofit_bags"
 # bags_folder: "/media/nimrod/Expansion/pilot/raanana_bags"
-destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/asher"
+destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking"
 
 save_raw: true                        # I dont see a reason why to set it to false
 
@@ -13,6 +13,7 @@ nimrod:                               # dataset name
                                     # usefull when standing few seconds at the begining. 
   post_truncated: 0.5                   # number in seconds -> when to finish storing data = end_time - post_truncated.
   max_depth: 10000
+
 # turtlebot: 
 #   aligned_topics: ["odom", "rgb", "depth", "target_object"]     # pick topics to be aligned
 #   sync_rate: 6                    # alignment rate, if null we will 
