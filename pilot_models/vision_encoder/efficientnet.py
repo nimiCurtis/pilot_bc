@@ -1,6 +1,9 @@
 from efficientnet_pytorch import EfficientNet as ecn
 from pilot_models.vision_encoder.base_model import BaseModel
 
+import torchvision.models as models
+
+
 class EfficientNet(BaseModel):
     # def __init__(self, version="efficientnet-b0", in_channels=3, pretrained=False) -> None:
         
@@ -32,3 +35,4 @@ class EfficientNet(BaseModel):
         # currently, the size is [batch_size, self.context_size+2, self.obs_encoding_size]
         
         return obs_encoding
+    

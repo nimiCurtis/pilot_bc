@@ -35,11 +35,16 @@ training:
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  use_ema: False # not in use
+  use_ema: True # not in use
   goal_mask_prob: 0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
   modal_dropout_prob: 0 # 0 for no no dropout , 1 for dropout one modal anytime
+
+  debug:
+    # steps per epoch
+    max_train_steps: null
+    max_val_steps: null
 
 
 # data config
@@ -77,6 +82,8 @@ data:
 log:
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
+  # project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
+
 
   run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off

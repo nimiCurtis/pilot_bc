@@ -35,7 +35,7 @@ class Trainer:
     and save model checkpoints using a set of configurations provided during instantiation.
 
     """
-        
+
     def __init__(self, model: nn.Module,
                 optimizer: torch.optim,
                 scheduler,
@@ -55,7 +55,6 @@ class Trainer:
             scheduler: Learning rate scheduler.
             dataloader (DataLoader): Loader for training data.
             test_dataloaders (List[DataLoader]): List of loaders for test data.
-            transform (transforms): Data transformations.
             device: Computation device (CPU or GPU).
             training_cfg (DictConfig): Training-specific configurations.
             data_cfg (DictConfig): Data handling configurations.
@@ -69,10 +68,7 @@ class Trainer:
         self.scheduler = scheduler
         self.dataloader = dataloader
         self.test_dataloaders = test_dataloaders
-        # self.transform = transform
         self.device = device
-        self.training_cfg = training_cfg
-        self.data_cfg = data_cfg
 
         # Log config
         project_log_folder = os.path.join(log_cfg.project_folder,log_cfg.run_name)
@@ -111,24 +107,24 @@ class Trainer:
         if self.model_name == "pidiff":
             noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
             self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
+
+        # TODO: Implement and modify
+        self.ema_model = None
+        if self.use_ema: 
             
-            # TODO: Implement and modify
-            if self.use_ema: 
-                self.ema = EMAModel(self.model.parameters(), power=0.75)
-                self.ema.to(self.device)
-                self.ema_model = copy.deepcopy(self.model)
-                self.ema_model.to(self.device)
+            print("Using EMA model")
+            self.ema_model = copy.deepcopy(self.model)
+            self.ema_model.to(self.device)
+            self.ema = EMAModel(self.ema_model, power=0.75)
+                
 
         self.goal_mask_prob = training_cfg.goal_mask_prob
         self.goal_mask_prob = torch.clip(torch.tensor(self.goal_mask_prob), 0, 1)
 
         self.modal_dropout_prob = training_cfg.modal_dropout_prob
         self.modal_dropout_prob = torch.clip(torch.tensor(self.modal_dropout_prob), 0, 1)
-
-    def to_ema(self):
-        # Weights of the EMA model
-        # is used for inference
-        self.ema.copy_to(self.ema_model.parameters())
+        
+        self.debug = training_cfg.debug
 
     def train_one_epoch(self, epoch: int)->None:
         """
@@ -184,6 +180,8 @@ class Trainer:
             dynamic_ncols=True,
             desc=f"Training epoch {epoch}",
         )
+        total_train_steps = tqdm_iter.total
+        
         for i, data in enumerate(tqdm_iter):
             (
                 obs_image,
@@ -229,8 +227,8 @@ class Trainer:
             
             # Infer model
             if self.model_name == "pidiff":
-                # Sample noise to add to actions
                 
+                # Sample noise to add to actions
                 action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
                 action_label_pred_rel_orientations = action_label_pred[:,:,2:]
                 action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
@@ -312,20 +310,18 @@ class Trainer:
             # Optim Step
             self.optimizer.step()
             
-            
+            # Update Exponential Moving Average of the model weights after optimizing
+            if self.use_ema:
+                self.ema.step(self.model.parameters())
+
             # maintain memory
             del loss
             gc.collect()
             
-            # # Update Exponential Moving Average of the model weights after optimizing
             if self.model_name == "pidiff": ### TODO: add eme implementation
 
                 if i % self.print_log_freq == 0 :
                     
-                    # action_pred = self.model("action_pred",obs_img=obs_image,
-                    #                     curr_rel_pos_to_target=curr_rel_pos_to_target,
-                    #                     goal_rel_pos_to_target=goal_rel_pos_to_target,
-                    #                     goal_mask=goal_mask)
                     
                     # initialize action from Gaussian noise
                     noisy_diffusion_output = torch.randn(
@@ -389,6 +385,13 @@ class Trainer:
                 mode="train",
                 use_latest=True,
             )
+            
+            if self.debug.max_train_steps:
+                if i==self.debug.max_train_steps:
+                    break
+            else:
+                if i==total_train_steps - 2:
+                    break
 
     def evaluate_one_epoch(self, dataloader:DataLoader, eval_type:str, epoch:int)->Tuple:
         """
@@ -404,9 +407,8 @@ class Trainer:
         """
         
         
-        # eval_model = self.ema_model if self.use_ema else self.model
-        # eval_model.eval()
-        self.model.eval()
+        eval_model = self.ema_model if self.use_ema else self.model
+        eval_model.eval()
         self.noise_scheduler.eval()
         
         action_loss_logger = Logger("action_loss", eval_type)
@@ -511,28 +513,43 @@ class Trainer:
                         action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
-                    obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
-                    
+                    # obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
+                    obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image)
+
                     # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                     if self.goal_condition:
                         # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
-                        lin_encoding = self.model("linear_encoder",
+                        # lin_encoding = self.model("linear_encoder",
+                        #                         curr_rel_pos_to_target=curr_rel_pos_to_target)
+                        
+                        lin_encoding = eval_model("linear_encoder",
                                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
                         
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                         
-                        fused_modalities_encoding = self.model("fuse_modalities",
+                        # fused_modalities_encoding = self.model("fuse_modalities",
+                        #                                     modalities=modalities,
+                        #                                     mask=modal_dropout_mask)
+                        
+                        fused_modalities_encoding = eval_model("fuse_modalities",
                                                             modalities=modalities,
                                                             mask=modal_dropout_mask)
                         
-                        goal_encoding = self.model("goal_encoder",
+                        # goal_encoding = self.model("goal_encoder",
+                        #                         goal_rel_pos_to_target=goal_rel_pos_to_target)
+                        
+                        goal_encoding = eval_model("goal_encoder",
                                                 goal_rel_pos_to_target=goal_rel_pos_to_target)
                         
                         final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                        final_encoded_condition = self.model("goal_masking",
+                        # final_encoded_condition = self.model("goal_masking",
+                        #                                     final_encoded_condition=final_encoded_condition,
+                        #                                     goal_mask = goal_mask)
+                        
+                        final_encoded_condition = eval_model("goal_masking",
                                                             final_encoded_condition=final_encoded_condition,
                                                             goal_mask = goal_mask)
 
@@ -541,11 +558,16 @@ class Trainer:
                     else:       # No Goal condition >> take the obs_encoding as the tokens
                         final_encoded_condition = obs_encoding_condition
 
-                    noise_pred = self.model("noise_pred",
+                    noise_pred = eval_model("noise_pred",
                                         noisy_action=noisy_action,
                                         timesteps=timesteps,
                                         final_encoded_condition=final_encoded_condition)
-                
+
+                    # noise_pred = self.model("noise_pred",
+                    #                     noisy_action=noisy_action,
+                    #                     timesteps=timesteps,
+                    #                     final_encoded_condition=final_encoded_condition)
+                    
                     losses = compute_noise_losses(noise_pred=noise_pred,
                             noise=noise,
                             action_mask=action_mask)
@@ -560,7 +582,12 @@ class Trainer:
                         
                         for k in self.noise_scheduler.timesteps():
                             # predict noise
-                            noise_pred = self.model("noise_pred",
+                            # noise_pred = self.model("noise_pred",
+                            #                 noisy_action=diffusion_output,
+                            #                 timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                            #                 final_encoded_condition=final_encoded_condition)
+                            
+                            noise_pred = eval_model("noise_pred",
                                             noisy_action=diffusion_output,
                                             timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
                                             final_encoded_condition=final_encoded_condition)
@@ -585,7 +612,7 @@ class Trainer:
 
                 # Not in use -> TODO: refactor for another models
                 else:
-                    model_outputs = model_outputs = self.model("action_pred",
+                    model_outputs = self.model("action_pred",
                                             obs_img=obs_image,
                                             curr_rel_pos_to_target=curr_rel_pos_to_target,
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
@@ -621,6 +648,10 @@ class Trainer:
                     use_latest=False,
                     wandb_increment_step=False,
                 )
+                
+                if self.debug.max_val_steps:
+                    if i==self.debug.max_val_steps:
+                        break
 
         return action_loss_logger.average(), total_loss_logger.average()
 
@@ -632,7 +663,7 @@ class Trainer:
         Returns:
             None
         """
-         
+
         for epoch in range(self.current_epoch, self.current_epoch + self.epochs):
             print()
             print(
@@ -641,12 +672,16 @@ class Trainer:
             
             self.train_one_epoch(epoch=epoch)
             
+            if self.use_ema:
+                self.ema.copy_to(self.ema_model.parameters())
+            
             avg_total_test_loss = []
             for dataset_type in self.test_dataloaders:
                 print(
                     f"Start {dataset_type} {self.model_name} Testing Epoch {epoch}/{self.current_epoch + self.epochs - 1}"
                 )
                 loader = self.test_dataloaders[dataset_type]
+                
                 test_action_loss, total_eval_loss = self.evaluate_one_epoch(eval_type=dataset_type,
                                                                                             dataloader=loader,
                                                                                             epoch=epoch)
@@ -699,7 +734,10 @@ class Trainer:
     
     def save_checkpoint(self,epoch, current_avg_loss, path):
         # DataParallel wrappers keep raw model object in .module attribute
-        raw_model = self.model.module if hasattr(self.model, "module") else self.model
+        if self.use_ema:
+            raw_model = self.ema_model.module if hasattr(self.ema_model, "module") else self.ema_model
+        else:
+            raw_model = self.model.module if hasattr(self.model, "module") else self.model
         checkpoint = {
                     "epoch": epoch,
                     "model_state_dict": raw_model.state_dict(),

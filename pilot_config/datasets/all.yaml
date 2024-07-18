@@ -1,4 +1,6 @@
 data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/all
+# data_folder: /home/curtis/dev/pilot/pilot_bc/pilot_dataset/all
+
 max_depth: 5000
 nimrod:
   end_slack: 3
@@ -14,9 +16,13 @@ nimrod:
     min_lin_vel: -0.8049
     std_ang_vel: 0.2114
     std_lin_vel: 0.1675
+  # test: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/all/test/nimrod
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/nimrod
+
   time: 39.9132
+  # train: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/all/train/nimrod
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/nimrod
+
   waypoint_spacing: 2
 robots:
 - nimrod
@@ -36,6 +42,10 @@ turtlebot:
     std_ang_vel: 0.1682
     std_lin_vel: 0.085
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/test/turtlebot
+  # test: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/all/test/turtlebot
+
   time: 48.8943
+  # train: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/all/train/turtlebot
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/all/train/turtlebot
+
   waypoint_spacing: 2
