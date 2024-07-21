@@ -10,35 +10,35 @@ import torch
 import torch.nn as nn
 import torchvision.transforms.v2 as transforms
 
-# # Check vectorized operations
-# def transform_images(pil_imgs: List[PILImage.Image],
-#                     transform: transforms) -> torch.Tensor:
-#     """Transforms a list of PIL image to a torch tensor."""
-#     if type(pil_imgs) != list:
-#         pil_imgs = [pil_imgs]
-#     transf_imgs = []
-#     for pil_img in pil_imgs:
-#         if pil_img.mode == 'RGBA':
-#             pil_img = pil_img.convert('RGB')
-#         transf_img = transform(pil_img)
-#         transf_imgs.append(transf_img)
-#     return torch.cat(transf_imgs)
-
-
-def transform_images(pil_imgs: List[Image.Image], transform: transforms.Compose) -> torch.Tensor:
-    """Transforms a list of PIL images to a torch tensor using batch processing."""
-    # Convert all images to RGB mode if necessary
-    pil_imgs = [img.convert('RGB') if img.mode == 'RGBA' else img for img in pil_imgs]
-    # Apply the transform to the entire batch
-    transf_imgs = transform(pil_imgs)
+# Check vectorized operations
+def transform_images(pil_imgs: List[PILImage.Image],
+                    transform: transforms) -> torch.Tensor:
+    """Transforms a list of PIL image to a torch tensor."""
+    if type(pil_imgs) != list:
+        pil_imgs = [pil_imgs]
+    transf_imgs = []
+    for pil_img in pil_imgs:
+        if pil_img.mode == 'RGBA':
+            pil_img = pil_img.convert('RGB')
+        transf_img = transform(pil_img)
+        transf_imgs.append(transf_img)
     return torch.cat(transf_imgs)
 
-def resize_and_aspect_crop(
-    img: Image.Image, image_resize_size: Tuple[int, int], aspect_ratio: float = IMAGE_ASPECT_RATIO
-):
-    img = img.resize(image_resize_size)
-    resize_img = TF.to_tensor(img)
-    return resize_img
+# def transform_images(pil_imgs: List[Image.Image], transform: transforms.Compose) -> torch.Tensor:
+#     """Transforms a list of PIL images to a torch tensor using batch processing."""
+#     # Convert all images to RGB mode if necessary
+#     pil_imgs = [img.convert('RGB') if img.mode == 'RGBA' else img for img in pil_imgs]
+#     # Apply the transform to each image individually
+#     transf_imgs = [transform(img) for img in pil_imgs]
+#     return torch.stack(transf_imgs)
+
+# def transform_images(pil_imgs: List[Image.Image], transform: transforms.Compose) -> torch.Tensor:
+#     """Transforms a list of PIL images to a torch tensor using batch processing."""
+#     # Convert all images to RGB mode if necessary
+#     pil_imgs = [img.convert('RGB') if img.mode == 'RGBA' else img for img in pil_imgs]
+#     # Apply the transform to the entire batch
+#     transf_imgs = transform(pil_imgs)
+#     return torch.cat(transf_imgs)
 
 class ObservationTransform:
     def __init__(self, data_cfg,
@@ -88,14 +88,14 @@ class ObservationTransform:
                                             resize,
                                             ## main transforms
                                             # TODO: try to run with transforms
-                                            # random_erasing,
-                                            # random_rotation,
-                                            # random_mask,
+                                            random_erasing,
+                                            random_rotation,
+                                            random_mask,
                                             # end of pipeline
                                             to_float32,
                                             normalize
                                         ])
-        
+
         ### EVAL TRANSFORMS ###
         eval_transform =  transforms.Compose([
                                             ## start of pipline

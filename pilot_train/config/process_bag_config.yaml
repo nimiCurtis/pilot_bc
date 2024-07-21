@@ -1,4 +1,4 @@
-bags_folder: "/media/roblab20/Expansion/pilot/zofit_bags"
+bags_folder: "/media/roblab20/Expansion/pilot/back_from_objects_bags"
 # bags_folder: "/media/nimrod/Expansion/pilot/raanana_bags"
 destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking"
 

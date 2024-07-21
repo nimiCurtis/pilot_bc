@@ -5,8 +5,8 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
+  - linear_encoder: tcn       # mlp | tcn | ..
+  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -19,8 +19,8 @@ device: cuda
 training:
   # goal_condition: True
   batch_size: 16
-  eval_batch_size: 16
-  epochs: 5
+  eval_batch_size: 32
+  epochs: 40
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -43,8 +43,8 @@ training:
 
   debug:
     # steps per epoch
-    max_train_steps: 3
-    max_val_steps: 3
+    max_train_steps: null
+    max_val_steps: null
 
 
 # data config
@@ -80,7 +80,7 @@ data:
 
 # logging config
 log:
-  desc: "test_inference"
+  desc: "transform_v1_experiment_nonormalize_"
   # desc: batch_experiment_b${training.batch_size}_
   
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
@@ -91,7 +91,7 @@ log:
   ## =0 turns off
   num_images_log: 4
   print_log_freq: 300 # in iterations
-  eval_log_freq: 5  # in iterations
+  eval_log_freq: 10  # in iterations
   image_log_freq: 2 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
