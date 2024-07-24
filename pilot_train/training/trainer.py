@@ -17,6 +17,10 @@ from torchvision.transforms import transforms
 import torch.nn.functional as F
 
 from diffusers.training_utils import EMAModel
+from diffusers.optimization import (
+    Union, SchedulerType, Optional,
+    Optimizer, TYPE_TO_SCHEDULER_FUNCTION
+)
 
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_train.training.logger import Logger, LoggingManager
@@ -114,7 +118,7 @@ class Trainer:
             print("Using EMA model")
             self.ema_model = copy.deepcopy(self.model)
             self.ema_model.to(self.device)
-            self.ema = EMAModel(self.ema_model, power=0.75)
+            self.ema = EMAModel(self.ema_model.parameters(), power=0.75)
                 
 
         self.goal_mask_prob = training_cfg.goal_mask_prob
@@ -123,7 +127,10 @@ class Trainer:
         self.modal_dropout_prob = training_cfg.modal_dropout_prob
         self.modal_dropout_prob = torch.clip(torch.tensor(self.modal_dropout_prob), 0, 1)
         
+        
         self.debug = training_cfg.debug
+        self.global_step = 0
+        self.gradient_accumulate_every = training_cfg.gradient_accumulate_every
 
     def train_one_epoch(self, epoch: int)->None:
         """
@@ -301,21 +308,31 @@ class Trainer:
                 
                 loss = losses["total_loss"]
             
-            # self.print_log_freq
-            # Zero Grad
-            self.optimizer.zero_grad()
-            # Backward Step
-            loss.backward()
-            # Optim Step
-            self.optimizer.step()
+            # # self.print_log_freq
+            # # Zero Grad
+            # self.optimizer.zero_grad()
+            # # Backward Step
+            # loss.backward()
+            # # Optim Step
+            # self.optimizer.step()
             
+            # self.scheduler.step()
+            
+            loss.backward()
+
+            # step optimizer
+            if self.global_step % self.gradient_accumulate_every == 0:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                self.scheduler.step()
+                            
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
 
             # maintain memory
-            del loss
-            gc.collect()
+            # del loss
+            # gc.collect()
             
             if self.model_name == "pidiff": ### TODO: add eme implementation
 
@@ -352,16 +369,16 @@ class Trainer:
                                                                         action_mask=action_mask,
                                                                         )
                     losses.update(action_losses)
-
-                    # step lr scheduler every batch
-                    # this is different from standard pytorch behavior
-                    # TODO: check
-                    if self.scheduler is not None:
-                        # scheduler calls based on the type of scheduler
-                        if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-                            self.scheduler.step(action_losses)
-                        else:
-                            self.scheduler.step()
+                    
+                # step lr scheduler every batch
+                # this is different from standard pytorch behavior
+                # TODO: check
+                # if self.scheduler is not None:
+                #     # scheduler calls based on the type of scheduler
+                #     if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                #         self.scheduler.step(action_losses)
+                #     else:
+                
 
             # Append to Logger
             for key, value in losses.items():
@@ -385,12 +402,15 @@ class Trainer:
                 use_latest=True,
             )
             
+            is_last_batch = i == total_train_steps - 2
             if self.debug.max_train_steps:
                 if i==self.debug.max_train_steps:
                     break
-            else:
-                if i==total_train_steps - 2:
+            elif is_last_batch:
                     break
+            else:
+                self.global_step+=1
+            
 
     def evaluate_one_epoch(self, dataloader:DataLoader, eval_type:str, epoch:int)->Tuple:
         """
@@ -797,56 +817,99 @@ class Trainer:
 
         return optimizer
     
+    # @staticmethod
+    # def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
+    #     """
+    #     Constructs and returns a learning rate scheduler based on the provided configuration.
+
+    #     Parameters:
+    #         training_cfg (DictConfig): Training configurations that may include scheduler type.
+    #         optimizer (torch.optim): Optimizer for which the scheduler will be used.
+    #         lr (float): Initial learning rate.
+
+    #     Returns:
+    #         Scheduler: The constructed scheduler.
+    #     """
+        
+    #     scheduler_name = training_cfg.scheduler.lower()
+    #     if scheduler_name == "cosine":
+    #         print("Using cosine annealing with T_max", training_cfg.epochs)
+    #         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #             optimizer, T_max=training_cfg.epochs
+    #         )
+    #     elif scheduler_name == "cyclic":
+    #         print("Using cyclic LR with cycle", training_cfg.cyclic_period)
+    #         scheduler = torch.optim.lr_scheduler.CyclicLR(
+    #             optimizer,
+    #             base_lr=lr / 10.,
+    #             max_lr=lr,
+    #             step_size_up=training_cfg.cyclic_period // 2,
+    #             cycle_momentum=False,
+    #         )
+    #     elif scheduler_name == "plateau":
+    #         print("Using ReduceLROnPlateau")
+    #         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #             optimizer,
+    #             factor=training_cfg.plateau_factor,
+    #             patience=training_cfg.plateau_patience,
+    #             verbose=True,
+    #         )
+    #     else:
+    #         raise ValueError(f"Scheduler {scheduler_name} not supported")
+
+    #     if training_cfg.warmup:
+    #         print("Using warmup scheduler")
+    #         scheduler = GradualWarmupScheduler(
+    #             optimizer,
+    #             multiplier=1,
+    #             total_epoch=training_cfg.warmup_epochs,
+    #             after_scheduler=scheduler,
+    #         )
+        
+    #     return scheduler
+    
     @staticmethod
-    def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
+    def get_scheduler(
+        name: Union[str, SchedulerType],
+        optimizer: Optimizer,
+        num_warmup_steps: Optional[int] = None,
+        num_training_steps: Optional[int] = None,
+        **kwargs
+    ):
         """
-        Constructs and returns a learning rate scheduler based on the provided configuration.
+        Added kwargs vs diffuser's original implementation
 
-        Parameters:
-            training_cfg (DictConfig): Training configurations that may include scheduler type.
-            optimizer (torch.optim): Optimizer for which the scheduler will be used.
-            lr (float): Initial learning rate.
+        Unified API to get any scheduler from its name.
 
-        Returns:
-            Scheduler: The constructed scheduler.
+        Args:
+            name (`str` or `SchedulerType`):
+                The name of the scheduler to use.
+            optimizer (`torch.optim.Optimizer`):
+                The optimizer that will be used during training.
+            num_warmup_steps (`int`, *optional*):
+                The number of warmup steps to do. This is not required by all schedulers (hence the argument being
+                optional), the function will raise an error if it's unset and the scheduler type requires it.
+            num_training_steps (`int``, *optional*):
+                The number of training steps to do. This is not required by all schedulers (hence the argument being
+                optional), the function will raise an error if it's unset and the scheduler type requires it.
         """
-        
-        scheduler_name = training_cfg.scheduler.lower()
-        if scheduler_name == "cosine":
-            print("Using cosine annealing with T_max", training_cfg.epochs)
-            scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=training_cfg.epochs
-            )
-        elif scheduler_name == "cyclic":
-            print("Using cyclic LR with cycle", training_cfg.cyclic_period)
-            scheduler = torch.optim.lr_scheduler.CyclicLR(
-                optimizer,
-                base_lr=lr / 10.,
-                max_lr=lr,
-                step_size_up=training_cfg.cyclic_period // 2,
-                cycle_momentum=False,
-            )
-        elif scheduler_name == "plateau":
-            print("Using ReduceLROnPlateau")
-            scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-                optimizer,
-                factor=training_cfg.plateau_factor,
-                patience=training_cfg.plateau_patience,
-                verbose=True,
-            )
-        else:
-            raise ValueError(f"Scheduler {scheduler_name} not supported")
+        name = SchedulerType(name)
+        schedule_func = TYPE_TO_SCHEDULER_FUNCTION[name]
+        if name == SchedulerType.CONSTANT:
+            return schedule_func(optimizer, **kwargs)
 
-        if training_cfg.warmup:
-            print("Using warmup scheduler")
-            scheduler = GradualWarmupScheduler(
-                optimizer,
-                multiplier=1,
-                total_epoch=training_cfg.warmup_epochs,
-                after_scheduler=scheduler,
-            )
-        
-        return scheduler
+        # All other schedulers require `num_warmup_steps`
+        if num_warmup_steps is None:
+            raise ValueError(f"{name} requires `num_warmup_steps`, please provide that argument.")
+
+        if name == SchedulerType.CONSTANT_WITH_WARMUP:
+            return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, **kwargs)
+
+        # All other schedulers require `num_training_steps`
+        if num_training_steps is None:
+            raise ValueError(f"{name} requires `num_training_steps`, please provide that argument.")
+
+        return schedule_func(optimizer, num_warmup_steps=num_warmup_steps, num_training_steps=num_training_steps, **kwargs)
     
     @staticmethod
     def get_dataloaders(datasets_cfg:DictConfig,

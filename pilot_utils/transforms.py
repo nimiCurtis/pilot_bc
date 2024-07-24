@@ -74,7 +74,7 @@ class ObservationTransform:
         random_mask = MaskImage(img_patch_size=16, img_masking_prob=0.015)
         random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
         
-        random_rotation = transforms.RandomRotation(degrees=3)
+        random_rotation = transforms.RandomRotation(degrees=5)
         random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.1)
         
         ## TODO: modify it to rgb as well

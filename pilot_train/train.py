@@ -90,8 +90,19 @@ def train(cfg:DictConfig):
             )
 
     optimizer = Trainer.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
-    scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
+    # scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 
+    scheduler = Trainer.get_scheduler(
+                training_cfg.scheduler,
+                optimizer=optimizer,
+                num_warmup_steps=training_cfg.warmup_steps,
+                num_training_steps=(
+                    (len(train_dataloader)-2) * training_cfg.epochs) \
+                        // training_cfg.gradient_accumulate_every,
+                # pytorch assumes stepping LRScheduler every epoch
+                # however huggingface diffusers steps it every batch
+                last_epoch=-1
+            )
 
     ### TODO: add the load run in the Trainer class
     # if "load_run" in config:
@@ -102,7 +113,6 @@ def train(cfg:DictConfig):
     #     load_model(model, config["model_type"], latest_checkpoint)
     #     if "epoch" in latest_checkpoint:
     #         current_epoch = latest_checkpoint["epoch"] + 1
-
 
     # if "load_run" in config:  # load optimizer and scheduler after data parallel
     #     if "optimizer" in latest_checkpoint:

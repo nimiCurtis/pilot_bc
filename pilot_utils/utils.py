@@ -276,7 +276,7 @@ def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_t
         for idx in drop_indices:
             modality_to_mask = random.randint(0, modalities_size - 1)
             mask[idx, modality_to_mask] = 0
-    
+
     return mask
 
 def get_action_stats(properties, waypoint_spacing):

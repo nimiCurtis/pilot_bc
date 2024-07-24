@@ -5,7 +5,7 @@ mha_ff_dim_factor: 4
 down_dims: [64, 128, 256]
 cond_predict_scale: False
 noise_scheduler:
-  type: ddim                    # ddpm | ddim
+  type: ddpm                    # ddpm | ddim
   num_diffusion_iters_eval: 10
   num_diffusion_iters_train: 100
   beta_schedule: squaredcos_cap_v2
