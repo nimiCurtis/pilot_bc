@@ -3,10 +3,10 @@ from torch import nn
 
 
 class BaseModel(nn.Module):
-    def __init__(self, linear_encoder_cfg):
+    def __init__(self, linear_encoder_cfg, data_cfg):
         super().__init__()
         self.name = linear_encoder_cfg.name
-        self.lin_features_dim = linear_encoder_cfg.lin_features_dim
+        self.lin_features_dim = linear_encoder_cfg.lin_features_dim + 4 if data_cfg.learn_angle else linear_encoder_cfg.lin_features_dim + 2
         self.lin_encoding_size = linear_encoder_cfg.lin_encoding_size
         
     def get_model(self):

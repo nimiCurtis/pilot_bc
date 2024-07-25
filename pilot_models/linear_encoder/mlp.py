@@ -6,7 +6,7 @@ class MLP(BaseModel):
 
     def __init__(self, linear_encoder_config, data_config) -> None:
 
-        super().__init__(linear_encoder_config)
+        super().__init__(linear_encoder_config, data_config)
 
         context_size = data_config.context_size
         obs_num_lin_features = self.lin_features_dim*(context_size+1)

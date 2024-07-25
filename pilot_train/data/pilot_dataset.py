@@ -328,6 +328,11 @@ class PilotDataset(Dataset):
         yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
         positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing])
 
+        prev_yaw = np.array(traj_data["yaw"][start_index + -self.context_size * self.waypoint_spacing: start_index + 2*self.waypoint_spacing: self.waypoint_spacing])
+        prev_positions =  np.array(traj_data["position"][start_index + -self.context_size * self.waypoint_spacing: start_index + 2*self.waypoint_spacing: self.waypoint_spacing])
+
+        # prev_action_delta = np.concatenate([positions[0] - prev_position, np.array([yaw[0] - prev_yaw])])
+        
         # Get the goal position, ensuring it does not exceed the length of the trajectory
         goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
 
@@ -349,6 +354,8 @@ class PilotDataset(Dataset):
         waypoints = to_local_coords(positions, positions[0], yaw[0])
         goal_in_local = to_local_coords(goal_pos, positions[0], yaw[0])
 
+        
+        prev_waypoints = to_local_coords(prev_positions, prev_positions[0], prev_yaw[0])
         # Ensure waypoints have the correct shape
         assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
 
@@ -356,20 +363,24 @@ class PilotDataset(Dataset):
             # Compute relative yaw changes and concatenate with waypoints
             yaw = yaw[1:] - yaw[0]  # yaw is relative to the initial yaw
             actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1)
+            
+            prev_yaw = prev_yaw[1:] - prev_yaw[0]  # yaw is relative to the initial yaw
+            prev_actions = np.concatenate([prev_waypoints[1:], prev_yaw[:, None]], axis=-1)
         else:
             actions = waypoints[1:]
-
+            prev_actions = prev_waypoints[1:]
+            
         if self.normalize:
             # Normalize the actions based on provided action statistics
             normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
-
+            normalized_prev_action = actions_forward_pass(prev_actions,action_stats,self.learn_angle)
             # Normalize the goal position in local coordinates
             normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
 
         # Assertion to ensure the shape of normalized actions is correct
         assert normalized_actions.shape == (self.pred_horizon, self.num_action_params), f"{normalized_actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 
-        return normalized_actions, normalized_goal_pos
+        return normalized_actions,normalized_prev_action, normalized_goal_pos
     
     def _get_trajectory(self, trajectory_name, target:bool = False):
         """
@@ -456,7 +467,7 @@ class PilotDataset(Dataset):
 
         # Compute the actions and normalized goal position
         action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
-        normalized_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
+        normalized_actions, normalized_prev_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
 
         if self.goal_condition:
             # Load the current and goal target trajectory data
@@ -489,6 +500,8 @@ class PilotDataset(Dataset):
 
             # Convert the context of relative positions to target into a tensor
             curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
+            normalized_prev_actions_tensor = torch.as_tensor(normalized_prev_actions)
+            curr_rel_pos_to_target = torch.concatenate([curr_rel_pos_to_target,normalized_prev_actions_tensor],axis=1)
         else:
             # Not in use
             curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], 3, 0))
@@ -508,6 +521,7 @@ class PilotDataset(Dataset):
             (not goal_is_negative)
         )
 
+        
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
             torch.as_tensor(obs_image, dtype=torch.float32),  # [C*(context+1),H,W]
