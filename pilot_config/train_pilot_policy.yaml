@@ -29,7 +29,7 @@ training:
   clipping: True # Clip gradients
   clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 10
+  warmup_steps: 100
   gradient_accumulate_every: 1
 
   warmup: False 
