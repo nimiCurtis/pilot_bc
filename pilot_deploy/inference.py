@@ -18,7 +18,8 @@ from pilot_utils.utils import (
     to_numpy,
     # get_goal_mask_tensor,
     get_action_stats,
-    clip_angle
+    clip_angle,
+    mask_target_context
 )
 
 from pilot_utils.transforms import transform_images, ObservationTransform
@@ -142,10 +143,10 @@ class InferenceDataset(PilotDataset):
                 # For now, this is not in use
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
 
-            mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
+            target_context_mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
             np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0], 3))
-            np_curr_rel_pos_in_d_theta[~mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~mask])
-            np_curr_rel_pos_in_d_theta[~mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+            np_curr_rel_pos_in_d_theta[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
+            np_curr_rel_pos_in_d_theta[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~target_context_mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
 
             # Convert the context of relative positions to target into a tensor
             curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
@@ -176,7 +177,9 @@ class InferenceDataset(PilotDataset):
             torch.as_tensor(normalized_actions, dtype=torch.float32),
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
-            torch.as_tensor(action_mask, dtype=torch.float32),
+            torch.as_tensor(action_mask, dtype=torch.float32)
+            # torch.as_tensor(target_context_mask).long(), #TODO: add implementation for not goal condition
+
         )
 
 
@@ -316,9 +319,12 @@ class PilotAgent(nn.Module):
             # goal_mask = get_goal_mask_tensor(curr_rel_pos_to_target).to(self.device)
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
             
-            zeros_per_timesteps = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
-            goal_mask = (torch.sum(zeros_per_timesteps) == curr_rel_pos_to_target.shape[0]).long()
-                        
+            target_context_mask = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
+            
+            goal_mask = (torch.sum(target_context_mask) == curr_rel_pos_to_target.shape[0]).long()
+            
+            target_context_mask = target_context_mask.unsqueeze(0).to(self.device).long()
+            
         if goal_rel_pos_to_target is not None:
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
@@ -328,12 +334,13 @@ class PilotAgent(nn.Module):
                 obs_img=context_queue,
                 curr_rel_pos_to_target=target_context_queue,
                 goal_rel_pos_to_target=goal_to_target,
-                input_goal_mask=goal_mask
+                input_goal_mask=goal_mask,
+                target_context_mask = target_context_mask
             )
 
         return normalized_actions[0]  # no batch dimension
     
-    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask):
+    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask, target_context_mask):
         
         obs_encoding = self.model("vision_encoder",
                                 obs_img=obs_img)
@@ -347,6 +354,8 @@ class PilotAgent(nn.Module):
         lin_encoding = self.model("linear_encoder",
                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
 
+        lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
+        
         modalities = [obs_encoding, lin_encoding]
         fused_modalities_encoding = self.model("fuse_modalities", modalities=modalities)
         
@@ -503,7 +512,7 @@ def main():
     # Loop through the dataset, performing inference and timing each prediction
     for i in range(0, size):
         # Retrieve relevant data for inference, including context, ground truth actions, etc.
-        context_queue, target_context_queue, goal_to_target, gt_actions_normalized, _, dataset_index, _ = dataset[i]
+        context_queue, target_context_queue, goal_to_target, gt_actions_normalized, _, dataset_index, _  = dataset[i]
         
         # Convert the ground truth actions into waypoints
         gt_waypoints = to_numpy(gt_actions_normalized)

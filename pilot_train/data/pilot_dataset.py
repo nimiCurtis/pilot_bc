@@ -482,10 +482,11 @@ class PilotDataset(Dataset):
                 # For now, this is not in use
                 np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
 
-            mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
+            #TODO: add implementation for not goal condition
+            target_context_mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
             np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0], 3))
-            np_curr_rel_pos_in_d_theta[~mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~mask])
-            np_curr_rel_pos_in_d_theta[~mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+            np_curr_rel_pos_in_d_theta[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
+            np_curr_rel_pos_in_d_theta[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~target_context_mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
 
             # Convert the context of relative positions to target into a tensor
             curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
@@ -517,6 +518,7 @@ class PilotDataset(Dataset):
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
+            torch.as_tensor(target_context_mask).long(), #TODO: add implementation for not goal condition
         )
 
     def _get_properties(self,trajectory_name):
