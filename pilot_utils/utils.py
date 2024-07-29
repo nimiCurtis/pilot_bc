@@ -340,3 +340,12 @@ def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
     action_pred = action_pred[:,:action_horizon,:]
     
     return action_pred
+
+def mask_target_context(lin_encoding, target_context_mask):
+    # Expand target_context_mask to have the same number of features as lin_encoding
+    target_context_mask_expanded = target_context_mask.unsqueeze(-1).expand_as(lin_encoding)
+    
+    # Mask the specific timesteps
+    masked_lin_encoding = lin_encoding * (1 - target_context_mask_expanded)
+    
+    return masked_lin_encoding
