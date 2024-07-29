@@ -315,10 +315,10 @@ class PilotAgent(nn.Module):
             # print(curr_rel_pos_to_target)
             # goal_mask = get_goal_mask_tensor(curr_rel_pos_to_target).to(self.device)
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
-            goal_mask = torch.sum((torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[0])).long()
             
-            # print(goal_mask)
-            
+            zeros_per_timesteps = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
+            goal_mask = (torch.sum(zeros_per_timesteps) == curr_rel_pos_to_target.shape[0]).long()
+                        
         if goal_rel_pos_to_target is not None:
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
@@ -364,7 +364,7 @@ class PilotAgent(nn.Module):
         noisy_diffusion_output = torch.randn(
             (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
         diffusion_output = noisy_diffusion_output
-        
+
         for k in self.noise_scheduler.timesteps():
             # predict noise
             noise_pred = self.model("noise_pred",

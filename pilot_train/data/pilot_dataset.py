@@ -460,8 +460,8 @@ class PilotDataset(Dataset):
 
         if self.goal_condition:
             # Load the current and goal target trajectory data
-            curr_target_traj_data = self._get_trajectory(f_curr, target=True)
-            goal_target_traj_data = self._get_trajectory(f_goal, target=True)
+            curr_target_traj_data = self._get_trajectory(f_curr, target=True) #fcur
+            goal_target_traj_data = self._get_trajectory(f_goal, target=True) #fgoal
             goal_target_traj_data_len = len(goal_target_traj_data)
             assert goal_time < goal_target_traj_data_len, f"{goal_time} and {goal_target_traj_data_len}"
 
