@@ -6,7 +6,7 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: tcn       # mlp | tcn | ..
-  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -29,7 +29,7 @@ training:
   clipping: True # Clip gradients
   clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 100
+  warmup_steps: 150
   gradient_accumulate_every: 1
 
   warmup: False 
@@ -39,10 +39,10 @@ training:
   plateau_factor: 0.5
   seed: 42
   use_ema: True 
-  goal_mask_prob: 0 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0.2 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.1 # 0 for no no dropout , 1 for dropout one modal anytime
+  modal_dropout_prob: 0.2 # 0 for no no dropout , 1 for dropout one modal anytime
 
   debug:
     # steps per epoch
@@ -66,7 +66,7 @@ data:
     min_dist_cat: 0
     max_dist_cat: 8
   action:
-    min_dist_cat: 0
+    min_dist_cat: 3
     max_dist_cat: 8
 
   # action output params
