@@ -462,7 +462,7 @@ def main():
     Loads the model, sets up the dataset, and evaluates the predictions.
     """
     # Set the name of the model to load and evaluate
-    model_name = "pilot-target-tracking_2024-07-14_17-47-20"
+    model_name = "pilot-target-tracking-c2_2024-07-29_21-02-01"
     model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
@@ -477,7 +477,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu") if device == "cuda" else "cpu"
 
     # Initialize the PilotPlanner model with the appropriate configurations
-    wpt_i = 2
+    wpt_i = 0
     frame_rate = 7
     model = PilotAgent(data_cfg=data_cfg,
                                 policy_model_cfg=policy_model_cfg,
