@@ -1,8 +1,8 @@
+device: cuda
 training:
-  goal_condition: false
   batch_size: 16
-  eval_batch_size: 16
-  epochs: 70
+  eval_batch_size: 32
+  epochs: 30
   current_epoch: 0
   gpu_ids:
   - 0
@@ -12,32 +12,35 @@ training:
   clipping: true
   clipping_max_norm: 1.0
   scheduler: cosine
+  warmup_steps: 150
+  gradient_accumulate_every: 1
   warmup: false
   warmup_epochs: 4
   cyclic_period: 10
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  alpha: 0.5
-  beta: 10
-  use_ema: false
-device: cuda
+  use_ema: true
+  goal_mask_prob: 0.2
+  modal_dropout_prob: 0.2
+  debug:
+    max_train_steps: null
+    max_val_steps: null
 data:
-  goal_condition: false
+  goal_condition: true
   normalize: true
   context_type: temporal
   target_observation_enable: true
   target_context: true
-  context_size: 4
+  context_size: 2
   distance:
     min_dist_cat: 0
-    max_dist_cat: 20
+    max_dist_cat: 8
   action:
-    min_dist_cat: 0
-    max_dist_cat: 20
-  close_far_threshold: 30
-  len_traj_pred: 8
-  action_horizon: 6
+    min_dist_cat: 3
+    max_dist_cat: 8
+  pred_horizon: 8
+  action_horizon: 5
   learn_angle: true
   image_size:
   - 96
@@ -46,11 +49,12 @@ data:
   obs_type: image
   img_type: depth
 log:
+  desc: context_experiment_c${data.context_size}_
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
-  run_name: train_pilot_policy/${policy_model.name}/${now:%Y-%m-%d}_${now:%H-%M-%S}
+  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   num_images_log: 4
-  print_log_freq: 50
-  eval_log_freq: 5
+  print_log_freq: 300
+  eval_log_freq: 10
   image_log_freq: 2
   eval_fraction: 0.25
   eval_freq: 1
@@ -64,20 +68,22 @@ log:
       project: pilot-release
       entity: nimrodcurtis
       mode: online
-encoder_model:
-  name: efficientnet
-  version: efficientnet-b1
+linear_encoder:
+  name: tcn
+  lin_features_dim: 3
+  lin_encoding_size: 256
+  kernel_size: 2
+  drop_out: 0.2
+vision_encoder:
+  name: depth_feature_extractor
   in_channels: 1
   pretrained: false
+  vision_encoding_size: 256
 policy_model:
   name: pidiff
   mha_num_attention_heads: 4
   mha_num_attention_layers: 4
   mha_ff_dim_factor: 4
-  late_fusion: false
-  obs_encoding_size: 256
-  lin_encoding_size: 256
-  num_lin_features: 2
   down_dims:
   - 64
   - 128
@@ -86,28 +92,28 @@ policy_model:
   noise_scheduler:
     type: ddpm
     num_diffusion_iters_eval: 10
-    num_diffusion_iters_train: 70
+    num_diffusion_iters_train: 100
     beta_schedule: squaredcos_cap_v2
 datasets:
-  data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/go_to_the_picture
+  data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking
   max_depth: 10000
   nimrod:
     end_slack: 0
     goals_per_obs: 1
     negative_mining: false
-    number_of_bags: 52
+    number_of_bags: 163
     stats:
-      max_ang_vel: 0.7791
-      max_lin_vel: 0.6062
-      mean_ang_vel: -0.0004
-      mean_lin_vel: 0.0816
-      min_ang_vel: -0.9489
-      min_lin_vel: -0.4322
-      std_ang_vel: 0.1118
-      std_lin_vel: 0.091
-    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/test/nimrod
-    time: 20.7878
-    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/go_to_the_picture/train/nimrod
-    waypoint_spacing: 2
+      max_ang_vel: 43.9604
+      max_lin_vel: 2.2882
+      mean_ang_vel: -0.0189
+      mean_lin_vel: 0.2396
+      min_ang_vel: -43.9178
+      min_lin_vel: -1.6975
+      std_ang_vel: 1.916
+      std_lin_vel: 0.3654
+    test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/nimrod
+    time: 88.8277
+    train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/nimrod
+    waypoint_spacing: 1
   robots:
   - nimrod
