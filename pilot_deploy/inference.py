@@ -233,14 +233,15 @@ class PilotAgent(nn.Module):
         robot_properties.update({'frame_rate':self.frame_rate})
         self.action_stats = get_action_stats(properties=robot_properties, waypoint_spacing=waypoint_spacing)
 
-    def load(self, model_name):
+    def load(self, model_name:str, model_version:str = "best_model"):
         """
         Load a pre-trained model.
 
         Args:
             model_name (str): The name of the pre-trained model.
         """
-        model_path = os.path.join(CKPTH_PATH, model_name, "best_model.pth")
+        
+        model_path = os.path.join(CKPTH_PATH, model_name, f"{model_version}.pth")
         checkpoint = torch.load(model_path)
 
         state_dict = checkpoint["model_state_dict"]
@@ -462,7 +463,7 @@ def main():
     """
     # Set the name of the model to load and evaluate
     model_name = "pilot-target-tracking_2024-07-14_17-47-20"
-
+    model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
@@ -487,7 +488,7 @@ def main():
                                 frame_rate=frame_rate)
 
     # Load the pre-trained model and move to the specified device 
-    model.load(model_name=model_name)
+    model.load(model_name=model_name,model_version=model_version)
     model.to(device=device)
 
     # Initialize transform for test
