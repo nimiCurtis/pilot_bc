@@ -66,16 +66,16 @@ class ObservationTransform:
         random_erasing = transforms.RandomErasing(p=0.1,
                                                 scale=(0.02, 0.02),
                                                 ratio=(1., 2.))
-        random_erasing = transforms.RandomApply(transforms=[random_erasing], p=0.1)
+        random_erasing = transforms.RandomApply(transforms=[random_erasing], p=0.15)
         
         random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
         center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
         
         random_mask = MaskImage(img_patch_size=16, img_masking_prob=0.015)
-        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.2)
         
         random_rotation = transforms.RandomRotation(degrees=5)
-        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.1)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.2)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 

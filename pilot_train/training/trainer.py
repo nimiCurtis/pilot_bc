@@ -214,7 +214,7 @@ class Trainer:
             # current relative target pos
             curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
             target_context_mask = target_context_mask.to(self.device)
-            
+
             # GOAL
             goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -477,6 +477,8 @@ class Trainer:
                     goal_pos,
                     dataset_index,
                     action_mask,
+                    target_context_mask,
+
                 ) = data
 
                 B = action_label.shape[0]
@@ -491,7 +493,7 @@ class Trainer:
                 obs_image = torch.cat(obs_images, dim=1)
                 # current relative target pos
                 curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
-
+                target_context_mask = target_context_mask.to(self.device)
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -549,7 +551,7 @@ class Trainer:
                         
                         lin_encoding = eval_model("linear_encoder",
                                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
-                        
+                        lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                         
