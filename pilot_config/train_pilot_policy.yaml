@@ -29,7 +29,7 @@ training:
   clipping: False # Clip gradients
   clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 50
+  warmup_steps: 500
   gradient_accumulate_every: 1
 
   warmup: False 
@@ -38,11 +38,11 @@ training:
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  use_ema: True 
-  goal_mask_prob: 0.0 # 0 for no mask att all -> task specific
+  use_ema: False 
+  goal_mask_prob: 0.5 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.0 # 0 for no no dropout , 1 for dropout one modal anytime
+  modal_dropout_prob: 0.5 # 0 for no no dropout , 1 for dropout one modal anytime
 
   debug:
     # steps per epoch
@@ -61,7 +61,7 @@ data:
   context_type: temporal
   target_observation_enable: True
   target_context: True
-  context_size: 0
+  context_size: 3
   distance:
     min_dist_cat: 0
     max_dist_cat: 6

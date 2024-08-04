@@ -16,7 +16,7 @@ class MLP(BaseModel):
                                         nn.Linear(self.lin_encoding_size // 4, self.lin_encoding_size // 2),
                                         nn.ReLU(),
                                         nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
-        
+
     def get_model(self):
         return self
 

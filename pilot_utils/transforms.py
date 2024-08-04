@@ -72,7 +72,7 @@ class ObservationTransform:
         resize = transforms.Resize((self.width, self.height),
                                 interpolation=transforms.InterpolationMode.BILINEAR,
                                 antialias=True)
-        
+
         random_erasing = transforms.RandomErasing(p=0.8,
                                                 scale=(0.02, 0.02),
                                                 ratio=(1., 2.))
@@ -236,7 +236,7 @@ if __name__ == "__main__":
     # Define a sample image path
     image_path = '/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking/nimrod_bag-2024-06-30-17-11-31-data/visual_data/depth/3.jpg'
     # Instantiate the custom data configuration
-    data_cfg = CustomDataConfig(image_size=(96, 96), img_type="rgb")
+    data_cfg = CustomDataConfig(image_size=(96, 96), img_type="depth")
     # Define a simple transform for demonstration purposes
     transform = ObservationTransform(data_cfg=data_cfg).get_transform(type="train")
 
