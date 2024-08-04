@@ -266,7 +266,7 @@ class Trainer:
                     lin_encoding = self.model("linear_encoder",
                                             curr_rel_pos_to_target=curr_rel_pos_to_target)
                     
-                    lin_encoding = mask_target_context(lin_encoding, target_context_mask)
+                    # lin_encoding = mask_target_context(lin_encoding, target_context_mask)
                     
                     modalities = [obs_encoding_condition, lin_encoding]
                     modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
@@ -291,7 +291,7 @@ class Trainer:
                                         noisy_action=noisy_action,
                                         timesteps=timesteps,
                                         final_encoded_condition=final_encoded_condition)
-                
+
                 losses = compute_noise_losses(noise_pred=noise_pred,
                         noise=noise,
                         action_mask=action_mask)
@@ -551,7 +551,7 @@ class Trainer:
                         
                         lin_encoding = eval_model("linear_encoder",
                                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
-                        lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
+                        # lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                         

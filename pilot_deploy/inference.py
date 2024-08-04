@@ -355,7 +355,7 @@ class PilotAgent(nn.Module):
         lin_encoding = self.model("linear_encoder",
                                 curr_rel_pos_to_target=curr_rel_pos_to_target)
 
-        lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
+        # lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
         
         modalities = [obs_encoding, lin_encoding]
         fused_modalities_encoding = self.model("fuse_modalities", modalities=modalities)

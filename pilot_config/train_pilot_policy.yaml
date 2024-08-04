@@ -5,10 +5,10 @@ hydra:
 
 defaults:
   - _self_
-  - linear_encoder: tcn       # mlp | tcn | ..
-  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
+  - linear_encoder: mlp       # mlp | tcn | ..
+  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: pilot_target_tracking # all | go_to_the_picture
+  - datasets: pilot_target_tracking_broadcom_only # all | go_to_the_picture
   # - log: defaults
 
 
@@ -20,16 +20,16 @@ training:
   # goal_condition: True
   batch_size: 16
   eval_batch_size: 32
-  epochs: 30
+  epochs: 15
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
   lr: 1e-5 # 5e-4 5e-5 1e-5 1e-4  
   optimizer: adamw
-  clipping: True # Clip gradients
+  clipping: False # Clip gradients
   clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 150
+  warmup_steps: 50
   gradient_accumulate_every: 1
 
   warmup: False 
@@ -39,10 +39,10 @@ training:
   plateau_factor: 0.5
   seed: 42
   use_ema: True 
-  goal_mask_prob: 0.2 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0.0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.2 # 0 for no no dropout , 1 for dropout one modal anytime
+  modal_dropout_prob: 0.0 # 0 for no no dropout , 1 for dropout one modal anytime
 
   debug:
     # steps per epoch
@@ -61,13 +61,13 @@ data:
   context_type: temporal
   target_observation_enable: True
   target_context: True
-  context_size: 4
+  context_size: 0
   distance:
     min_dist_cat: 0
-    max_dist_cat: 8
+    max_dist_cat: 6
   action:
-    min_dist_cat: 3
-    max_dist_cat: 8
+    min_dist_cat: 0
+    max_dist_cat: 6
 
   # action output params
   pred_horizon: 8 # TODO: chang to pred_horizon
@@ -93,12 +93,12 @@ log:
   run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
   num_images_log: 4
-  print_log_freq: 300 # in iterations
-  eval_log_freq: 10  # in iterations
+  print_log_freq: 200 # in iterations
+  eval_log_freq: 8  # in iterations
   image_log_freq: 2 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
-  save_model_freq: 10
+  save_model_freq: 5
   wandb: 
     run: 
       enable: true

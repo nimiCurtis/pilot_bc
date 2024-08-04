@@ -46,7 +46,9 @@ class PiDiff(BaseModel):
         #                           current observation (1) + encoded lin observation and target (1) 
 
         if self.goal_condition:
-            seq_len = self.context_size + 2
+            seq_len = self.context_size + 3
+            # seq_len = self.context_size + 2
+
         else:
             seq_len = self.context_size + 1
 
@@ -147,7 +149,7 @@ class PiDiff(BaseModel):
             lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
             if len(lin_encoding.shape) == 2:
                 lin_encoding = lin_encoding.unsqueeze(1)
-                lin_encoding = lin_encoding.expand(-1, self.context_size + 1, -1)
+            #     lin_encoding = lin_encoding.expand(-1, self.context_size + 1, -1)
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
             return lin_encoding
 
@@ -211,21 +213,21 @@ class PiDiff(BaseModel):
             #     fused_tensor+=tensor         # Sum all the tensors
 
         # If mask is provided, ensure it has the correct shape
-        if mask is not None:
-            if mask.shape != (len(modalities[0]), len(modalities)):
-                raise ValueError("The mask must have the shape (batch_size, modalities_size).")
+        # if mask is not None:
+        #     if mask.shape != (len(modalities[0]), len(modalities)):
+        #         raise ValueError("The mask must have the shape (batch_size, modalities_size).")
             
-            # Apply the mask: set masked modalities to zero
-            masked_modalities = []
-            for i, modality in enumerate(modalities):
-                masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
-                masked_modalities.append(masked_modality)
-        else:
-            masked_modalities = modalities
+        #     # Apply the mask: set masked modalities to zero
+        #     masked_modalities = []
+        #     for i, modality in enumerate(modalities):
+        #         masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
+        #         masked_modalities.append(masked_modality)
+        # else:
+        #     masked_modalities = modalities
         
         # Sum the (possibly masked) tensors
-        fused_tensor = torch.sum(torch.stack(masked_modalities), dim=0)
-        
+        # fused_tensor = torch.sum(torch.stack(masked_modalities), dim=0)
+        fused_tensor = torch.cat(modalities, dim=1)  # >> Concat the lin_encoding as a token too
         # Apply mask if provided
         # if mask is not None:
         #     if mask.shape != fused_tensor.shape:
@@ -233,6 +235,45 @@ class PiDiff(BaseModel):
         #     fused_tensor = fused_tensor * mask
     
         return fused_tensor
+
+    # def fuse_modalities(self, modalities: List[torch.Tensor], mask: torch.Tensor = None):
+    # # Ensure the list of tensors is not empty
+    #     if not modalities:
+    #         raise ValueError("The list of modalities is empty.")
+
+    #     # Check that all tensors have the same shape
+    #     shape = modalities[0].shape
+        
+    #     # fused_tensor = torch.zeros_like(modalities[0]) # TODO: fix this
+    #     for tensor in modalities:
+    #         if tensor.shape[-1] != shape[-1]:
+    #             raise ValueError("All tensors must have the same features dim.")
+    #         # else:
+    #         #     fused_tensor+=tensor         # Sum all the tensors
+
+    #     # If mask is provided, ensure it has the correct shape
+    #     if mask is not None:
+    #         if mask.shape != (len(modalities[0]), len(modalities)):
+    #             raise ValueError("The mask must have the shape (batch_size, modalities_size).")
+            
+    #         # Apply the mask: set masked modalities to zero
+    #         masked_modalities = []
+    #         for i, modality in enumerate(modalities):
+    #             masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
+    #             masked_modalities.append(masked_modality)
+    #     else:
+    #         masked_modalities = modalities
+        
+    #     # Sum the (possibly masked) tensors
+    #     fused_tensor = torch.sum(torch.stack(masked_modalities), dim=0)
+        
+    #     # Apply mask if provided
+    #     # if mask is not None:
+    #     #     if mask.shape != fused_tensor.shape:
+    #     #         raise ValueError("The mask must have the same shape as the fused tensor.")
+    #     #     fused_tensor = fused_tensor * mask
+    
+    #     return fused_tensor
 
     def forward(self, func_name, **kwargs):
         

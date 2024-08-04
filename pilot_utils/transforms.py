@@ -4,6 +4,7 @@ from typing import List, Tuple
 from pilot_utils.data.data_utils import IMAGE_ASPECT_RATIO
 from PIL import Image as PILImage
 from PIL import Image
+import matplotlib.pyplot as plt
 import random
 import numpy as np
 import torch
@@ -40,6 +41,15 @@ def transform_images(pil_imgs: List[PILImage.Image],
 #     transf_imgs = transform(pil_imgs)
 #     return torch.cat(transf_imgs)
 
+# Define a custom data_cfg
+class CustomDataConfig:
+    def __init__(self, image_size: Tuple[int, int], img_type: str):
+        self.image_size = image_size
+        self.img_type = img_type
+
+
+
+
 class ObservationTransform:
     def __init__(self, data_cfg,
                 img_patch_size=8, img_gaussian_noise=0.0, img_masking_prob=0.0):
@@ -63,32 +73,38 @@ class ObservationTransform:
                                 interpolation=transforms.InterpolationMode.BILINEAR,
                                 antialias=True)
         
-        random_erasing = transforms.RandomErasing(p=0.1,
+        random_erasing = transforms.RandomErasing(p=0.8,
                                                 scale=(0.02, 0.02),
                                                 ratio=(1., 2.))
-        random_erasing = transforms.RandomApply(transforms=[random_erasing], p=0.15)
         
-        random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
-        center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
+        # random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
+        # center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
         
-        random_mask = MaskImage(img_patch_size=16, img_masking_prob=0.015)
-        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.2)
+        random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.15)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.15)
         
-        random_rotation = transforms.RandomRotation(degrees=5)
-        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.2)
+        random_rotation = transforms.RandomRotation(degrees=20)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.6)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
-
+        
+        random_crop = transforms.RandomResizedCrop(size=(self.width, self.height),
+                                interpolation=transforms.InterpolationMode.BILINEAR,
+                                # ratio=self.image_aspect_ratio,
+                                antialias=True)
+        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.2)
+        
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([
                                             ## start of pipline
                                             to_image,
                                             to_uint8,
+                                            random_crop,
                                             resize,
                                             ## main transforms
                                             # TODO: try to run with transforms
-                                            random_erasing,
+                                            # random_erasing,
                                             random_rotation,
                                             random_mask,
                                             # end of pipeline
@@ -186,3 +202,43 @@ class MaskImage(nn.Module):
             x = x.contiguous()
             x = x.unsqueeze(0)  # Add the channel dimension back
         return x
+
+
+# Function to display the original and transformed images
+# Function to display the original and multiple transformed images
+def show_transformed_images(image_path, transform, num_transforms=10):
+    # Load the image
+    img = PILImage.open(image_path)
+
+    # Plot the original image
+    fig, axes = plt.subplots(1, num_transforms + 1, figsize=(15, 5))
+    axes[0].imshow(img)
+    axes[0].set_title('Original Image')
+    axes[0].axis('off')
+
+    # Apply the transformation multiple times and display each transformed image
+    for i in range(num_transforms):
+        transformed_img = transform(img)
+
+        # Convert transformed image back to PIL Image for visualization
+        transformed_img = transformed_img.permute(1, 2, 0).numpy()
+        # transformed_img = np.clip(transformed_img, 0, 255).astype(np.uint8)
+
+        axes[i + 1].imshow(transformed_img)
+        axes[i + 1].set_title(f'Transform {i+1}')
+        axes[i + 1].axis('off')
+
+    plt.tight_layout()
+    plt.show()
+
+if __name__ == "__main__":
+    
+    # Define a sample image path
+    image_path = '/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking/nimrod_bag-2024-06-30-17-11-31-data/visual_data/depth/3.jpg'
+    # Instantiate the custom data configuration
+    data_cfg = CustomDataConfig(image_size=(96, 96), img_type="rgb")
+    # Define a simple transform for demonstration purposes
+    transform = ObservationTransform(data_cfg=data_cfg).get_transform(type="train")
+
+    # Call the function to display the images
+    show_transformed_images(image_path, transform)
