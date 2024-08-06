@@ -198,13 +198,12 @@ class Trainer:
                 curr_rel_pos_to_target,
                 goal_rel_pos_to_target,
                 action_label,
+                normalized_prev_actions,
                 goal_pos,
                 dataset_index,
                 action_mask,
-                target_context_mask,
             ) = data
-            
-            
+
             B = action_label.shape[0] #batch size
             action_dim = action_label.shape[-1]
             # STATE
@@ -217,7 +216,7 @@ class Trainer:
             obs_image = torch.cat(obs_images, dim=1)
             # current relative target pos
             curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
-            target_context_mask = target_context_mask.to(self.device)
+            # target_context_mask = target_context_mask.to(self.device)
 
             # GOAL
             goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
@@ -228,6 +227,7 @@ class Trainer:
             
             # ACTION
             action_label_pred = action_label.to(self.device)
+            normalized_prev_actions = normalized_prev_actions.to(self.device)
             # action label pred -> the pred horizon actions. it is already normalize cumsum
             # so the deltas are normalized
 
@@ -267,9 +267,11 @@ class Trainer:
                     # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
+                    linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                                normalized_prev_actions.flatten(1)], axis=1)
                     # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
                     lin_encoding = self.model("linear_encoder",
-                                            curr_rel_pos_to_target=curr_rel_pos_to_target)
+                                            curr_rel_pos_to_target=linear_input)
                     
                     # lin_encoding = mask_target_context(lin_encoding, target_context_mask)
                     
@@ -338,10 +340,6 @@ class Trainer:
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
-
-            # maintain memory
-            # del loss
-            # gc.collect()
             
             if self.model_name == "pidiff": ### TODO: add eme implementation
 
@@ -479,10 +477,10 @@ class Trainer:
                     curr_rel_pos_to_target,
                     goal_rel_pos_to_target,
                     action_label,
+                    normalized_prev_actions,
                     goal_pos,
                     dataset_index,
                     action_mask,
-                    target_context_mask,
 
                 ) = data
 
@@ -498,7 +496,7 @@ class Trainer:
                 obs_image = torch.cat(obs_images, dim=1)
                 # current relative target pos
                 curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
-                target_context_mask = target_context_mask.to(self.device)
+                # target_context_mask = target_context_mask.to(self.device)
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -509,7 +507,8 @@ class Trainer:
 
                 # ACTION
                 action_label_pred = action_label.to(self.device)
-                
+                normalized_prev_actions = normalized_prev_actions.to(self.device)
+
 
                 # Take the actions horizon samples for the action loss
                 action_label = action_label[:,:self.action_horizon,:]
@@ -550,10 +549,11 @@ class Trainer:
 
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
+                        linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                                    normalized_prev_actions.flatten(1)], axis=1)
                         # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
-
-                        lin_encoding = eval_model("linear_encoder",
-                                                curr_rel_pos_to_target=curr_rel_pos_to_target)
+                        lin_encoding = self.model("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input)
                         
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify

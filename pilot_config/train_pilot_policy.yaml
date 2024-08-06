@@ -68,8 +68,11 @@ data:
   # context
   context_type: temporal
   target_observation_enable: True
-  target_context: True
   context_size: 3
+  action_context_size: 3 # modify to 0 for not using actions history
+  target_context: True
+  target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
+
   distance:
     min_dist_cat: 0
     max_dist_cat: 6

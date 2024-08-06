@@ -83,6 +83,11 @@ class PilotDataset(Dataset):
         }, "context_type must be one of temporal, randomized, randomized_temporal"
         self.context_type = data_cfg.context_type
         
+        
+        self.action_context_size = data_cfg.action_context_size
+        self.target_dim = data_cfg.target_dim
+        assert self.action_context_size<=self.context_size, "Action context size is bigger the the visual context"
+        
         # Possible distances for predicting distance
         self.distance_categories = list(
             range(data_cfg.distance.min_dist_cat,
@@ -323,13 +328,18 @@ class PilotDataset(Dataset):
         # Define the start and end indices for slicing the trajectory data
         start_index = curr_time
         end_index = curr_time + self.pred_horizon * self.waypoint_spacing + 1
-
+        
+        
+        # Define the start and end indices for slicing the actions history data
+        start_index_prev = curr_time + -self.action_context_size * self.waypoint_spacing
+        end_index_prev = curr_time + self.waypoint_spacing
+        
         # Extract yaw and position data from the trajectory
         yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
         positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing])
 
-        prev_yaw = np.array(traj_data["yaw"][start_index + -self.context_size * self.waypoint_spacing: start_index + 2*self.waypoint_spacing: self.waypoint_spacing])
-        prev_positions =  np.array(traj_data["position"][start_index + -self.context_size * self.waypoint_spacing: start_index + 2*self.waypoint_spacing: self.waypoint_spacing])
+        prev_yaw = np.array(traj_data["yaw"][start_index_prev: end_index_prev: self.waypoint_spacing])
+        prev_positions =  np.array(traj_data["position"][start_index_prev: end_index_prev: self.waypoint_spacing])
 
         # prev_action_delta = np.concatenate([positions[0] - prev_position, np.array([yaw[0] - prev_yaw])])
         
@@ -479,10 +489,14 @@ class PilotDataset(Dataset):
             # Get the goal position relative to the target
             goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2])
             if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
-                goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-                goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': 0.1, 'max': self.max_depth / 1000})
+                
+                if self.target_dim == 3:
+                    goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
+                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+                elif self.target_dim == 2:
+                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
             else:
-                goal_rel_pos_to_target = np.zeros((3,))
+                goal_rel_pos_to_target = np.zeros((self.target_dim,))
 
             if self.target_context:
                 # Get the context of target positions relative to the current trajectory
@@ -495,18 +509,22 @@ class PilotDataset(Dataset):
 
             #TODO: add implementation for not goal condition
             target_context_mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
-            np_curr_rel_pos_in_d_theta = np.zeros((np_curr_rel_pos_to_target.shape[0], 3))
-            np_curr_rel_pos_in_d_theta[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
-            np_curr_rel_pos_in_d_theta[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos_in_d_theta[~target_context_mask, 0], stats={'min': 0.1, 'max': self.max_depth / 1000})
-
+            np_curr_rel_pos = np.zeros((np_curr_rel_pos_to_target.shape[0], self.target_dim))
+            
+            if self.target_dim == 3:
+                np_curr_rel_pos[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
+                np_curr_rel_pos[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+            elif self.target_dim == 2:
+                np_curr_rel_pos[~target_context_mask] = normalize_data(data=np_curr_rel_pos_to_target[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+            
             # Convert the context of relative positions to target into a tensor
-            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos_in_d_theta)
+            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos)
             normalized_prev_actions_tensor = torch.as_tensor(normalized_prev_actions)
-            curr_rel_pos_to_target = torch.concatenate([curr_rel_pos_to_target,normalized_prev_actions_tensor],axis=1)
+            # curr_rel_pos_to_target = torch.concatenate([curr_rel_pos_to_target,normalized_prev_actions_tensor],axis=1)
         else:
             # Not in use
-            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], 3, 0))
-            goal_rel_pos_to_target = np.array([0, 0, 0])
+            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
+            goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
 
         # Compute the timestep distances
         if goal_is_negative:
@@ -529,10 +547,10 @@ class PilotDataset(Dataset):
             torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
+            torch.as_tensor(normalized_prev_actions_tensor, dtype=torch.float32),
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
-            torch.as_tensor(target_context_mask).long(), #TODO: add implementation for not goal condition
         )
 
     def _get_properties(self,trajectory_name):

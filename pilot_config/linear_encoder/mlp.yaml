@@ -1,3 +1,2 @@
 name: mlp
-lin_features_dim: 3
 lin_encoding_size: 256

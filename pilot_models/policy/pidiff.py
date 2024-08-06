@@ -61,9 +61,9 @@ class PiDiff(BaseModel):
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
 
-        lin_features_dim = linear_encoder_model_cfg.lin_features_dim 
+        target_dim = data_cfg.target_dim 
         lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
-        self.goal_encoder = nn.Sequential(nn.Linear(lin_features_dim, lin_encoding_size // 4),
+        self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
                                         nn.ReLU(),
                                         nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
                                         nn.ReLU(),
