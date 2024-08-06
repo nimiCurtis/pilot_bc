@@ -7,7 +7,7 @@ from pilot_models.linear_encoder.base_model import BaseModel
 class TCN(BaseModel):
 
     def __init__(self, linear_encoder_config, data_config) -> None:
-        super().__init__(linear_encoder_config)
+        super().__init__(linear_encoder_config,data_config)
 
         context_size = data_config.context_size
         num_inputs = self.lin_features_dim

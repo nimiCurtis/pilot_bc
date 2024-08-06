@@ -140,26 +140,34 @@ def calculate_sin_cos(waypoints):
 
     Args:
         waypoints: A NumPy array or PyTorch tensor of waypoints. Expected shape is [N, 3] where
-                the last dimension contains [x, y, angle].
+                the last dimension contains [x, y, angle], or [3] for 1D input.
 
     Returns:
         A NumPy array or PyTorch tensor (matching the input type) of waypoints with sin and cos
-        of the angle appended. Output shape is [N, 4], containing [x, y, sin(angle), cos(angle)].
+        of the angle appended. Output shape is [N, 4] for 2D input, containing [x, y, sin(angle), cos(angle)],
+        or [4] for 1D input.
     """
     library = torch if isinstance(waypoints, torch.Tensor) else np
 
-    assert waypoints.shape[1] == 3, "Waypoints should have shape [N, 3]."
-
-    angle = waypoints[:, 2]
-    sin_angle = library.sin(angle)
-    cos_angle = library.cos(angle)
-
-    if library is torch:
-        angle_repr = torch.stack((cos_angle, sin_angle), dim=1)
-        return torch.cat((waypoints[:, :2], angle_repr), dim=1)
+    if waypoints.ndim == 1:
+        assert waypoints.shape[0] == 3, "1D Waypoints should have shape [3]."
+        angle = waypoints[2]
+        sin_angle = library.sin(angle)
+        cos_angle = library.cos(angle)
+        return library.concatenate((waypoints[:2], library.array([cos_angle, sin_angle])))
+    
     else:
-        angle_repr = np.stack((cos_angle, sin_angle), axis=1)
-        return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
+        assert waypoints.shape[1] == 3, "2D Waypoints should have shape [N, 3]."
+        angle = waypoints[:, 2]
+        sin_angle = library.sin(angle)
+        cos_angle = library.cos(angle)
+
+        if library is torch:
+            angle_repr = torch.stack((cos_angle, sin_angle), dim=1)
+            return torch.cat((waypoints[:, :2], angle_repr), dim=1)
+        else:
+            angle_repr = np.stack((cos_angle, sin_angle), axis=1)
+            return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
 
 def xy_to_d_cos_sin(xy):
     """
@@ -222,17 +230,25 @@ def actions_forward_pass(actions,action_stats, learn_angle):
         torch.Tensor or np.ndarray: Normalized actions.
     """
     
+    # Initialize normalized_actions with the original actions
     normalized_actions = actions.copy()
-    
-    # Take the delta actions
-    actions_deltas = get_delta(actions[:, :2])
-    
-    # Normalize based on stats
-    normalized_actions_deltas = normalize_data(actions_deltas,action_stats['pos'])
-    
-    # Cumsum for normalized trajectory of actions
-    normalized_actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
+
+    # Normalize and compute deltas if actions contain multiple dimensions
+    if len(actions.shape) > 1:
+        # Compute deltas for the first two dimensions
+        actions_deltas = get_delta(actions[:, :2])
+        
+        # Normalize deltas based on provided statistics
+        normalized_actions_deltas = normalize_data(actions_deltas, action_stats['pos'])
+        
+        # Compute cumulative sum for normalized trajectory
+        normalized_actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
+    else:
+        # Normalize actions for one-dimensional case
+        normalized_actions[:2] = normalize_data(actions[:2], action_stats['pos'])
+
     if learn_angle:
+        # Calculate sine and cosine for the angle
         normalized_actions = calculate_sin_cos(normalized_actions)
 
     return normalized_actions
