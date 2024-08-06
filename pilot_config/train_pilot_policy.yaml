@@ -38,7 +38,15 @@ training:
   plateau_patience: 3
   plateau_factor: 0.5
   seed: 42
-  use_ema: False 
+  use_ema: True 
+  ema:
+    _target_: diffusers.training_utils.EMAModel
+    update_after_step: 0
+    inv_gamma: 1.0
+    power: 0.75
+    min_decay: 0.0
+    decay: 0.9999
+
   goal_mask_prob: 0.2 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
@@ -53,7 +61,7 @@ training:
 # data config
 data:
   goal_condition: True
-  
+
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
   normalize: True

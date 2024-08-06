@@ -14,6 +14,6 @@ go2:
       k3: 0.0
       p1: 0.0
       p2: 0.0
-  max_ang_vel: 1.6131
-  max_lin_vel: 1. # currently limited from safety reasons 0 - 3.7 m/s
+  max_ang_vel: 1.0
+  max_lin_vel: 2.0427 # currently limited from safety reasons 0 - 3.7 m/s
   metric_waypoint_spacing: 1 # not in use

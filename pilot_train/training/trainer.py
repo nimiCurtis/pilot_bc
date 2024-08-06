@@ -5,6 +5,7 @@ import copy
 import numpy as np
 import tqdm
 import wandb
+import hydra
 from omegaconf import DictConfig, OmegaConf
 from typing import List, Tuple
 import torch
@@ -30,7 +31,6 @@ from pilot_utils.utils import get_delta, get_goal_mask_tensor, get_modal_dropout
 from pilot_utils.train.train_utils import compute_losses, compute_noise_losses
 from pilot_models.policy.pidiff import DiffuserScheduler
 from pilot_utils.transforms import ObservationTransform
-
 class Trainer:
     """
     A class responsible for managing the training and evaluation processes of pilot model.
@@ -115,10 +115,14 @@ class Trainer:
         self.ema_model = None
         if self.use_ema: 
             
+
             print("Using EMA model")
             self.ema_model = copy.deepcopy(self.model)
             self.ema_model.to(self.device)
-            self.ema = EMAModel(self.ema_model.parameters(), power=0.75)
+            self.ema = hydra.utils.instantiate(
+                training_cfg.ema,
+                parameters=self.ema_model.parameters())
+            # self.ema = EMAModel(self.ema_model.parameters(), power=0.75)
                 
 
         self.goal_mask_prob = training_cfg.goal_mask_prob
