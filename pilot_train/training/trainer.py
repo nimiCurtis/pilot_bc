@@ -267,8 +267,9 @@ class Trainer:
                     # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
+                    linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
                     lin_encoding = self.model("linear_encoder",
-                                            curr_rel_pos_to_target=curr_rel_pos_to_target)
+                                            curr_rel_pos_to_target=linear_input)
                     
                     # lin_encoding = mask_target_context(lin_encoding, target_context_mask)
                     
@@ -542,34 +543,26 @@ class Trainer:
                         action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
-                    # obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
                     obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image)
 
                     # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                     if self.goal_condition:
-                        # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
-                        # lin_encoding = self.model("linear_encoder",
-                        #                         curr_rel_pos_to_target=curr_rel_pos_to_target)
                         
+                        linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
+
                         lin_encoding = eval_model("linear_encoder",
-                                                curr_rel_pos_to_target=curr_rel_pos_to_target)
-                        # lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
+                                                curr_rel_pos_to_target=linear_input)
+                        
                         modalities = [obs_encoding_condition, lin_encoding]
                         modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-                        
-                        # fused_modalities_encoding = self.model("fuse_modalities",
-                        #                                     modalities=modalities,
-                        #                                     mask=modal_dropout_mask)
-                        
+
                         fused_modalities_encoding = eval_model("fuse_modalities",
                                                             modalities=modalities,
                                                             mask=modal_dropout_mask)
-                        
-                        # goal_encoding = self.model("goal_encoder",
-                        #                         goal_rel_pos_to_target=goal_rel_pos_to_target)
-                        
+
                         goal_encoding = eval_model("goal_encoder",
                                                 goal_rel_pos_to_target=goal_rel_pos_to_target)
                         
