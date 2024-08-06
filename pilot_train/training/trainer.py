@@ -387,7 +387,7 @@ class Trainer:
                 #     if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
                 #         self.scheduler.step(action_losses)
                 #     else:
-                
+
 
             # Append to Logger
             for key, value in losses.items():
@@ -550,7 +550,6 @@ class Trainer:
 
                         goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
-                        
                         # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
 
                         lin_encoding = eval_model("linear_encoder",
