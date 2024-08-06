@@ -124,9 +124,13 @@ def get_delta(actions):
         ex_actions = np.concatenate([np.zeros((1, actions.shape[-1])), actions], axis=0)
         delta = ex_actions[1:, :] - ex_actions[:-1, :]
     elif isinstance(actions, torch.Tensor):
-        # Append zeros to the first action for PyTorch tensor
-        ex_actions = torch.cat([torch.zeros((actions.shape[0],1, actions.shape[-1]), dtype=actions.dtype, device=actions.device), actions], dim=1)
-        delta = ex_actions[:,1:, :] - ex_actions[:,:-1, :]
+        if len(actions.shape)>2:
+            # Append zeros to the first action for PyTorch tensor
+            ex_actions = torch.cat([torch.zeros((actions.shape[0],1, actions.shape[-1]), dtype=actions.dtype, device=actions.device), actions], dim=1)
+            delta = ex_actions[:,1:, :] - ex_actions[:,:-1, :]
+        else:
+            ex_actions = torch.cat([torch.zeros((1, actions.shape[-1]), dtype=actions.dtype, device=actions.device), actions], dim=0)
+            delta = ex_actions[1:, :] - ex_actions[:-1, :]
     else:
         raise TypeError("Input must be a NumPy array or a PyTorch tensor")
 
@@ -222,16 +226,18 @@ def actions_forward_pass(actions,action_stats, learn_angle):
     Forward pass for actions, normalizing and converting deltas to trajectory.
 
     Args:
-        actions (np.ndarray): Actions to process.
-        action_stats (dict): Statistics for normalization.
-        learn_angle (bool): Whether to learn the angle.
+        actions: A NumPy array or PyTorch tensor of actions. Expected shape is [batch, sequence_len, features_len].
+        action_stats: A dictionary containing statistics for normalization.
+        learn_angle: Whether to learn the angle.
 
     Returns:
-        torch.Tensor or np.ndarray: Normalized actions.
+        A NumPy array or PyTorch tensor (matching the input type) of normalized actions.
     """
     
+    library = torch if isinstance(actions, torch.Tensor) else np
+
     # Initialize normalized_actions with the original actions
-    normalized_actions = actions.copy()
+    normalized_actions = actions
 
     # Normalize and compute deltas if actions contain multiple dimensions
     if len(actions.shape) > 1:
@@ -242,7 +248,7 @@ def actions_forward_pass(actions,action_stats, learn_angle):
         normalized_actions_deltas = normalize_data(actions_deltas, action_stats['pos'])
         
         # Compute cumulative sum for normalized trajectory
-        normalized_actions[:, :2] = np.cumsum(normalized_actions_deltas, axis=0)
+        normalized_actions[:, :2] = library.cumsum(normalized_actions_deltas, axis=0)
     else:
         # Normalize actions for one-dimensional case
         normalized_actions[:2] = normalize_data(actions[:2], action_stats['pos'])

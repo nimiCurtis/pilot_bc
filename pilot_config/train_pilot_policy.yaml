@@ -20,7 +20,7 @@ training:
   # goal_condition: True
   batch_size: 16
   eval_batch_size: 32
-  epochs: 20
+  epochs: 3
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -69,7 +69,7 @@ data:
   context_type: temporal
   target_observation_enable: True
   context_size: 3
-  action_context_size: 3 # modify to 0 for not using actions history
+  action_context_size: 0 # modify to 0 for not using actions history
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 

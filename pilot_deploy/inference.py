@@ -13,13 +13,12 @@ from pilot_utils.utils import (
     normalize_data,
     xy_to_d_cos_sin,
     unnormalize_data,
-    # actions_forward_pass,
+    actions_forward_pass,
     tic, toc,
     to_numpy,
     # get_goal_mask_tensor,
     get_action_stats,
     clip_angle,
-    mask_target_context
 )
 
 from pilot_utils.transforms import transform_images, ObservationTransform
@@ -259,7 +258,10 @@ class PilotAgent(nn.Module):
         self.model.to(device=device)
         self.device = device
 
-    def forward(self, obs_img: torch.Tensor, curr_rel_pos_to_target: torch.Tensor = None, goal_rel_pos_to_target: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs_img: torch.Tensor,
+                curr_rel_pos_to_target: torch.Tensor = None,
+                goal_rel_pos_to_target: torch.Tensor = None,
+                prev_actions: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through the model to predict the next waypoint.
 
@@ -271,7 +273,8 @@ class PilotAgent(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Predicted waypoint and corresponding action.
         """
-        predicted_waypoints_normalized = self.predict_raw(obs_img, curr_rel_pos_to_target, goal_rel_pos_to_target)
+        
+        predicted_waypoints_normalized = self.predict_raw(obs_img, curr_rel_pos_to_target, goal_rel_pos_to_target, prev_actions)
         predicted_waypoints_normalized = to_numpy(predicted_waypoints_normalized)
         predicted_waypoint = self.get_waypoint(predicted_waypoints_normalized)
 
@@ -298,7 +301,10 @@ class PilotAgent(nn.Module):
         return waypoints
 
 
-    def predict_raw(self, obs_img: torch.Tensor, curr_rel_pos_to_target: torch.Tensor, goal_rel_pos_to_target: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+    def predict_raw(self, obs_img: torch.Tensor,
+                    curr_rel_pos_to_target: torch.Tensor,
+                    goal_rel_pos_to_target: torch.Tensor,
+                    prev_actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate raw predictions using the policy model.
 
@@ -313,7 +319,12 @@ class PilotAgent(nn.Module):
         
         
         context_queue = obs_img.unsqueeze(0).to(self.device)
-        target_context_queue, goal_to_target, goal_mask = None, None, None
+        normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
+        
+        if prev_actions is not None:
+            normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle)
+            normalized_action_context_queue = normalized_action_context_queue.unsqueeze(0).to(self.device)
+        
         
         if curr_rel_pos_to_target is not None:
             # print(curr_rel_pos_to_target)
@@ -336,12 +347,12 @@ class PilotAgent(nn.Module):
                 curr_rel_pos_to_target=target_context_queue,
                 goal_rel_pos_to_target=goal_to_target,
                 input_goal_mask=goal_mask,
-                target_context_mask = target_context_mask
+                normalized_action_context = normalized_action_context_queue
             )
 
         return normalized_actions[0]  # no batch dimension
     
-    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask, target_context_mask):
+    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
         
         obs_encoding = self.model("vision_encoder",
                                 obs_img=obs_img)
@@ -351,11 +362,15 @@ class PilotAgent(nn.Module):
             goal_mask = input_goal_mask.to(self.device)
 
         # TODO: add if else condition on goal_condition
-        
+        if normalized_action_context is not None:
+            
+            linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                                        normalized_action_context.flatten(1)], axis=1)
+        else:
+            linear_input = curr_rel_pos_to_target.flatten(1)
+            
         lin_encoding = self.model("linear_encoder",
-                                curr_rel_pos_to_target=curr_rel_pos_to_target)
-
-        # lin_encoding = mask_target_context(lin_encoding=lin_encoding, target_context_mask=target_context_mask)
+                                curr_rel_pos_to_target=linear_input)
         
         modalities = [obs_encoding, lin_encoding]
         fused_modalities_encoding = self.model("fuse_modalities", modalities=modalities)

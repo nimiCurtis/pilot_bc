@@ -584,11 +584,6 @@ class Trainer:
                                         timesteps=timesteps,
                                         final_encoded_condition=final_encoded_condition)
 
-                    # noise_pred = self.model("noise_pred",
-                    #                     noisy_action=noisy_action,
-                    #                     timesteps=timesteps,
-                    #                     final_encoded_condition=final_encoded_condition)
-                    
                     losses = compute_noise_losses(noise_pred=noise_pred,
                             noise=noise,
                             action_mask=action_mask)
@@ -603,11 +598,6 @@ class Trainer:
                         
                         for k in self.noise_scheduler.timesteps():
                             # predict noise
-                            # noise_pred = self.model("noise_pred",
-                            #                 noisy_action=diffusion_output,
-                            #                 timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                            #                 final_encoded_condition=final_encoded_condition)
-                            
                             noise_pred = eval_model("noise_pred",
                                             noisy_action=diffusion_output,
                                             timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
