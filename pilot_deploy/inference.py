@@ -241,7 +241,7 @@ class PilotAgent(nn.Module):
         """
         
         model_path = os.path.join(CKPTH_PATH, model_name, f"{model_version}.pth")
-        checkpoint = torch.load(model_path)
+        checkpoint = torch.load(model_path,map_location='cpu')
 
         state_dict = checkpoint["model_state_dict"]
         self.model.load_state_dict(state_dict, strict=False)

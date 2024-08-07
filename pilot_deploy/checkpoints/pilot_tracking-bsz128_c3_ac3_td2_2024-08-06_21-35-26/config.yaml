@@ -1,0 +1,146 @@
+device: cuda
+training:
+  batch_size: 128
+  eval_batch_size: 32
+  epochs: 15
+  current_epoch: 0
+  gpu_ids:
+  - 1
+  - 2
+  - 3
+  num_workers: 12
+  lr: 0.0001
+  optimizer: adamw
+  clipping: false
+  clipping_max_norm: 1.0
+  scheduler: cosine
+  warmup_steps: 500
+  gradient_accumulate_every: 1
+  warmup: false
+  warmup_epochs: 4
+  cyclic_period: 10
+  plateau_patience: 3
+  plateau_factor: 0.5
+  seed: 42
+  use_ema: true
+  ema:
+    _target_: diffusers.training_utils.EMAModel
+    update_after_step: 0
+    inv_gamma: 1.0
+    power: 0.75
+    min_decay: 0.0
+    decay: 0.9999
+  goal_mask_prob: 0.2
+  modal_dropout_prob: 0.5
+  debug:
+    max_train_steps: null
+    max_val_steps: null
+data:
+  goal_condition: true
+  normalize: true
+  context_type: temporal
+  target_observation_enable: true
+  context_size: 3
+  action_context_size: 3
+  target_context: true
+  target_dim: 2
+  distance:
+    min_dist_cat: 0
+    max_dist_cat: 8
+  action:
+    min_dist_cat: 0
+    max_dist_cat: 8
+  pred_horizon: 8
+  action_horizon: 5
+  learn_angle: true
+  image_size:
+  - 96
+  - 96
+  goal_type: image
+  obs_type: image
+  img_type: depth
+log:
+  desc: experiment_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_td${data.target_dim}_
+  project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
+  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
+  num_images_log: 4
+  print_log_freq: 75
+  eval_log_freq: 5
+  image_log_freq: 2
+  eval_fraction: 0.25
+  eval_freq: 1
+  save_model_freq: 5
+  wandb:
+    run:
+      enable: true
+      name: ${log.run_name}
+      log_freq: 10
+    setup:
+      project: pilot-release
+      entity: nimrodcurtis
+      mode: online
+linear_encoder:
+  name: mlp
+  lin_encoding_size: 256
+vision_encoder:
+  name: depth_feature_extractor
+  in_channels: 1
+  pretrained: false
+  vision_encoding_size: 256
+policy_model:
+  name: pidiff
+  mha_num_attention_heads: 4
+  mha_num_attention_layers: 4
+  mha_ff_dim_factor: 4
+  down_dims:
+  - 64
+  - 128
+  - 256
+  cond_predict_scale: false
+  noise_scheduler:
+    type: ddpm
+    num_diffusion_iters_eval: 10
+    num_diffusion_iters_train: 100
+    beta_schedule: squaredcos_cap_v2
+datasets:
+  data_folder: /home/curtis/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking
+  go2:
+    end_slack: 0
+    goals_per_obs: 1
+    negative_mining: false
+    number_of_bags: 196
+    stats:
+      max_ang_vel: 43.7955
+      max_lin_vel: 2.0427
+      mean_ang_vel: 0.0109
+      mean_lin_vel: 0.387
+      min_ang_vel: -43.7779
+      min_lin_vel: -2.0568
+      std_ang_vel: 1.9218
+      std_lin_vel: 0.5096
+    test: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/go2
+    time: 16.9077
+    train: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/go2
+    waypoint_spacing: 1
+  max_depth: 10000
+  nimrod:
+    end_slack: 0
+    goals_per_obs: 1
+    negative_mining: false
+    number_of_bags: 196
+    stats:
+      max_ang_vel: 43.9604
+      max_lin_vel: 2.2882
+      mean_ang_vel: -0.0194
+      mean_lin_vel: 0.2414
+      min_ang_vel: -43.9178
+      min_lin_vel: -1.6975
+      std_ang_vel: 2.0664
+      std_lin_vel: 0.3717
+    test: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/nimrod
+    time: 101.609
+    train: /home/curtis/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/nimrod
+    waypoint_spacing: 1
+  robots:
+  - go2
+  - nimrod
