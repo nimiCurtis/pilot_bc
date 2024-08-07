@@ -208,8 +208,10 @@ class Trainer:
             action_dim = action_label.shape[-1]
             # STATE
             # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
-            obs_images = torch.split(obs_image, 3, dim=1)
+            obs_images = torch.split(obs_image, 1, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
+            viz_context_t0_image = TF.resize(obs_images[0], VISUALIZATION_IMAGE_SIZE)
+
             # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
             obs_images = [obs_image.to(self.device) for obs_image in obs_images]
 
@@ -223,7 +225,6 @@ class Trainer:
 
             # This line is for not corrupt the pipeline of visualization right now
             # TODO: modify it
-            viz_goal_image = viz_obs_image
             
             # ACTION
             action_label_pred = action_label.to(self.device)
@@ -400,9 +401,10 @@ class Trainer:
                 normalized=self.normalized,
                 loggers=loggers,
                 obs_image=viz_obs_image,
-                goal_image=viz_goal_image,
+                goal_image=viz_context_t0_image,
                 action_pred=action_pred,
                 action_label=action_label,
+                action_context=normalized_prev_actions,
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
                 mode="train",
@@ -481,15 +483,16 @@ class Trainer:
                     goal_pos,
                     dataset_index,
                     action_mask,
-
                 ) = data
 
                 B = action_label.shape[0]
                 action_dim = action_label.shape[-1]
                 # STATE
                 # visual context
-                obs_images = torch.split(obs_image, 3, dim=1)
+                obs_images = torch.split(obs_image, 1, dim=1)
                 viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
+                viz_context_t0_image = TF.resize(obs_images[0], VISUALIZATION_IMAGE_SIZE)
+
                 # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
                 obs_images = [obs_image.to(self.device) for obs_image in obs_images]
 
@@ -499,11 +502,6 @@ class Trainer:
                 # target_context_mask = target_context_mask.to(self.device)
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
-
-                # This line is for not corrupt the pipeline of visualization right now
-                # TODO: modify it
-                viz_goal_image = viz_obs_image
-
 
                 # ACTION
                 action_label_pred = action_label.to(self.device)
@@ -650,9 +648,11 @@ class Trainer:
                     normalized=self.normalized,
                     loggers=loggers,
                     obs_image=viz_obs_image,
-                    goal_image=viz_goal_image,
+                    goal_image=viz_context_t0_image,
                     action_pred=action_pred,
                     action_label=action_label,
+                    action_context=normalized_prev_actions,
+
                     goal_pos=goal_pos,
                     dataset_index=dataset_index,
                     mode=eval_type,

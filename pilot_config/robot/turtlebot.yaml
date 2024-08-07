@@ -15,5 +15,5 @@ turtlebot:
       p2: 0.0
   max_ang_vel: 0.8625
   max_lin_vel: 0.3021
-  metric_waypoint_spacing: 0.31
+  metric_waypoint_spacing: 1.
 

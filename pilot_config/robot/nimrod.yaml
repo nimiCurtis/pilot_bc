@@ -15,4 +15,4 @@ nimrod:
       p2: 0.0
   max_ang_vel: 43.7212
   max_lin_vel: 2.2882
-  metric_waypoint_spacing: 0.7718
+  metric_waypoint_spacing: 1

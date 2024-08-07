@@ -364,7 +364,6 @@ class PilotDataset(Dataset):
         waypoints = to_local_coords(positions, positions[0], yaw[0])
         goal_in_local = to_local_coords(goal_pos, positions[0], yaw[0])
 
-        
         prev_waypoints = to_local_coords(prev_positions, prev_positions[0], prev_yaw[0])
         # Ensure waypoints have the correct shape
         assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
@@ -540,7 +539,6 @@ class PilotDataset(Dataset):
             (not goal_is_negative)
         )
 
-        
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
             torch.as_tensor(obs_image, dtype=torch.float32),  # [C*(context+1),H,W]

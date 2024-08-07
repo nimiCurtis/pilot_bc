@@ -17,7 +17,8 @@ import wandb
 import yaml
 import torch
 import torch.nn as nn
-from pilot_utils.utils import to_numpy
+from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angle
+from pilot_utils.data.data_utils import yaw_rotmat
 
 
 # # load data_config.yaml
@@ -124,6 +125,7 @@ class Visualizer:
             batch_goals: np.ndarray,
             batch_pred_waypoints: np.ndarray,
             batch_label_waypoints: np.ndarray,
+            batch_waypoints_context: np.ndarray,
             eval_type: str,
             normalized: bool,
             epoch: int,
@@ -177,11 +179,8 @@ class Visualizer:
             goal_pos = batch_goals[i]
             pred_waypoints = batch_pred_waypoints[i]
             label_waypoints = batch_label_waypoints[i]
-
-            if normalized:
-                pred_waypoints *= robot_config[dataset_name]["metric_waypoint_spacing"]
-                label_waypoints *= robot_config[dataset_name]["metric_waypoint_spacing"]
-                goal_pos *= robot_config[dataset_name]["metric_waypoint_spacing"]
+            context_waypoints = batch_waypoints_context[i]
+            #TODO: modify with unormalizing based on the dataset
 
             save_path = None
             if visualize_path is not None:
@@ -194,6 +193,7 @@ class Visualizer:
                 goal_pos,
                 pred_waypoints,
                 label_waypoints,
+                context_waypoints,
                 save_path,
                 display,
             )
@@ -211,6 +211,8 @@ class Visualizer:
             goal_pos: np.ndarray,
             pred_waypoints: np.ndarray,
             label_waypoints: np.ndarray,
+            context_waypoints: np.ndarray,
+
             save_path: Optional[str] = None,
             display: Optional[bool] = False,
     ):
@@ -230,32 +232,85 @@ class Visualizer:
 
         fig, ax = plt.subplots(1, 3)
         start_pos = np.array([0, 0])
+        robot_pos = start_pos
+        
+        start_yaw = [0]
+        start_wpt = np.concatenate([start_pos,start_yaw])
+        start_wpt = calculate_sin_cos(start_wpt)
+        traj_labels = ["prediction", "ground truth"]
+        traj_colors=[CYAN, MAGENTA]
+        if context_waypoints.shape[0] > 0:
+            
+            context_waypoints = np.vstack([start_wpt,context_waypoints])
+            
+            traj_colors.append(YELLOW)
+            traj_labels.append("context traj")
+
+            last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
+            last_pos = context_waypoints[-1][:2]
+            robot_pos = last_pos
+            
+            positions = pred_waypoints[:,:2]
+            yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
+            yaws = yaws + last_yaw
+            yaws = np.array([clip_angle(yaw) for yaw in yaws])
+            
+            
+            gt_positions = label_waypoints[:,:2]
+            gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
+            gt_yaws = gt_yaws + last_yaw
+            gt_yaws = np.array([clip_angle(yaw) for yaw in gt_yaws])
+            
+            
+            rotmat = yaw_rotmat(last_yaw)
+
+            if positions.shape[-1] == 2:
+                rotmat = rotmat[:2, :2]
+            
+            pred_waypoints[:,:2] = (positions + last_pos).dot(rotmat)
+            pred_waypoints = calculate_sin_cos(np.concatenate([pred_waypoints[:,:2],yaws.reshape(-1,1)],axis=1))
+            pred_waypoints = np.vstack([context_waypoints[-1],pred_waypoints])
+
+            label_waypoints[:,:2] = (gt_positions + last_pos).dot(rotmat)
+            label_waypoints = calculate_sin_cos(np.concatenate([label_waypoints[:,:2],gt_yaws.reshape(-1,1)],axis=1))
+            label_waypoints = np.vstack([context_waypoints[-1],label_waypoints])
+
         if len(pred_waypoints.shape) > 2:
             trajs = [*pred_waypoints, label_waypoints]
         else:
             trajs = [pred_waypoints, label_waypoints]
+            
+        if context_waypoints.shape[0] > 0:
+            trajs.append(context_waypoints)
+
         plot_trajs_and_points(
             ax[0],
             trajs,
-            [start_pos, goal_pos],
-            traj_colors=[CYAN, MAGENTA],
+            [robot_pos, goal_pos],
+            traj_colors=traj_colors,
+            traj_labels=traj_labels,
             point_colors=[GREEN, RED],
         )
+        
+        ## Context image
+        ax[1].imshow(goal_img)
+        
         self.plot_trajs_and_points_on_image(
-            ax[1],
+            ax[2],
             obs_img,
             dataset_name,
-            trajs,
-            [start_pos, goal_pos],
+            trajs[:2],
+            [robot_pos, goal_pos],
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
-        ax[2].imshow(goal_img)
+        
 
         fig.set_size_inches(18.5, 10.5)
         ax[0].set_title(f"Action Prediction")
-        ax[1].set_title(f"Observation")
-        ax[2].set_title(f"Goal")
+        ax[1].set_title(f"Context @ t0")
+        ax[2].set_title(f"Observation")
+
 
         if save_path is not None:
             fig.savefig(
@@ -394,16 +449,16 @@ def plot_trajs_and_points(
     for i, traj in enumerate(list_trajs):
         if traj_labels is None:
             ax.plot(
-                traj[:, 0],
                 traj[:, 1],
+                traj[:, 0],
                 color=traj_colors[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
                 marker="o",
             )
         else:
             ax.plot(
-                traj[:, 0],
                 traj[:, 1],
+                traj[:, 0],
                 color=traj_colors[i],
                 label=traj_labels[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
@@ -412,18 +467,18 @@ def plot_trajs_and_points(
         if traj.shape[1] > 2 and quiver_freq > 0:  # traj data also includes yaw of the robot
             bearings = gen_bearings_from_waypoints(traj)
             ax.quiver(
-                traj[::quiver_freq, 0],
                 traj[::quiver_freq, 1],
+                traj[::quiver_freq, 0],
+                -1*bearings[::quiver_freq, 1], ## for right hand system
                 bearings[::quiver_freq, 0],
-                bearings[::quiver_freq, 1],
                 color=traj_colors[i] * 0.5,
                 scale=1.0,
             )
     for i, pt in enumerate(list_points):
         if point_labels is None:
             ax.plot(
-                pt[0],
                 pt[1],
+                pt[0],
                 color=point_colors[i],
                 alpha=point_alphas[i] if point_alphas is not None else 1.0,
                 marker="o",
@@ -431,15 +486,15 @@ def plot_trajs_and_points(
             )
         else:
             ax.plot(
-                pt[0],
                 pt[1],
+                pt[0],
                 color=point_colors[i],
                 alpha=point_alphas[i] if point_alphas is not None else 1.0,
                 marker="o",
                 markersize=7.0,
                 label=point_labels[i],
             )
-
+            
     # put the legend below the plot
     if traj_labels is not None or point_labels is not None:
         ax.legend()
