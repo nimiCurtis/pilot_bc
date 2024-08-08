@@ -100,6 +100,7 @@ class Trainer:
         self.learn_angle=data_cfg.learn_angle
         self.action_horizon = data_cfg.action_horizon
         self.pred_horizon=data_cfg.pred_horizon
+        self.action_context_size= data_cfg.action_context_size
 
         self.latest_path = os.path.join(self.project_log_folder, f"latest.pth")
 
@@ -194,7 +195,7 @@ class Trainer:
         
         for i, data in enumerate(tqdm_iter):
             (
-                obs_image,
+                obs_image_transformed,
                 curr_rel_pos_to_target,
                 goal_rel_pos_to_target,
                 action_label,
@@ -207,18 +208,15 @@ class Trainer:
             B = action_label.shape[0] #batch size
             action_dim = action_label.shape[-1]
             # STATE
-            # visual context ###TODO: check!!!! >> it seems to do nothing but be carefull
-            obs_images = torch.split(obs_image, 1, dim=1)
-            viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
-            viz_context_t0_image = TF.resize(obs_images[0], VISUALIZATION_IMAGE_SIZE)
+            # visual context ###TODO: modify for rgb
+            viz_images = torch.split(obs_image_transformed, 1, dim=1)
+            viz_obs_image = TF.resize(viz_images[-1], VISUALIZATION_IMAGE_SIZE)
+            viz_context_t0_image = TF.resize(viz_images[-self.action_context_size], VISUALIZATION_IMAGE_SIZE)
 
-            # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
-            obs_images = [obs_image.to(self.device) for obs_image in obs_images]
-
-            obs_image = torch.cat(obs_images, dim=1)
+            obs_image_transformed = obs_image_transformed.to(self.device)
+            
             # current relative target pos
             curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
-            # target_context_mask = target_context_mask.to(self.device)
 
             # GOAL
             goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
@@ -261,7 +259,7 @@ class Trainer:
                     timesteps=timesteps)
 
                 # Predict the noise residual
-                obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image)
+                obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image_transformed)
                 
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
@@ -307,7 +305,7 @@ class Trainer:
                 
             else:
                 model_outputs = self.model("action_pred",
-                                        obs_img=obs_image,
+                                        obs_img=obs_image_transformed,
                                         curr_rel_pos_to_target=curr_rel_pos_to_target,
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 action_pred = model_outputs
@@ -405,6 +403,7 @@ class Trainer:
                 action_pred=action_pred,
                 action_label=action_label,
                 action_context=normalized_prev_actions,
+                action_mask=action_mask,
                 goal_pos=goal_pos,
                 dataset_index=dataset_index,
                 mode="train",
@@ -475,7 +474,7 @@ class Trainer:
             )
             for i, data in enumerate(tqdm_iter):
                 (
-                    obs_image,
+                    obs_image_transformed,
                     curr_rel_pos_to_target,
                     goal_rel_pos_to_target,
                     action_label,
@@ -489,17 +488,15 @@ class Trainer:
                 action_dim = action_label.shape[-1]
                 # STATE
                 # visual context
-                obs_images = torch.split(obs_image, 1, dim=1)
-                viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
-                viz_context_t0_image = TF.resize(obs_images[0], VISUALIZATION_IMAGE_SIZE)
+                viz_images = torch.split(obs_image_transformed, 1, dim=1)
+                viz_obs_image = TF.resize(viz_images[-1], VISUALIZATION_IMAGE_SIZE)
+                viz_context_t0_image = TF.resize(viz_images[-self.action_context_size], VISUALIZATION_IMAGE_SIZE)
 
-                # obs_images = [self.transform(obs_image).to(self.device) for obs_image in obs_images]
-                obs_images = [obs_image.to(self.device) for obs_image in obs_images]
+                obs_image_transformed = obs_image_transformed.to(self.device)
 
-                obs_image = torch.cat(obs_images, dim=1)
                 # current relative target pos
                 curr_rel_pos_to_target = curr_rel_pos_to_target.to(self.device)
-                # target_context_mask = target_context_mask.to(self.device)
+
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -515,8 +512,6 @@ class Trainer:
                 # Take the action mask. TODO: check
                 action_mask = action_mask.to(self.device)
 
-                # Infer model
-                
                 # Infer model
                 if self.model_name == "pidiff":
                     action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
@@ -540,7 +535,7 @@ class Trainer:
                         action_label_pred_deltas, noise, timesteps)
 
                     # Predict the noise residual
-                    obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image)
+                    obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image_transformed)
 
                     # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                     if self.goal_condition:
@@ -622,7 +617,7 @@ class Trainer:
                 # Not in use -> TODO: refactor for another models
                 else:
                     model_outputs = self.model("action_pred",
-                                            obs_img=obs_image,
+                                            obs_img=obs_image_transformed,
                                             curr_rel_pos_to_target=curr_rel_pos_to_target,
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     action_pred = model_outputs
@@ -652,7 +647,7 @@ class Trainer:
                     action_pred=action_pred,
                     action_label=action_label,
                     action_context=normalized_prev_actions,
-
+                    action_mask=action_mask,
                     goal_pos=goal_pos,
                     dataset_index=dataset_index,
                     mode=eval_type,

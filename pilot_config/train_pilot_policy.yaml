@@ -104,9 +104,9 @@ log:
   run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
   num_images_log: 4
-  print_log_freq: 300 # in iterations
+  print_log_freq: 10 # in iterations
   eval_log_freq: 8  # in iterations
-  image_log_freq: 2 # # in iterations
+  image_log_freq: 1 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 5

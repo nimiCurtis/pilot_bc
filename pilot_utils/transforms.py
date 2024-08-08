@@ -80,11 +80,11 @@ class ObservationTransform:
         # random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
         # center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
         
-        random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.15)
-        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.15)
+        random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.1)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
         
         random_rotation = transforms.RandomRotation(degrees=20)
-        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.6)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.5)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 

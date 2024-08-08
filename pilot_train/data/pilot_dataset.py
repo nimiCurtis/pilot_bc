@@ -467,7 +467,7 @@ class PilotDataset(Dataset):
         obs_image = [self._load_image(f, t) for f, t in context]
 
         # Apply transformations to the context images
-        obs_image = transform_images(obs_image, self.transform)
+        obs_image_transformed = transform_images(obs_image, self.transform)
 
         # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
@@ -541,7 +541,7 @@ class PilotDataset(Dataset):
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            torch.as_tensor(obs_image, dtype=torch.float32),  # [C*(context+1),H,W]
+            torch.as_tensor(obs_image_transformed, dtype=torch.float32),  # [C*(context+1),H,W]
             torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),

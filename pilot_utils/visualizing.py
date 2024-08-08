@@ -34,7 +34,6 @@ CYAN = np.array([0, 1, 1])
 YELLOW = np.array([1, 1, 0])
 MAGENTA = np.array([1, 0, 1])
 
-
 class Visualizer:
 
     def __init__(self,datasets_cfg, log_cfg) -> None:
@@ -126,6 +125,7 @@ class Visualizer:
             batch_pred_waypoints: np.ndarray,
             batch_label_waypoints: np.ndarray,
             batch_waypoints_context: np.ndarray,
+            batch_action_mask: np.ndarray,
             eval_type: str,
             normalized: bool,
             epoch: int,
@@ -180,6 +180,7 @@ class Visualizer:
             pred_waypoints = batch_pred_waypoints[i]
             label_waypoints = batch_label_waypoints[i]
             context_waypoints = batch_waypoints_context[i]
+            action_mask = int(batch_action_mask[i])
             #TODO: modify with unormalizing based on the dataset
 
             save_path = None
@@ -194,6 +195,7 @@ class Visualizer:
                 pred_waypoints,
                 label_waypoints,
                 context_waypoints,
+                action_mask,
                 save_path,
                 display,
             )
@@ -212,7 +214,7 @@ class Visualizer:
             pred_waypoints: np.ndarray,
             label_waypoints: np.ndarray,
             context_waypoints: np.ndarray,
-
+            action_mask,
             save_path: Optional[str] = None,
             display: Optional[bool] = False,
     ):
@@ -233,23 +235,28 @@ class Visualizer:
         fig, ax = plt.subplots(1, 3)
         start_pos = np.array([0, 0])
         robot_pos = start_pos
-        
+        points = [start_pos, goal_pos, robot_pos]
+        points_labels=["start", "goal", "robot"]
+        points_colors = [0.1*RED, RED, GREEN]
         start_yaw = [0]
         start_wpt = np.concatenate([start_pos,start_yaw])
         start_wpt = calculate_sin_cos(start_wpt)
         traj_labels = ["prediction", "ground truth"]
         traj_colors=[CYAN, MAGENTA]
+        
+        
         if context_waypoints.shape[0] > 0:
             
             context_waypoints = np.vstack([start_wpt,context_waypoints])
             
-            traj_colors.append(YELLOW)
-            traj_labels.append("context traj")
+            traj_colors.append(BLUE)
+            traj_labels.append("history")
 
             last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
             last_pos = context_waypoints[-1][:2]
             robot_pos = last_pos
-            
+            points[2] = robot_pos
+
             positions = pred_waypoints[:,:2]
             yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
             yaws = yaws + last_yaw
@@ -267,6 +274,8 @@ class Visualizer:
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
             
+            goal_pos = (goal_pos + last_pos).dot(rotmat)
+            points[1] = goal_pos
             pred_waypoints[:,:2] = (positions + last_pos).dot(rotmat)
             pred_waypoints = calculate_sin_cos(np.concatenate([pred_waypoints[:,:2],yaws.reshape(-1,1)],axis=1))
             pred_waypoints = np.vstack([context_waypoints[-1],pred_waypoints])
@@ -286,31 +295,34 @@ class Visualizer:
         plot_trajs_and_points(
             ax[0],
             trajs,
-            [robot_pos, goal_pos],
+            points,
             traj_colors=traj_colors,
             traj_labels=traj_labels,
-            point_colors=[GREEN, RED],
+            point_colors=points_colors,
+            point_labels=points_labels,
+            action_mask= action_mask,
         )
         
         ## Context image
         ax[1].imshow(goal_img)
+        ax[2].imshow(obs_img)
         
-        self.plot_trajs_and_points_on_image(
-            ax[2],
-            obs_img,
-            dataset_name,
-            trajs[:2],
-            [robot_pos, goal_pos],
-            traj_colors=[CYAN, MAGENTA],
-            point_colors=[GREEN, RED],
-        )
+        ## TODO        
+        # self.plot_trajs_and_points_on_image(
+        #     ax[2],
+        #     obs_img,
+        #     dataset_name,
+        #     trajs[:2],
+        #     [robot_pos, goal_pos],
+        #     traj_colors=[CYAN, MAGENTA],
+        #     point_colors=[GREEN, RED],
+        # )
         
 
         fig.set_size_inches(18.5, 10.5)
         ax[0].set_title(f"Action Prediction")
-        ax[1].set_title(f"Context @ t0")
-        ax[2].set_title(f"Observation")
-
+        ax[1].set_title(f"Observation @ first action / context",color=points_colors[0])
+        ax[2].set_title(f"Observation @ Now",color=points_colors[-1])
 
         if save_path is not None:
             fig.savefig(
@@ -413,6 +425,7 @@ def plot_trajs_and_points(
         ax: plt.Axes,
         list_trajs: list,
         list_points: list,
+        action_mask: int,
         traj_colors: list = [CYAN, MAGENTA],
         point_colors: list = [RED, GREEN],
         traj_labels: Optional[list] = ["prediction", "ground truth"],
@@ -485,15 +498,27 @@ def plot_trajs_and_points(
                 markersize=7.0
             )
         else:
-            ax.plot(
-                pt[1],
-                pt[0],
-                color=point_colors[i],
-                alpha=point_alphas[i] if point_alphas is not None else 1.0,
-                marker="o",
-                markersize=7.0,
-                label=point_labels[i],
-            )
+            if point_labels[i] == "goal" and not(action_mask):
+                ax.plot(
+                    pt[1],
+                    pt[0],
+                    color=point_colors[i],
+                    alpha=point_alphas[i] if point_alphas is not None else 1.0,
+                    marker="o",
+                    markersize=7.0,
+                    label="negative goal",
+                    markerfacecolor="none",
+                )
+            else:
+                ax.plot(
+                    pt[1],
+                    pt[0],
+                    color=point_colors[i],
+                    alpha=point_alphas[i] if point_alphas is not None else 1.0,
+                    marker="o",
+                    markersize=7.0,
+                    label=point_labels[i],
+                )
             
     # put the legend below the plot
     if traj_labels is not None or point_labels is not None:
