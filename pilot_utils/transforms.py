@@ -84,7 +84,7 @@ class ObservationTransform:
         random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
         
         random_rotation = transforms.RandomRotation(degrees=20)
-        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.5)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.4)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
@@ -93,7 +93,7 @@ class ObservationTransform:
                                 interpolation=transforms.InterpolationMode.BILINEAR,
                                 # ratio=self.image_aspect_ratio,
                                 antialias=True)
-        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.2)
+        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.1)
         
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([
