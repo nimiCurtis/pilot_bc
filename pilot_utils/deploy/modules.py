@@ -2,6 +2,7 @@ import numba as nb
 import numpy as np
 import numpy.typing as npt
 from numba.experimental import jitclass
+from filterpy.kalman import KalmanFilter, UnscentedKalmanFilter
 
 spec = [
     ("_window_size", nb.int64),
@@ -81,3 +82,103 @@ class MovingWindowFilter(object):
 
         return (self._sum + self._correction) / self._window_size
 
+@nb.jit(nopython=True, cache=True, parallel=True)
+def inv_with_jit(M: npt.NDArray[np.float64]):
+    return np.linalg.inv(M)
+
+class GoalPositionEstimator:
+    """Estimates base velocity of A1 robot.
+
+    The velocity estimator consists of 2 parts:
+    1) A state estimator for CoM velocity.
+
+    Two sources of information are used:
+    The integrated reading of accelerometer and the velocity estimation from
+    contact legs. The readings are fused together using a Kalman Filter.
+
+    2) A moving average filter to smooth out velocity readings
+    """
+
+    def __init__(
+        self,
+        model_variance=0.1,
+        initial_variance=0.1,
+        target_position_variance=0.1,
+        moving_window_filter_size=10,
+        k=0.1
+    ):
+        """Initiates the velocity estimator.
+
+        See filterpy documentation in the link below for more details.
+        https://filterpy.readthedocs.io/en/latest/kalman/KalmanFilter.html
+
+        Args:
+            target_position_variance: noise estimation for accelerometer reading.
+            model_variance: noise estimation for motor velocity reading.
+            initial_covariance: covariance estimation of initial state.
+        """
+
+        self.filter = KalmanFilter(dim_x=3, dim_z=3, dim_u=3)
+        self.filter.x = np.zeros(3)
+        self._initial_variance = initial_variance
+        self.filter.P = np.eye(3) * self._initial_variance  # State covariance
+        self.filter.Q = np.eye(3) * target_position_variance
+        self.filter.R = np.eye(3) * model_variance
+
+        self.filter.H = np.eye(3)  # measurement function (y=H*x)
+        self.filter.F = np.eye(3)  # state transition matrix
+        
+        self.k = k
+        self.filter.B = np.eye(3) * self.k # type: ignore
+        self.filter.inv = inv_with_jit  # type: ignore     To accelerate inverse calculation (~3x faster)
+
+        self._window_size = moving_window_filter_size
+        self.moving_window_filter = MovingWindowFilter(
+            window_size=self._window_size, data_dim=3
+        )
+        self._estimated_goal = np.zeros(3)
+        self._last_timestamp_s = 0.0
+
+        self.filter.inv(np.eye(3))
+
+    def reset(self):
+        self.filter.x = np.zeros(3)
+        self.filter.P = np.eye(3) * self._initial_variance
+        self.moving_window_filter = MovingWindowFilter(
+            window_size=self._window_size, data_dim=2
+        )
+
+        # self._last_timestamp_s = 0.0
+
+    # def _compute_delta_time(self, new_timestamp_s: float):
+    #     if self._last_timestamp_s == 0.0:
+    #         # First timestamp received, return an estimated delta_time.
+    #         delta_time_s = self._default_control_dt
+    #     else:
+    #         delta_time_s = new_timestamp_s - self._last_timestamp_s
+    #     self._last_timestamp_s = new_timestamp_s
+    #     return delta_time_s
+
+    def update(
+        self,
+        model_prediction:npt.NDArray[np.float64],
+        error: npt.NDArray[np.float64],
+
+    ):
+        """Propagate current state estimate with new accelerometer reading."""
+
+        # Get rotation matrix from quaternion
+        self.filter.predict(u=error)
+
+        if self.observed_model_prediction(model_prediction):
+            self.filter.update(model_prediction)
+
+        self._estimated_goal = self.moving_window_filter.calculate_average(
+            self.filter.x
+        )
+    def observed_model_prediction(self,model_prediction):
+        return model_prediction is not None
+    
+    @property
+    def estimated_goal(self):
+        return self._estimated_goal.copy()
