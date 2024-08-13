@@ -2,7 +2,8 @@ import numba as nb
 import numpy as np
 import numpy.typing as npt
 from numba.experimental import jitclass
-
+from filterpy.kalman import KalmanFilter, UnscentedKalmanFilter
+from pilot_utils.utils import clip_angle
 spec = [
     ("_window_size", nb.int64),
     ("_data_dim", nb.int64),
@@ -81,3 +82,104 @@ class MovingWindowFilter(object):
 
         return (self._sum + self._correction) / self._window_size
 
+@nb.jit(nopython=True, cache=True, parallel=True)
+def inv_with_jit(M: npt.NDArray[np.float64]):
+    return np.linalg.inv(M)
+
+class GoalPositionEstimator:
+    """Estimates base velocity of A1 robot.
+
+    The velocity estimator consists of 2 parts:
+    1) A state estimator for CoM velocity.
+
+    Two sources of information are used:
+    The integrated reading of accelerometer and the velocity estimation from
+    contact legs. The readings are fused together using a Kalman Filter.
+
+    2) A moving average filter to smooth out velocity readings
+    """
+
+    def __init__(
+        self,
+        sensor_variance=np.array([1e-2,1e-2,1e-1]),
+        initial_variance=np.array([0.1,0.1,0.1]),
+        moving_window_filter_size=15,   
+        k=0.05
+    ):
+        """Initiates the velocity estimator.
+
+        See filterpy documentation in the link below for more details.
+        https://filterpy.readthedocs.io/en/latest/kalman/KalmanFilter.html
+
+        Args:
+
+        """
+
+        self.filter = KalmanFilter(dim_x=3, dim_z=3, dim_u=3)
+        # Motion Model
+        self.filter.x = np.zeros(3)
+        self._initial_variance = initial_variance
+        self.filter.P = np.eye(3) * self._initial_variance  # State covariance
+        # self.filter.Q = np.eye(3) * target_position_variance
+        self._prediction_variance = np.zeros(6)
+        self.filter.F = np.eye(3)  # state transition matrix
+        self.k = k # np.array([k,k,k]) # coefficient
+        self.filter.B = np.eye(3) * self.k # type: ignore
+        self.filter.inv = inv_with_jit  # type: ignore     To accelerate inverse calculation (~3x faster)
+
+        # Sensor Model
+        self._sensor_variance = sensor_variance
+        self.filter.R = np.eye(3) * sensor_variance
+        self.filter.H = np.eye(3)  # measurement function (y=H*x)
+
+        self._window_size = moving_window_filter_size
+        self.moving_window_filter = MovingWindowFilter(
+            window_size=self._window_size, data_dim=3
+        )
+        self._estimated_goal = np.zeros(3)
+        self.filter.inv(np.eye(3))
+
+    def reset(self):
+        self.filter.x = np.zeros(3)
+        self.filter.P = np.eye(3) * self._initial_variance
+        self.moving_window_filter = MovingWindowFilter(
+            window_size=self._window_size, data_dim=3
+        )
+
+    def update(
+        self,
+        state_error: npt.NDArray[np.float64],
+        sensor_prediction:npt.NDArray[np.float64],
+        prediction_variance: npt.NDArray[np.float64],
+        prediction_mag: np.float64,
+        correction_mag: np.float64,
+    ):
+        """Propagate current state estimate with new accelerometer reading."""
+
+        # Get rotation matrix from quaternion
+        self._prediction_variance = prediction_variance
+        # Reconstructing the covariance matrix
+        pred_cov_matrix = np.diag([self._prediction_variance[0],
+                                self._prediction_variance[1],
+                                self._prediction_variance[2]])
+        
+        self.filter.Q = pred_cov_matrix.dot(prediction_mag)
+        
+        self.filter.predict(u=state_error)
+        # self.filter.x[-1] = clip_angle(self.filter.x[-1])
+        if self.observed_model_prediction(sensor_prediction):
+            self.filter.R = np.eye(3).dot(correction_mag) * self._sensor_variance 
+            self.filter.update(sensor_prediction)
+            # self.filter.x[-1] = clip_angle(self.filter.x[-1])
+
+
+        self._estimated_goal = self.moving_window_filter.calculate_average(
+            self.filter.x
+        )
+        
+    def observed_model_prediction(self,model_prediction):
+        return model_prediction is not None
+    
+    @property
+    def estimated_goal(self):
+        return self._estimated_goal.copy()
