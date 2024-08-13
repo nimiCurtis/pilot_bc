@@ -104,7 +104,7 @@ class GoalPositionEstimator:
         sensor_variance=np.array([1e-2,1e-2,1e-1]),
         initial_variance=np.array([0.1,0.1,0.1]),
         moving_window_filter_size=15,   
-        k=0.1
+        k=0.05
     ):
         """Initiates the velocity estimator.
 
@@ -116,8 +116,6 @@ class GoalPositionEstimator:
         """
 
         self.filter = KalmanFilter(dim_x=3, dim_z=3, dim_u=3)
-        
-        
         # Motion Model
         self.filter.x = np.zeros(3)
         self._initial_variance = initial_variance
@@ -125,7 +123,7 @@ class GoalPositionEstimator:
         # self.filter.Q = np.eye(3) * target_position_variance
         self._prediction_variance = np.zeros(6)
         self.filter.F = np.eye(3)  # state transition matrix
-        self.k =  np.array([k,k,0.5*k]) # coefficient
+        self.k = k # np.array([k,k,k]) # coefficient
         self.filter.B = np.eye(3) * self.k # type: ignore
         self.filter.inv = inv_with_jit  # type: ignore     To accelerate inverse calculation (~3x faster)
 
