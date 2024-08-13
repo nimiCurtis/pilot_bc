@@ -109,7 +109,7 @@ class ObservationTransform:
                                             random_mask,
                                             # end of pipeline
                                             to_float32,
-                                            normalize
+                                            # normalize
                                         ])
 
         ### EVAL TRANSFORMS ###
@@ -120,7 +120,7 @@ class ObservationTransform:
                                             resize,
                                             ## end of pipeline
                                             to_float32,
-                                            normalize
+                                            # normalize
                                                 ])
 
         return train_transform, eval_transform

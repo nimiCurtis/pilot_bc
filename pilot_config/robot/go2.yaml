@@ -15,5 +15,5 @@ go2:
       p1: 0.0
       p2: 0.0
   max_ang_vel: 1.0
-  max_lin_vel: 2.0427 # currently limited from safety reasons 0 - 3.7 m/s
+  max_lin_vel: 2.139 # currently limited from safety reasons 0 - 3.7 m/s
   metric_waypoint_spacing: 1 # in use in visualizer

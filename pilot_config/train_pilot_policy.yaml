@@ -6,7 +6,7 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -94,7 +94,7 @@ data:
 
 # logging config
 log:
-  desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ddpm_"
+  desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ph${data.pred_horizon}"
   # desc: batch_experiment_b${training.batch_size}_
   
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
