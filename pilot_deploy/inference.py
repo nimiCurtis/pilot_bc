@@ -341,8 +341,8 @@ class PilotAgent(nn.Module):
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
-        with torch.no_grad():
-            normalized_actions = self.infer_actions(
+        # with torch.no_grad():
+        normalized_actions = self.infer_actions(
                 obs_img=context_queue,
                 curr_rel_pos_to_target=target_context_queue,
                 goal_rel_pos_to_target=goal_to_target,
@@ -352,6 +352,7 @@ class PilotAgent(nn.Module):
 
         return normalized_actions[0]  # no batch dimension
     
+    @torch.inference_mode()
     def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
         
         obs_encoding = self.model("vision_encoder",
