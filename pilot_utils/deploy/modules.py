@@ -164,7 +164,7 @@ class GoalPositionEstimator:
                                 self._prediction_variance[2]])
         
         self.filter.Q = pred_cov_matrix.dot(prediction_mag)
-        
+        self.filter.B = np.eye(3) * self.k * correction_mag
         self.filter.predict(u=state_error)
         # self.filter.x[-1] = clip_angle(self.filter.x[-1])
         if self.observed_model_prediction(sensor_prediction):
