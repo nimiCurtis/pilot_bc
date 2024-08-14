@@ -239,11 +239,14 @@ class Trainer:
             # Infer model
             if self.model_name == "pidiff":
                 
-                # Sample noise to add to actions
-                action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
-                action_label_pred_rel_orientations = action_label_pred[:,:,2:]
-                action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
+                # Take action label deltas
+                action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
                 
+                if self.learn_angle:
+                    # We don't take the deltas of yaw
+                    action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
+
+                # Sample noise to add to actions
                 noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
                 # Sample a diffusion iteration for each data point
@@ -358,7 +361,7 @@ class Trainer:
                                         final_encoded_condition=final_encoded_condition)
 
                         # inverse diffusion step (remove noise)
-                        diffusion_output = self.noise_scheduler.step(
+                        diffusion_output = self.noise_scheduler.remove_noise(
                             model_output=noise_pred,
                             timestep=k,
                             sample=diffusion_output
@@ -518,9 +521,13 @@ class Trainer:
                     action_label_pred_rel_orientations = action_label_pred[:,:,2:]
                     action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
                     
-                    # action label pred -> the pred horizon actions. it is already normalize cumsum
-                    # so the deltas are normalized
-                    action_label_pred_deltas = get_delta(actions=action_label_pred)
+                    # Take action label deltas
+                    action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                    
+                    if self.learn_angle:
+                        # We don't take the deltas of yaw
+                        action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
+
                     # Sample noise to add to actions
                     noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
 
@@ -597,7 +604,7 @@ class Trainer:
                                             final_encoded_condition=final_encoded_condition)
 
                             # inverse diffusion step (remove noise)
-                            diffusion_output = self.noise_scheduler.step(
+                            diffusion_output = self.noise_scheduler.remove_noise(
                                 model_output=noise_pred,
                                 timestep=k,
                                 sample=diffusion_output

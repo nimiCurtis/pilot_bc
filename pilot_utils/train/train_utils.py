@@ -79,6 +79,8 @@ def compute_noise_losses(
             # Reduce over non-batch dimensions to get loss per batch element
             while unreduced_loss.dim() > 1:
                 unreduced_loss = unreduced_loss.mean(dim=-1)
+                # unreduced_loss = unreduced_loss.sum(dim=-1)
+
             assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
             return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 
@@ -111,7 +113,9 @@ def compute_losses(
         def action_reduce(unreduced_loss: torch.Tensor):
             # Reduce over non-batch dimensions to get loss per batch element
             while unreduced_loss.dim() > 1:
+                # unreduced_loss = unreduced_loss.sum(dim=-1)
                 unreduced_loss = unreduced_loss.mean(dim=-1)
+
             assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
             return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 

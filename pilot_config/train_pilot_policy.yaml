@@ -81,7 +81,7 @@ data:
     max_dist_cat: 10
 
   # action output params
-  pred_horizon: 16 # TODO: chang to pred_horizon
+  pred_horizon: 16 
   action_horizon: 8
   learn_angle: True
   # dataset specific parameters

@@ -149,7 +149,7 @@ class PiDiff(BaseModel):
             lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
             if len(lin_encoding.shape) == 2:
                 lin_encoding = lin_encoding.unsqueeze(1)
-            #     lin_encoding = lin_encoding.expand(-1, self.context_size + 1, -1)
+
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
             return lin_encoding
 
@@ -174,7 +174,6 @@ class PiDiff(BaseModel):
             no_goal_mask = goal_mask.long()
             self.all_masks = self.all_masks.to(no_goal_mask.device)
             # select from all_masks a tensor based on the no_goal_mask tensor
-            # src_key_padding_mask = torch.index_select(self.all_masks.to(self.device), 0, no_goal_mask)
             src_key_padding_mask = torch.index_select(self.all_masks, 0, no_goal_mask)
 
         else:
@@ -198,7 +197,7 @@ class PiDiff(BaseModel):
         return final_encoded_condition
 
     def fuse_modalities(self, modalities: List[torch.Tensor], mask: torch.Tensor = None):
-    # Ensure the list of tensors is not empty
+        # Ensure the list of tensors is not empty
         if not modalities:
             raise ValueError("The list of modalities is empty.")
         
@@ -209,8 +208,6 @@ class PiDiff(BaseModel):
         for tensor in modalities:
             if tensor.shape[-1] != shape[-1]:
                 raise ValueError("All tensors must have the same features dim.")
-            # else:
-            #     fused_tensor+=tensor         # Sum all the tensors
 
         # If mask is provided, ensure it has the correct shape
         if mask is not None:
@@ -222,17 +219,11 @@ class PiDiff(BaseModel):
             for i, modality in enumerate(modalities):
                 masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
                 masked_modalities.append(masked_modality)
-        else:
-            masked_modalities = modalities
+        
+            fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
 
-        # Sum the (possibly masked) tensors
-        # fused_tensor = torch.sum(torch.stack(masked_modalities), dim=0)
-        fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
-        # Apply mask if provided
-        # if mask is not None:
-        #     if mask.shape != fused_tensor.shape:
-        #         raise ValueError("The mask must have the same shape as the fused tensor.")
-        #     fused_tensor = fused_tensor * mask
+        else:
+            fused_tensor = modalities
 
         return fused_tensor
 
@@ -268,17 +259,11 @@ class PiDiff(BaseModel):
     def train(self, mode: bool = True):
         super(PiDiff, self).train(mode)
         torch.cuda.empty_cache()
-        # if mode:
-        #     self.noise_scheduler.set_timesteps(self.num_diffusion_iters_train)
-        #     print(f"Diffusion timesteps (train): {len(self.noise_scheduler.timesteps)}")
         return self
 
     def eval(self):
         super(PiDiff, self).eval()
         torch.cuda.empty_cache()
-        # self.noise_scheduler.set_timesteps(self.num_diffusion_iters_eval)
-        # print(f"Diffusion timesteps (eval): {len(self.noise_scheduler.timesteps)}")
-
         return self
     
     def to(self, device):
@@ -322,7 +307,7 @@ class DiffuserScheduler:
     def timesteps(self):
         return self.noise_scheduler.timesteps[:]
     
-    def step(self,model_output,timestep,sample):
+    def remove_noise(self,model_output,timestep,sample):
         return self.noise_scheduler.step(
                                         model_output=model_output,
                                         timestep=timestep,

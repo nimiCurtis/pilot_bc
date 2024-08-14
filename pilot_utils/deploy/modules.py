@@ -120,7 +120,7 @@ class GoalPositionEstimator:
         self.filter.x = np.zeros(3)
         self._initial_variance = initial_variance
         self.filter.P = np.eye(3) * self._initial_variance  # State covariance
-        # self.filter.Q = np.eye(3) * target_position_variance
+
         self._prediction_variance = np.zeros(6)
         self.filter.F = np.eye(3)  # state transition matrix
         self.k = k # np.array([k,k,k]) # coefficient

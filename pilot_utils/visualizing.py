@@ -247,29 +247,35 @@ class Visualizer:
         
         if context_waypoints.shape[0] > 0:
             
-            context_waypoints = np.vstack([start_wpt,context_waypoints])
-            
             traj_colors.append(BLUE)
             traj_labels.append("history")
-
-            last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
+            
+            #shape
+            if context_waypoints.shape[1] == 4:
+                context_waypoints = np.vstack([start_wpt,context_waypoints])
+            
             last_pos = context_waypoints[-1][:2]
             robot_pos = last_pos
             points[2] = robot_pos
-
+            
             positions = pred_waypoints[:,:2]
-            yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
-            yaws = yaws + last_yaw
-            yaws = np.array([clip_angle(yaw) for yaw in yaws])
-            
-            
             gt_positions = label_waypoints[:,:2]
-            gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
-            gt_yaws = gt_yaws + last_yaw
-            gt_yaws = np.array([clip_angle(yaw) for yaw in gt_yaws])
+            
+            #shape
+            if context_waypoints.shape[1] == 4:
+                last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
+                yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
+                yaws = yaws + last_yaw
+                yaws = np.array([clip_angle(yaw) for yaw in yaws])
+                
+                gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
+                gt_yaws = gt_yaws + last_yaw
+                gt_yaws = np.array([clip_angle(yaw) for yaw in gt_yaws])
             
             
-            rotmat = yaw_rotmat(last_yaw)
+                rotmat = yaw_rotmat(last_yaw)
+            else:
+                rotmat = yaw_rotmat(0)
 
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
@@ -277,11 +283,14 @@ class Visualizer:
             goal_pos = (goal_pos + last_pos).dot(rotmat)
             points[1] = goal_pos
             pred_waypoints[:,:2] = (positions + last_pos).dot(rotmat)
-            pred_waypoints = calculate_sin_cos(np.concatenate([pred_waypoints[:,:2],yaws.reshape(-1,1)],axis=1))
-            pred_waypoints = np.vstack([context_waypoints[-1],pred_waypoints])
-
             label_waypoints[:,:2] = (gt_positions + last_pos).dot(rotmat)
-            label_waypoints = calculate_sin_cos(np.concatenate([label_waypoints[:,:2],gt_yaws.reshape(-1,1)],axis=1))
+
+            #shape
+            if context_waypoints.shape[1] == 4:
+                pred_waypoints = calculate_sin_cos(np.concatenate([pred_waypoints[:,:2],yaws.reshape(-1,1)],axis=1))
+                label_waypoints = calculate_sin_cos(np.concatenate([label_waypoints[:,:2],gt_yaws.reshape(-1,1)],axis=1))
+
+            pred_waypoints = np.vstack([context_waypoints[-1],pred_waypoints])
             label_waypoints = np.vstack([context_waypoints[-1],label_waypoints])
 
         if len(pred_waypoints.shape) > 2:
