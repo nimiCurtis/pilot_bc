@@ -15,13 +15,13 @@ def get_vision_encoder_model(vision_encoder_config, data_config):
     """
     
     from pilot_models.vision_encoder.efficientnet import EfficientNet
-    from pilot_models.vision_encoder.vit import ViT
+    # from pilot_models.vision_encoder.vit import ViT
     from pilot_models.vision_encoder.depth_feature_extractor import DepthFeatureExtractor
 
     # Registry of available models
     vision_model_registry = {
         'efficientnet': EfficientNet,
-        'vit': ViT,
+        # 'vit': ViT,
         'depth_feature_extractor': DepthFeatureExtractor,
         # Add new models here as you develop them, e.g., 'resnet': ResNet
     }
