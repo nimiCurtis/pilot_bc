@@ -48,7 +48,6 @@ class PiDiff(BaseModel):
         if self.goal_condition:
             seq_len = self.context_size + 3
             # seq_len = self.context_size + 2
-
         else:
             seq_len = self.context_size + 1
 
@@ -146,12 +145,12 @@ class PiDiff(BaseModel):
         return obs_encoding
 
     def infer_linear_encoder(self, curr_rel_pos_to_target):
-            lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
-            if len(lin_encoding.shape) == 2:
-                lin_encoding = lin_encoding.unsqueeze(1)
+        lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
+        if len(lin_encoding.shape) == 2:
+            lin_encoding = lin_encoding.unsqueeze(1)
 
-            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-            return lin_encoding
+        # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+        return lin_encoding
 
     def infer_noise_predictor(self, sample, timestep, condition):
         
