@@ -222,7 +222,7 @@ class PiDiff(BaseModel):
             fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
 
         else:
-            fused_tensor = modalities
+            fused_tensor = torch.cat(modalities, dim=1)
 
         return fused_tensor
 

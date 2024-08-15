@@ -212,7 +212,6 @@ class PilotAgent(nn.Module):
         """
         super().__init__()
 
-        
         self.wpt_i = wpt_i
         self.frame_rate = frame_rate
         self.model = get_policy_model(policy_model_cfg=policy_model_cfg,
@@ -399,7 +398,7 @@ class PilotAgent(nn.Module):
                                         final_encoded_condition = final_encoded_condition)
 
             # inverse diffusion step (remove noise)
-            diffusion_output = self.noise_scheduler.step(
+            diffusion_output = self.noise_scheduler.remove_noise(
                 model_output=noise_pred,
                 timestep=k,
                 sample=diffusion_output
