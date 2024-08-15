@@ -6,10 +6,11 @@ from omegaconf import DictConfig, OmegaConf
 import torch
 import torch.nn as nn
 
-from torchvision import transforms
 import torch.backends.cudnn as cudnn
 
-from pilot_train.training.trainer import Trainer
+from pilot_train.training.trainers.basic_trainer import BasicTrainer as bt
+from pilot_train.training.trainer import register_trainer
+from pilot_train.training.trainers.pidiff_trainer import PiDiffTrainer
 from pilot_config.config import get_main_config_dir, split_main_config
 from pilot_utils.utils import tic, toc
 from pilot_utils.transforms import ObservationTransform
@@ -63,17 +64,18 @@ def train(cfg:DictConfig):
     transform = ObservationTransform(data_cfg=data_cfg)
 
     # Training Getters
-    train_dataloader, test_dataloaders = Trainer.get_dataloaders(datasets_cfg=datasets_cfg,
+    train_dataloader, test_dataloaders = bt.get_dataloaders(datasets_cfg=datasets_cfg,
                                                                 data_cfg=data_cfg,
                                                                 training_cfg=training_cfg,
                                                                 transform=transform)
-    model = Trainer.get_model(
+    model = bt.get_model(
         policy_model_cfg = policy_model_cfg,
         vision_encoder_model_cfg = vision_encoder_model_cfg,
         linear_encoder_model_cfg = linear_encoder_model_cfg,
         data_cfg = data_cfg
         )
-    print(f"Model Type: {model.name}")
+    model_name = model.name
+    print(f"Model Type: {model_name}")
     model.count_parameters()
 
     ### GRADIENT CLIPPING
@@ -89,10 +91,10 @@ def train(cfg:DictConfig):
                 )
             )
 
-    optimizer = Trainer.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
+    optimizer = bt.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
     # scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 
-    scheduler = Trainer.get_scheduler(
+    scheduler = bt.get_scheduler(
                 training_cfg.scheduler,
                 optimizer=optimizer,
                 num_warmup_steps=training_cfg.warmup_steps,
@@ -127,7 +129,7 @@ def train(cfg:DictConfig):
         model = model.to(device)
 
     ##  Set Pilot Trainer  ## 
-    pilot_trainer = Trainer(model=model,
+    pilot_trainer = register_trainer(model=model,
         optimizer=optimizer,
         scheduler=scheduler,
         dataloader=train_dataloader,

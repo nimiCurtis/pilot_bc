@@ -1,13 +1,14 @@
 from typing import Tuple
 from omegaconf import DictConfig
+from typing import List
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
-from pilot_models.model_registry import get_vision_encoder_model
-from pilot_models.policy.common.transformer import MultiLayerDecoder
+from pilot_models.model_registry import get_linear_encoder_model, get_vision_encoder_model
+from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
 
 
 class ViNT(BaseModel):
@@ -15,6 +16,7 @@ class ViNT(BaseModel):
             self,
             policy_model_cfg: DictConfig,
             vision_encoder_model_cfg: DictConfig,
+            linear_encoder_model_cfg: DictConfig,
             data_cfg: DictConfig 
     ) -> None:
         """
@@ -30,83 +32,102 @@ class ViNT(BaseModel):
             goal_encoding_size (int): size of the encoding of the goal images
         """
         
-        # Data config
+        ## Init BaseModel
         context_size=data_cfg.context_size
-        len_traj_pred=data_cfg.len_traj_pred
-        self.learn_angle=data_cfg.learn_angle
+        pred_horizon=data_cfg.pred_horizon
+        learn_angle=data_cfg.learn_angle
+        channels=vision_encoder_model_cfg.in_channels
+        super(ViNT, self).__init__(policy_model_cfg.name,
+                                context_size,
+                                pred_horizon,
+                                learn_angle,
+                                channels)
+
+        # Data config
         self.target_obs_enable = data_cfg.target_observation_enable
         self.target_context = data_cfg.target_context
         self.goal_condition = data_cfg.goal_condition
-        # Policy model
-        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
-        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
-        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
-        self.obs_encoding_size=policy_model_cfg.obs_encoding_size
-        self.late_fusion=policy_model_cfg.late_fusion
-        
-        super(ViNT, self).__init__(policy_model_cfg.name,
-                                context_size,
-                                len_traj_pred,
-                                self.learn_angle,
-                                vision_encoder_model_cfg.in_channels)
-        
+
         # Final sequence length  = context size +
         #                           current observation (1) + encoded lin observation and target (1) 
+
         if self.goal_condition:
-            seq_len = self.context_size + 2
+            seq_len = self.context_size + 3
         else:
-            seq_len = self.context_size + 1 
-        
-        # pred horizon # TODO: remove dupliactes in refactoring
-        self.pred_horizon = self.len_trajectory_pred
-        # action dom # TODO: remove duplicates. change names in refactoring
-        self.action_dim = self.num_action_params
+            seq_len = self.context_size + 1
+
         self.action_horizon = data_cfg.action_horizon
         
+        # Linear encoder for time series target position
+        self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
+
+        # Vision encoder for context images
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
-        # self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
-        
-        # Linear input encoder #TODO: modify num_obs_features to be argument
-        num_obs_features = policy_model_cfg.num_lin_features   # (now its 2)
-        target_context_size = context_size if self.target_context else 0
-        num_obs_features *= (target_context_size + 1)  # (context+1)
-        
-        if self.target_obs_enable:
-            num_lin_features = num_obs_features + 2 #policy_model_cfg.num_target_features # x y
-        else:
-            num_lin_features = 2
-        self.lin_encoding_size = policy_model_cfg.lin_encoding_size  # should match obs_encoding_size for easy concat
 
-        # sum of features in current_rel_pos_to_target & goal_rel_pos_to_obj
-
-        # think of a better encoding
-        self.lin_encoder = nn.Sequential(nn.Linear(num_lin_features, self.lin_encoding_size // 2),
+        target_dim = data_cfg.target_dim 
+        lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
+        self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
                                         nn.ReLU(),
-                                        nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
+                                        nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
+                                        nn.ReLU(),
+                                        nn.Linear(lin_encoding_size // 2, lin_encoding_size))
 
-        self.num_obs_features = self.vision_encoder.get_in_feateures()
-        if self.num_obs_features != self.obs_encoding_size:
-            self.compress_obs_enc = nn.Linear(self.num_obs_features, self.obs_encoding_size)
+        ## TODO: add variables assignment for obe_target_enable = false -> only one target context! 
+
+        vision_encoding_size=vision_encoder_model_cfg.vision_encoding_size
+        vision_features_dim = self.vision_encoder.get_in_feateures()
+        if vision_features_dim != vision_encoding_size:
+            self.compress_obs_enc = nn.Linear(vision_features_dim, vision_encoding_size)
         else:
             self.compress_obs_enc = nn.Identity()
 
-        self.decoder = MultiLayerDecoder(
-            embed_dim=self.obs_encoding_size,
-            seq_len=seq_len,
-            output_layers=[256, 128, 64, 32],
-            nhead=mha_num_attention_heads,
-            num_layers=mha_num_attention_layers,
-            ff_dim_factor=mha_ff_dim_factor,
-        )
+        # Observations encoding size
+        assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
+        self.obs_encoding_size = vision_encoding_size
 
-        # NOT in use
-        # self.dist_predictor = nn.Sequential(
-        #     nn.Linear(32, 1),
-        # )
+        ### Goal masking
+        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
+        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
+        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
         
-        self.action_predictor = nn.Sequential(
-            nn.Linear(32, self.action_horizon * self.action_dim),
+        # Initialize positional encoding and self-attention layers
+        self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
+        self.sa_layer = nn.TransformerEncoderLayer(
+            d_model=self.obs_encoding_size, 
+            nhead=mha_num_attention_heads, 
+            dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
+            activation="gelu", 
+            batch_first=True, 
+            norm_first=True
         )
+        self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+
+        ## TODO:
+        # self.decoder = MultiLayerDecoder(
+        #     embed_dim=self.obs_encoding_size,
+        #     seq_len=seq_len,
+        #     output_layers=[256, 128, 64, 32],
+        #     nhead=mha_num_attention_heads,
+        #     num_layers=mha_num_attention_layers,
+        #     ff_dim_factor=mha_ff_dim_factor,
+        # )
+
+        # self.action_predictor = nn.Sequential(
+        #     nn.Linear(32, self.action_horizon * self.action_dim),
+        # )
+
+        self.action_predictor = nn.Sequential(nn.Linear(self.obs_encoding_size, self.obs_encoding_size // 2),
+                                        nn.ReLU(),
+                                        nn.Linear(self.obs_encoding_size // 2, self.obs_encoding_size // 4),
+                                        nn.ReLU(),
+                                        nn.Linear(self.obs_encoding_size // 4, self.action_horizon * self.action_dim))
+
+        # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
+        self.goal_mask = torch.zeros((1, seq_len), dtype=torch.bool)
+        self.goal_mask[:, -1] = True # Mask out the goal 
+        self.no_mask = torch.zeros((1, seq_len), dtype=torch.bool) 
+        self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
+        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
@@ -130,50 +151,88 @@ class ViNT(BaseModel):
 
         return obs_encoding
     
-    def infer_linear_encoder(self, linear_input: torch.tensor):
-            lin_encoding = self.lin_encoder(linear_input)
-            if len(lin_encoding.shape) == 2:
-                lin_encoding = lin_encoding.unsqueeze(1)
-            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-            assert lin_encoding.shape[2] == self.lin_encoding_size
-            
-            return lin_encoding
+    def infer_linear_encoder(self, curr_rel_pos_to_target):
+        lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
+        if len(lin_encoding.shape) == 2:
+            lin_encoding = lin_encoding.unsqueeze(1)
+
+        # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+        return lin_encoding
+
     
-    def forward(
-            self, obs_img: torch.tensor, curr_rel_pos_to_target: torch.tensor = None, goal_rel_pos_to_target: torch.tensor = None
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-
-        obs_encoding =  self.infer_vision_encoder(obs_img=obs_img)
+    
+    def infer_goal(self,goal_rel_pos_to_target):
+        goal_encoding = self.goal_encoder(goal_rel_pos_to_target)
+        if len(goal_encoding.shape) == 2:
+                goal_encoding = goal_encoding.unsqueeze(1)
+            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
+        return goal_encoding
+    
+    def infer_goal_masking(self,final_encoded_condition, goal_mask):
         
-        
-        #TODO: in one function
-        #TODO: convert to [d,cos(theta), sin(theta) rep, normalize d by max_depth[meters] and min of (0.1)
-        #TODO: cat based on context size
-        #TODO: do this for curr and goal as well
+        # If a goal mask is provided, mask some of the goal tokens
+        if goal_mask is not None:
+            no_goal_mask = goal_mask.long()
+            self.all_masks = self.all_masks.to(no_goal_mask.device)
+            # select from all_masks a tensor based on the no_goal_mask tensor
+            src_key_padding_mask = torch.index_select(self.all_masks, 0, no_goal_mask)
 
-        if self.goal_condition:
-            if self.target_obs_enable:
-                linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target), dim=1)
-            else:
-                # print("here")
-                linear_input = torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32)
-
-            # lin_encoding = self.lin_encoder(linear_input)
-            # if len(lin_encoding.shape) == 2:
-            #     lin_encoding = lin_encoding.unsqueeze(1)
-            # # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-            # assert lin_encoding.shape[2] == self.lin_encoding_size
-            lin_encoding = self.infer_linear_encoder(linear_input=linear_input)
+        else:
+            src_key_padding_mask = None
         
-            tokens = torch.cat((obs_encoding, lin_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-        
-        else:       # No Goal condition >> take the obs_encoding as the tokens
-            tokens = obs_encoding
+        # Apply positional encoding 
+        if self.positional_encoding:
+            final_encoded_condition = self.positional_encoding(final_encoded_condition)
 
-        final_repr = self.decoder(tokens)
+        final_encoded_condition = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
+
+        if src_key_padding_mask is not None:
+            self.avg_pool_mask = self.avg_pool_mask.to(no_goal_mask.device)
+            avg_mask = torch.index_select(self.avg_pool_mask, 0, no_goal_mask).unsqueeze(-1)
+
+            final_encoded_condition = final_encoded_condition * avg_mask
+        
+        final_encoded_condition = torch.mean(final_encoded_condition, dim=1)
+        
+        return final_encoded_condition
+
+    def fuse_modalities(self, modalities: List[torch.Tensor], mask: torch.Tensor = None):
+        # Ensure the list of tensors is not empty
+        if not modalities:
+            raise ValueError("The list of modalities is empty.")
+        
+        # Check that all tensors have the same shape
+        shape = modalities[0].shape
+        
+        # fused_tensor = torch.zeros_like(modalities[0]) # TODO: fix this
+        for tensor in modalities:
+            if tensor.shape[-1] != shape[-1]:
+                raise ValueError("All tensors must have the same features dim.")
+
+        # If mask is provided, ensure it has the correct shape
+        if mask is not None:
+            if mask.shape != (len(modalities[0]), len(modalities)):
+                raise ValueError("The mask must have the shape (batch_size, modalities_size).")
+
+            # Apply the mask: set masked modalities to zero
+            masked_modalities = []
+            for i, modality in enumerate(modalities):
+                masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
+                masked_modalities.append(masked_modality)
+        
+            fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
+
+        else:
+            fused_tensor = modalities
+
+        return fused_tensor
+
+    def infer_action(self,tokens: torch.Tensor):
+        
+        # final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]
-        action_pred_deltas = self.action_predictor(final_repr)
+        action_pred_deltas = self.action_predictor(tokens)
 
         # augment outputs to match labels size-wise
         action_pred_deltas = action_pred_deltas.reshape(
@@ -191,59 +250,51 @@ class ViNT(BaseModel):
             )  # normalize the angle prediction
         return action_pred
 
-    def _compute_losses(
-        self,
-            action_label: torch.Tensor,
-            action_pred: torch.Tensor,
-            action_mask: torch.Tensor = None,
-            control_magnitude: torch.Tensor = None,
-    ):
+
+    def forward(self, func_name, **kwargs):
+        
+        if func_name == "vision_encoder" :
+            output = self.infer_vision_encoder(kwargs["obs_img"])
+        
+        elif func_name == "linear_encoder":
+            output = self.infer_linear_encoder(kwargs["curr_rel_pos_to_target"])
+        
+        elif func_name == "goal_encoder":
+            output = self.infer_goal(kwargs["goal_rel_pos_to_target"])
+        
+        elif func_name == "fuse_modalities":
+            if "mask" in kwargs:
+                output = self.fuse_modalities(kwargs["modalities"],kwargs["mask"])
+            else:
+                output = self.fuse_modalities(kwargs["modalities"])
+
+        elif func_name == "goal_masking":
+            output = self.infer_goal_masking(kwargs["final_encoded_condition"], kwargs["goal_mask"])
+
+        elif func_name == "action_pred":
+            output = self.infer_action(kwargs["tokens"])
+        else:
+            raise NotImplementedError
+        
+        return output
+
+    def train(self, mode: bool = True):
+        super(ViNT, self).train(mode)
+        torch.cuda.empty_cache()
+        return self
+
+    def eval(self):
+        super(ViNT, self).eval()
+        torch.cuda.empty_cache()
+        return self
+    
+    def to(self, device):
         """
-        Compute losses for distance and action prediction.
+        Override the default `to` method to move mask tensors to the specified device.
         """
-
-        def action_reduce(unreduced_loss: torch.Tensor):
-            # Reduce over non-batch dimensions to get loss per batch element
-            while unreduced_loss.dim() > 1:
-                unreduced_loss = unreduced_loss.mean(dim=-1)
-            assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
-            return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
-
-        # Mask out invalid inputs (for negatives, or when the distance between obs and goal is large)
-        # This is the actual losses
-        assert action_pred.shape == action_label.shape, f"{action_pred.shape} != {action_label.shape}"
-        action_loss = action_reduce(F.mse_loss(action_pred, action_label, reduction="none"))
-
-        # Other losses for logger
-        action_waypts_cos_similairity = action_reduce(F.cosine_similarity(
-            action_pred[:, :, :2], action_label[:, :, :2], dim=-1
-        ))
-        multi_action_waypts_cos_sim = action_reduce(F.cosine_similarity(
-            torch.flatten(action_pred[:, :, :2], start_dim=1),
-            torch.flatten(action_label[:, :, :2], start_dim=1),
-            dim=-1,
-        ))
-
-        results = {
-            "action_loss": action_loss,
-            "action_waypts_cos_sim": action_waypts_cos_similairity,
-            "multi_action_waypts_cos_sim": multi_action_waypts_cos_sim,
-        }
-
-        if self.learn_angle:
-            action_orien_cos_sim = action_reduce(F.cosine_similarity(
-                action_pred[:, :, 2:], action_label[:, :, 2:], dim=-1
-            ))
-            multi_action_orien_cos_sim = action_reduce(F.cosine_similarity(
-                torch.flatten(action_pred[:, :, 2:], start_dim=1),
-                torch.flatten(action_label[:, :, 2:], start_dim=1),
-                dim=-1,
-            )
-            )
-            results["action_orien_cos_sim"] = action_orien_cos_sim
-            results["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim
-
-        total_loss = action_loss if control_magnitude is None else control_magnitude*action_loss
-        results["total_loss"] = total_loss
-
-        return results
+        super(ViNT, self).to(device)
+        self.goal_mask = self.goal_mask.to(self.device)
+        self.no_mask = self.no_mask.to(self.device)
+        self.all_masks = self.all_masks.to(self.device)
+        self.avg_pool_mask = self.avg_pool_mask.to(self.device)
+        return self
