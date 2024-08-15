@@ -1,8 +1,0 @@
-turtlebot_bag-2024-04-30-20-40-14-data
-turtlebot_bag-2024-04-30-20-26-46-data
-turtlebot_bag-2024-04-30-20-50-45-data
-turtlebot_bag-2024-04-30-20-19-32-data
-turtlebot_bag-2024-04-30-20-39-14-data
-turtlebot_bag-2024-04-30-20-45-04-data
-turtlebot_bag-2024-04-30-19-59-51-data
-turtlebot_bag-2024-04-30-20-17-33-data

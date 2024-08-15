@@ -4,12 +4,13 @@ __pycache__/
 *$py.class
 
 pilot_bc.egg-info
+pilot_dataset
+pilot_train/dataset/*
 *.egg-info/
 venv
 .vscode/*
 */.vscode/*
 .idea/
-pilot_dataset
 */wandb
 wandb
 wandb/
