@@ -6,6 +6,7 @@ __pycache__/
 pilot_bc.egg-info
 pilot_dataset
 pilot_train/dataset/*
+pilot_deploy/checkpoints
 *.egg-info/
 venv
 .vscode/*
