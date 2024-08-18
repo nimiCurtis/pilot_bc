@@ -405,7 +405,7 @@ if __name__ == "__main__":
     plt.figure(figsize=(10, 6))
     plt.plot(time_first, first_trajectory[:, 0], 'o-', label="First Trajectory x")
     plt.plot(time_second, second_trajectory[:, 0], 'x-', label="Second Trajectory x (Original)")
-    plt.plot(time_first, interpolated_second[:, 0], 'd-', label="Interpolated Second Trajectory x")
+    plt.plot(time_first, interpolated_second[:, 0], '*', label="Interpolated Second Trajectory x")
     plt.plot(time_first, aligned_trajectory[:, 0], 's-', label="Aligned Trajectory x")
     plt.plot(total_time, total_aligned_trajectory[:, 0], 'b--', label="Final Trajectory x")
     plt.xlabel("Time (s)")
