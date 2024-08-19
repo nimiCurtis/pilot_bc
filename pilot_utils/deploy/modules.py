@@ -191,108 +191,11 @@ if __name__ == "__main__":
     from matplotlib.animation import FuncAnimation
     from scipy.interpolate import interp1d
 
-    # # Set up the figure and axis
-    # fig, ax = plt.subplots(figsize=(10, 6))
-    # ax.set_xlim(0, 1.5)
-    # ax.set_ylim(0, 10)
-    # ax.set_xlabel("Time (s)")
-    # ax.set_ylabel("X Position")
-    # ax.set_title("Trajectory Alignment Animation")
-
-    # # Initialize the plot lines
-    # line_last, = ax.plot([], [], 'o-', label="Last Trajectory x")
-    # line_new, = ax.plot([], [], 'x-', label="New Trajectory x (Original)")
-    # line_interp, = ax.plot([], [], 'd-', label="Interpolated New Trajectory x")
-    # line_aligned, = ax.plot([], [], 's-', label="Aligned Trajectory x")
-
-    # # Set up the legend
-    # ax.legend()
-
-    # # Parameters
-    # time_first_initial = np.array([0, 1/7, 2/7, 3/7, 4/7])
-    # first_trajectory_initial = np.array([
-    #     [0.0, 0.0, 0.0],  # Example [x, y, yaw] values
-    #     [1.0, 1.0, 0.1],
-    #     [2.0, 2.0, 0.2],
-    #     [3.0, 3.0, 0.3],
-    #     [4.0, 4.0, 0.4]
-    # ])
-
-    # def generate_new_trajectory(t_start):
-    #     """Generate a new trajectory starting at time t_start"""
-    #     time_new = np.array([t_start + i/7 for i in range(5)])
-    #     new_trajectory = np.array([
-    #         [t_start * 10 + 0.5 + i, t_start * 10 + 0.5 + i, 0.45 + i * 0.1] for i in range(5)
-    #     ])
-    #     return time_new, new_trajectory
-
-    # def interpolate_trajectory(time_first, time_second, second_trajectory):
-    #     """Interpolate the second trajectory to the first trajectory's time points"""
-    #     interpolated_second = np.zeros_like(first_trajectory_initial)
-
-    #     for i in range(3):  # Iterate over x, y, yaw
-    #         interp_func = interp1d(time_second, second_trajectory[:, i], kind='linear', fill_value="extrapolate")
-    #         interpolated_second[:, i] = interp_func(time_first)
-
-    #     return interpolated_second
-
-    # def weighted_average_trajectory(first_trajectory, interpolated_second):
-    #     """Compute the weighted average of the first and interpolated second trajectories"""
-    #     weights_first = np.linspace(1, 0, len(first_trajectory))  # Decreasing weights for the first trajectory
-    #     weights_second = np.linspace(0, 1, len(first_trajectory))  # Increasing weights for the second trajectory
-
-    #     # Normalize weights
-    #     weights_first = weights_first / (weights_first + weights_second)
-    #     weights_second = weights_second / (weights_first + weights_second)
-
-    #     aligned_trajectory = (weights_first[:, np.newaxis] * first_trajectory + 
-    #                         weights_second[:, np.newaxis] * interpolated_second)
-    #     return aligned_trajectory
-
-    # # Initialization function for the animation
-    # def init():
-    #     line_last.set_data([], [])
-    #     line_new.set_data([], [])
-    #     line_interp.set_data([], [])
-    #     line_aligned.set_data([], [])
-    #     return line_last, line_new, line_interp, line_aligned
-
-    # # Animation update function
-    # def update(frame):
-    #     global first_trajectory_initial, time_first_initial
-
-    #     # Generate new trajectory
-    #     t_start = frame * 1/5
-    #     time_second, second_trajectory = generate_new_trajectory(t_start)
-
-    #     # Interpolate new trajectory to first trajectory's time points
-    #     interpolated_second = interpolate_trajectory(time_first_initial, time_second, second_trajectory)
-
-    #     # Compute the aligned trajectory
-    #     aligned_trajectory = weighted_average_trajectory(first_trajectory_initial, interpolated_second)
-
-    #     # Update the plot lines with the new data
-    #     line_last.set_data(time_first_initial, first_trajectory_initial[:, 0])
-    #     line_new.set_data(time_second, second_trajectory[:, 0])
-    #     line_interp.set_data(time_first_initial, interpolated_second[:, 0])
-    #     line_aligned.set_data(time_first_initial, aligned_trajectory[:, 0])
-
-    #     # Update the last trajectory to the aligned trajectory for the next iteration
-    #     first_trajectory_initial = aligned_trajectory
-
-    #     return line_last, line_new, line_interp, line_aligned
-
-    # # Create the animation
-    # ani = FuncAnimation(fig, update, frames=range(10), init_func=init, blit=True, interval=1000, repeat=False)
-
-    # # Show the animation
-    # plt.show()
     
 
-    # Assume t0 = 0 for simplicity
-    # First trajectory prediction (spanning ~0.71 seconds)
-    # t0 = 0
-    # time_first = np.array([t0, t0 + 1/7, t0 + 2/7, t0 + 3/7, t0 + 4/7])
+
+    # # Example data: Assuming t0 = 0 for simplicity
+    # time_first = np.array([0, 1/7, 2/7, 3/7, 4/7])
     # first_trajectory = np.array([
     #     [0.0, 0.0, 0.0],  # Example [x, y, yaw] values
     #     [1.0, 1.0, 0.1],
@@ -301,17 +204,16 @@ if __name__ == "__main__":
     #     [4.0, 4.0, 0.4]
     # ])
 
-    # # Second trajectory prediction (starting after 1/5 seconds)
-    # time_second = np.array([t0 + 1/5, t0 + 1/5 + 1/7, t0 + 1/5 + 2/7, t0 + 1/5 + 3/7, t0 + 1/5 + 4/7])
+    # time_second = np.array([1/5, 1/5 + 1/7, 1/5 + 2/7, 1/5 + 3/7, 1/5 + 4/7])
     # second_trajectory = np.array([
-    #     [2.5, 4.5, 0.45],  # Example [x, y, yaw] values
-    #     [3.5, 6.5, 0.55],
-    #     [2.5, 6.5, 0.65],
+    #     [5.5, 2.5, 0.45],  # Example [x, y, yaw] values
+    #     [5.5, 5.5, 0.55],
+    #     [8.5, 6.5, 0.65],
     #     [7.5, 7.5, 0.75],
-    #     [10.5, 8.5, 0.85]
+    #     [8.5, 8.5, 0.85]
     # ])
 
-    # # Interpolation of the second trajectory onto the first time steps
+    # # Interpolate the second trajectory to the first trajectory's time points
     # interpolated_second = np.zeros_like(first_trajectory)
 
     # for i in range(3):  # Iterate over x, y, yaw
@@ -326,91 +228,308 @@ if __name__ == "__main__":
     # weights_first = weights_first / (weights_first + weights_second)
     # weights_second = weights_second / (weights_first + weights_second)
 
-    # # Apply the weighted average to combine the trajectories
-    # aligned_trajectory = (weights_first[:, np.newaxis] * first_trajectory + 
-    #                     weights_second[:, np.newaxis] * interpolated_second)
+    # # Smoothen time factor
+    # smoothen_time = 1.  # You can adjust this value
+    # t_start = 0 #time_second[0]  # Assuming the transition starts at t0
+    # t = np.linspace(t_start, t_start + len(time_second) / 7, len(time_second))  # Time vector
 
-    # # Print the aligned trajectory
-    # print("Aligned Trajectory:\n", aligned_trajectory)
+    # # Transition factor as a function of time, applying the smoothen time
+    # transition_factor = np.clip((t - t_start) / smoothen_time, 0, 1)
 
+    # # Adjust the weights using the smoothen time factor
+    # adjusted_weights_first = (1 - transition_factor)  #* weights_first
+    # adjusted_weights_second = transition_factor  #* weights_second
+
+    # # Apply the weighted average with smoothen time to combine the trajectories
+    # aligned_trajectory = (adjusted_weights_first[:, np.newaxis] * first_trajectory + 
+    #                     adjusted_weights_second[:, np.newaxis] * interpolated_second)
+
+    # total_aligned_trajectory = np.concatenate([aligned_trajectory[time_first>t_start],second_trajectory[time_second>[time_first[-1]]]])
+    # total_time = np.concatenate([time_first[time_first>t_start],time_second[time_second>[time_first[-1]]]])
+    
+    
     # # Plot for visualization
     # plt.figure(figsize=(10, 6))
     # plt.plot(time_first, first_trajectory[:, 0], 'o-', label="First Trajectory x")
     # plt.plot(time_second, second_trajectory[:, 0], 'x-', label="Second Trajectory x (Original)")
-    # plt.plot(time_first, interpolated_second[:, 0], 'd-', label="Interpolated Second Trajectory x")
+    # plt.plot(time_first, interpolated_second[:, 0], '*', label="Interpolated Second Trajectory x")
     # plt.plot(time_first, aligned_trajectory[:, 0], 's-', label="Aligned Trajectory x")
+    # plt.plot(total_time, total_aligned_trajectory[:, 0], 'b--', label="Final Trajectory x")
     # plt.xlabel("Time (s)")
     # plt.ylabel("X Position")
+    # plt.title(f"Trajectory Smoothing with Smoothen Time = {smoothen_time}")
     # plt.legend()
-    # plt.title("Trajectory Alignment with Weighted Averaging")
     # plt.show()
-    
+
+    import numpy as np
+    import numpy.typing as npt
+    import logging
+    from typing import List
+    from scipy.spatial.transform import Rotation, Slerp
+
+    def slerp_wxyz(quat1, quat2, alpha):
+        w, x, y, z = quat1
+        start_rot = Rotation.from_quat([x, y, z, w])
+        w, x, y, z = quat2
+        end_rot = Rotation.from_quat([x, y, z, w])
+        orientation_slerp = Slerp(
+            times=[0, 1], rotations=Rotation.concatenate([start_rot, end_rot])
+        )
+        x, y, z, w = orientation_slerp([alpha])[0].as_quat()
+        return np.array([w, x, y, z])
+
+    class RealtimeTraj:
+        def __init__(self):
+            self.translations = np.zeros((0, 3), dtype=np.float64)
+            self.quaternions_wxyz = np.zeros((0, 4), dtype=np.float64)
+            self.timestamps = np.zeros((0,), dtype=np.float64)  # in seconds
+
+        def update(
+            self,
+            translations: npt.NDArray[np.float64],
+            quaternions_wxyz: npt.NDArray[np.float64],
+            timestamps: npt.NDArray[np.float64],
+            current_timestamp: float,
+            adaptive_latency_matching: bool = False,
+            smoothen_time: float = 0.0,
+        ):
+            assert (
+                translations.shape[1] == 3
+            ), f"Invalid shape {translations.shape[1]} for translations!"
+            assert (
+                quaternions_wxyz.shape[1] == 4
+            ), f"Invalid shape {quaternions_wxyz.shape[1]} for quaternions_wxyz!"
+            assert (
+                len(timestamps.shape) == 1
+            ), f"Invalid shape {timestamps.shape} for timestamps!"
+            assert (
+                translations.shape[0]
+                == quaternions_wxyz.shape[0]
+                == timestamps.shape[0]
+            ), f"Input number inconsistent!"
+            if len(timestamps) > 1 and np.any(timestamps[1:] - timestamps[:-1] <= 0):
+                logging.warning(f"Input timestamps are not monotonically increasing!")
+
+            if self.translations.shape[0] == 0:
+                self.translations = np.array(translations)
+                self.quaternions_wxyz = np.array(quaternions_wxyz)
+                self.timestamps = np.array(timestamps)
+            else:
+                input_traj = RealtimeTraj()
+                input_traj.update(
+                    translations=translations,
+                    quaternions_wxyz=quaternions_wxyz,
+                    timestamps=timestamps,
+                    current_timestamp=timestamps[0],
+                )
+                if adaptive_latency_matching:
+                    latency_precision = 0.02
+                    max_latency = 1.5
+                    min_latency = -0.0
+                    matching_dt = 0.05
+
+                    pose_samples = np.zeros((3, 3))
+                    for i in range(3):
+                        t = self.interpolate_translation(
+                            current_timestamp + (i - 1) * matching_dt
+                        )
+                        pose_samples[i, :3] = t
+                    errors = []
+                    error_weights = np.array(
+                        [1, 1, 1]
+                    )  # x, y, z, qw, qx, qy, qz
+
+                    for latency in np.arange(min_latency, max_latency, latency_precision):
+                        input_pose_samples = np.zeros((3, 3))
+                        for i in range(3):
+                            t = input_traj.interpolate_translation(
+                                current_timestamp + latency + (i - 1) * matching_dt
+                            )
+                            input_pose_samples[i, :3] = t
+
+                        error = np.sum(
+                            np.abs(input_pose_samples - pose_samples) * error_weights
+                        )
+                        errors.append(error)
+                    errors = np.array(errors)
+                    best_latency = np.arange(min_latency, max_latency, latency_precision)[
+                        np.argmin(errors)
+                    ]
+                    print(f"{best_latency=}")
+                    # input_traj.timestamps -= latency
+
+                if smoothen_time > 0.0:
+                    for i in range(len(input_traj.timestamps)):
+                        if input_traj.timestamps[i] <= current_timestamp:
+                            t, q = self.interpolate(input_traj.timestamps[i])
+                            input_traj.translations[i] = t
+                            input_traj.quaternions_wxyz[i] = q
+                        elif input_traj.timestamps[i] <= current_timestamp + smoothen_time:
+                            alpha = (
+                                input_traj.timestamps[i] - current_timestamp
+                            ) / smoothen_time
+                            t, q = self.interpolate(input_traj.timestamps[i])
+                            input_traj.translations[i] = (
+                                alpha * input_traj.translations[i] + (1 - alpha) * t
+                            )
+                            input_traj.quaternions_wxyz[i] = (
+                                alpha * input_traj.quaternions_wxyz[i] + (1 - alpha) * q
+                            )
+                        else:
+                            break
+
+                # Find the last timestamp prior to the first timestamp of the input data
+                idx = np.searchsorted(self.timestamps, input_traj.timestamps[0])
+
+                # Remove all data after this timestamp
+                self.translations = self.translations[:idx]
+                self.quaternions_wxyz = self.quaternions_wxyz[:idx]
+                self.timestamps = self.timestamps[:idx]
+
+                self.translations = np.concatenate(
+                    [self.translations, input_traj.translations]
+                )
+                self.quaternions_wxyz = np.concatenate(
+                    [self.quaternions_wxyz, input_traj.quaternions_wxyz]
+                )
+
+                self.timestamps = np.concatenate([self.timestamps, input_traj.timestamps])
+
+                assert np.all(
+                    self.timestamps[1:] - self.timestamps[:-1] > 0
+                ), f"Timestamps are not monotonically increasing!"
+
+            current_idx = np.searchsorted(self.timestamps, current_timestamp)
+            # Only keep one data point before the current timestamp (for interpolation)
+            if current_idx >= 2:
+                self.translations = self.translations[current_idx - 1 :]
+                self.quaternions_wxyz = self.quaternions_wxyz[current_idx - 1 :]
+                self.timestamps = self.timestamps[current_idx - 1 :]
+        
+        def interpolate_translation(self, timestamp: float):
+            if len(self.timestamps) == 0:
+                raise ValueError("Trajectory not initialized")
+            if timestamp <= self.timestamps[0]:
+                return self.translations[0].copy()
+            if timestamp >= self.timestamps[-1]:
+                return self.translations[-1].copy()
+
+            idx = np.searchsorted(self.timestamps, timestamp)
+            alpha = (timestamp - self.timestamps[idx - 1]) / (
+                self.timestamps[idx] - self.timestamps[idx - 1]
+            )
+            translation = (1 - alpha) * self.translations[
+                idx - 1
+            ] + alpha * self.translations[idx]
+            
+            return translation
+
+        def interpolate(self, timestamp: float):
+            if len(self.timestamps) == 0:
+                raise ValueError("Trajectory not initialized")
+            if timestamp <= self.timestamps[0]:
+                return (
+                    self.translations[0].copy(),
+                    self.quaternions_wxyz[0].copy(),
+                )
+            if timestamp >= self.timestamps[-1]:
+                return (
+                    self.translations[-1].copy(),
+                    self.quaternions_wxyz[-1].copy(),
+                )
+
+            idx = np.searchsorted(self.timestamps, timestamp)
+            alpha = (timestamp - self.timestamps[idx - 1]) / (
+                self.timestamps[idx] - self.timestamps[idx - 1]
+            )
+            translation = (1 - alpha) * self.translations[
+                idx - 1
+            ] + alpha * self.translations[idx]
+            
+            quaternion_wxyz = slerp_wxyz(self.quaternions_wxyz[idx-1], self.quaternions_wxyz[idx], alpha)
 
 
-    # Example data: Assuming t0 = 0 for simplicity
-    time_first = np.array([0, 1/7, 2/7, 3/7, 4/7])
-    first_trajectory = np.array([
-        [0.0, 0.0, 0.0],  # Example [x, y, yaw] values
-        [1.0, 1.0, 0.1],
-        [2.0, 2.0, 0.2],
-        [3.0, 3.0, 0.3],
-        [4.0, 4.0, 0.4]
+            return (
+                translation,
+                quaternion_wxyz,
+            )
+
+        def interpolate_traj(self, timestamps: List[float]):
+            
+            assert len(timestamps) >= 1, "Not enough timestamps"
+            
+            translations = []
+            quaternions_wxyz = []
+
+            for timestamp in timestamps:
+                t, q = self.interpolate(timestamp)
+                translations.append(t)
+                quaternions_wxyz.append(q)
+            
+            return (
+                np.stack(translations), # (N, 3)
+                np.stack(quaternions_wxyz), # (N, 4)
+            )
+
+    # Example usage
+
+    # Instantiate the RealtimeTraj class
+    traj = RealtimeTraj()
+
+    # Example: Initial trajectory data (simulating data at t=0 to t=2 seconds)
+    translations1 = np.array([[0.0, 0.0, 0.0], [0.6, 0.5, 0.5], [1.8, 1.0, 1.0], [1.5, 1.5, 1.5], [2.0, 2.0, 2.0]])
+    quaternions_wxyz1 = np.array([
+        [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
+        [0.707, 0.707, 0.0, 0.0],  # Quaternion representing 90 degrees rotation around X-axis
+        [0.707, 0.0, 0.707, 0.0],  # Quaternion representing 90 degrees rotation around Y-axis
+        [0.5, 0.5, 0.5, 0.5],  # Quaternion representing 90 degrees rotation around an arbitrary axis
+        [0.0, 0.0, 0.0, 1.0],  # Quaternion representing 180 degrees rotation around Z-axis
     ])
+    timestamps1 = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
 
-    time_second = np.array([1/5, 1/5 + 1/7, 1/5 + 2/7, 1/5 + 3/7, 1/5 + 4/7])
-    second_trajectory = np.array([
-        [5.5, 2.5, 0.45],  # Example [x, y, yaw] values
-        [5.5, 5.5, 0.55],
-        [8.5, 6.5, 0.65],
-        [7.5, 7.5, 0.75],
-        [8.5, 8.5, 0.85]
+    # Update the trajectory with the initial data
+    traj.update(translations=translations1, quaternions_wxyz=quaternions_wxyz1, timestamps=timestamps1, current_timestamp=2.0)
+
+    # New trajectory data (simulating data at t=2 to t=3 seconds)
+    translations2 = np.array([[1.0, 2.0, 2.0], [2.5, 2.5, 2.5], [3.0, 3.0, 3.0]])
+    quaternions_wxyz2 = np.array([
+        [0.0, 0.0, 0.0, 1.0],  # Continuation of 180 degrees rotation around Z-axis
+        [0.707, 0.0, 0.707, 0.0],  # Another 90 degrees rotation around Y-axis
+        [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
     ])
+    timestamps2 = np.array([1.0, 2.0, 3.0])
 
-    # Interpolate the second trajectory to the first trajectory's time points
-    interpolated_second = np.zeros_like(first_trajectory)
+    # Update the trajectory with the new data, enabling smoothing
+    traj.update(
+        translations=translations2,
+        quaternions_wxyz=quaternions_wxyz2,
+        timestamps=timestamps2,
+        current_timestamp=1.1,
+        smoothen_time=1.5  # Smooth transition over 1 second
+    )
 
-    for i in range(3):  # Iterate over x, y, yaw
-        interp_func = interp1d(time_second, second_trajectory[:, i], kind='linear', fill_value="extrapolate")
-        interpolated_second[:, i] = interp_func(time_first)
+    plt.plot(timestamps1, translations1[:,0],'x-', label="Translation 1")
+    plt.plot(timestamps2, translations2[:,0],'x-', label="Translation 2")
 
-    # Define weights for the first and second trajectories
-    weights_first = np.linspace(1, 0, len(time_first))  # Decreasing weights for the first trajectory
-    weights_second = np.linspace(0, 1, len(time_first))  # Increasing weights for the second trajectory
+    # Plot the updated trajectory
+    plt.plot(traj.timestamps, traj.translations[:, 0], 'x-', label="Updated X Translation")
 
-    # Normalize weights so that their sum equals 1
-    weights_first = weights_first / (weights_first + weights_second)
-    weights_second = weights_second / (weights_first + weights_second)
+    # Interpolate the trajectory at specific timestamps (e.g., for t=0.1, 0.9, 2.5 seconds)
+    interpolated_timestamps = [0.1, 0.9, 2.5]
+    interpolated_translations, _= traj.interpolate_traj(interpolated_timestamps)
 
-    # Smoothen time factor
-    smoothen_time = 1.  # You can adjust this value
-    t_start = 0 #time_second[0]  # Assuming the transition starts at t0
-    t = np.linspace(t_start, t_start + len(time_second) / 7, len(time_second))  # Time vector
+    # Print interpolated X translations
+    for t, x in zip(interpolated_timestamps, interpolated_translations[:, 0]):
+        print(f"Interpolated X Translation at t={t}: {x}")
 
-    # Transition factor as a function of time, applying the smoothen time
-    transition_factor = np.clip((t - t_start) / smoothen_time, 0, 1)
+    # Plot the interpolated points
+    plt.plot(interpolated_timestamps, interpolated_translations[:, 0], 's', label="Interpolated X Translation")
 
-    # Adjust the weights using the smoothen time factor
-    adjusted_weights_first = (1 - transition_factor)  #* weights_first
-    adjusted_weights_second = transition_factor  #* weights_second
-
-    # Apply the weighted average with smoothen time to combine the trajectories
-    aligned_trajectory = (adjusted_weights_first[:, np.newaxis] * first_trajectory + 
-                        adjusted_weights_second[:, np.newaxis] * interpolated_second)
-
-    total_aligned_trajectory = np.concatenate([aligned_trajectory[time_first>t_start],second_trajectory[time_second>[time_first[-1]]]])
-    total_time = np.concatenate([time_first[time_first>t_start],time_second[time_second>[time_first[-1]]]])
-    
-    
-    # Plot for visualization
-    plt.figure(figsize=(10, 6))
-    plt.plot(time_first, first_trajectory[:, 0], 'o-', label="First Trajectory x")
-    plt.plot(time_second, second_trajectory[:, 0], 'x-', label="Second Trajectory x (Original)")
-    plt.plot(time_first, interpolated_second[:, 0], '*', label="Interpolated Second Trajectory x")
-    plt.plot(time_first, aligned_trajectory[:, 0], 's-', label="Aligned Trajectory x")
-    plt.plot(total_time, total_aligned_trajectory[:, 0], 'b--', label="Final Trajectory x")
+    # Set plot labels and legend
     plt.xlabel("Time (s)")
-    plt.ylabel("X Position")
-    plt.title(f"Trajectory Smoothing with Smoothen Time = {smoothen_time}")
+    plt.ylabel("X Translation")
+    plt.title("X Translation Over Time with Updates and Interpolations")
     plt.legend()
-    plt.show()
 
+    # Display the plot
+    plt.show()
