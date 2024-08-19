@@ -109,11 +109,10 @@ class PiDiffTrainer(BasicTrainer):
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
-        if self.model_name == "pidiff":
-            diffusion_noise_loss = Logger(
-                "diffusion_noise_loss", "train", window_size=self.print_log_freq
-            )
-            loggers["diffusion_noise_loss"] = diffusion_noise_loss
+        diffusion_noise_loss = Logger(
+            "diffusion_noise_loss", "train", window_size=self.print_log_freq
+        )
+        loggers["diffusion_noise_loss"] = diffusion_noise_loss
 
 
         # Generate random goal mask
@@ -168,90 +167,73 @@ class PiDiffTrainer(BasicTrainer):
             action_label = action_label.to(self.device)
             action_mask = action_mask.to(self.device)
             
-            # Infer model
-            if self.model_name == "pidiff":
+            # Infer model                
+            # Take action label deltas
+            action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+            
+            if self.learn_angle:
+                # We don't take the deltas of yaw
+                action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
+
+            # Sample noise to add to actions
+            noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
+
+            # Sample a diffusion iteration for each data point
+            timesteps = torch.randint(
+                0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
+                (B,), device=self.device
+            ).long()
+            
+            # Add noise to the "clean" action_label_pred_deltas
+            noisy_action = self.noise_scheduler.add_noise(   
+                actions_labels=action_label_pred_deltas,
+                noise=noise,
+                timesteps=timesteps)
+
+            # Predict the noise residual
+            obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image_transformed)
+            
+            # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
+            if self.goal_condition:
+                # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
+                goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
+
+                linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                            normalized_prev_actions.flatten(1)], axis=1)
+                # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
+                lin_encoding = self.model("linear_encoder",
+                                        curr_rel_pos_to_target=linear_input)
                 
-                # Take action label deltas
-                action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                # lin_encoding = mask_target_context(lin_encoding, target_context_mask)
                 
-                if self.learn_angle:
-                    # We don't take the deltas of yaw
-                    action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
-
-                # Sample noise to add to actions
-                noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
-
-                # Sample a diffusion iteration for each data point
-                timesteps = torch.randint(
-                    0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
-                    (B,), device=self.device
-                ).long()
+                modalities = [obs_encoding_condition, lin_encoding]
+                modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                 
-                # Add noise to the "clean" action_label_pred_deltas
-                noisy_action = self.noise_scheduler.add_noise(   
-                    actions_labels=action_label_pred_deltas,
-                    noise=noise,
-                    timesteps=timesteps)
-
-                # Predict the noise residual
-                obs_encoding_condition = self.model("vision_encoder",obs_img=obs_image_transformed)
+                fused_modalities_encoding = self.model("fuse_modalities",
+                                                    modalities=modalities,
+                                                    mask=modal_dropout_mask)
                 
-                # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
-                if self.goal_condition:
-                    # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
-                    goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
-
-                    linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
-                                                normalized_prev_actions.flatten(1)], axis=1)
-                    # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
-                    lin_encoding = self.model("linear_encoder",
-                                            curr_rel_pos_to_target=linear_input)
-                    
-                    # lin_encoding = mask_target_context(lin_encoding, target_context_mask)
-                    
-                    modalities = [obs_encoding_condition, lin_encoding]
-                    modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-                    
-                    fused_modalities_encoding = self.model("fuse_modalities",
-                                                        modalities=modalities,
-                                                        mask=modal_dropout_mask)
-                    
-                    goal_encoding = self.model("goal_encoder",
-                                            goal_rel_pos_to_target=goal_rel_pos_to_target)
-                    
-                    final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                    final_encoded_condition = self.model("goal_masking",
-                                                        final_encoded_condition=final_encoded_condition,
-                                                        goal_mask = goal_mask)
-
-                else:      # TODO: next refactoring # No Goal condition >> take the obs_encoding as the tokens
-                    goal_mask = None
-                    final_encoded_condition = obs_encoding_condition
-
-                noise_pred = self.model("noise_pred",
-                                        noisy_action=noisy_action,
-                                        timesteps=timesteps,
-                                        final_encoded_condition=final_encoded_condition)
-
-                losses = compute_noise_losses(noise_pred=noise_pred,
-                        noise=noise,
-                        action_mask=action_mask)
-                loss = losses["diffusion_noise_loss"]
-                
-            else:
-                model_outputs = self.model("action_pred",
-                                        obs_img=obs_image_transformed,
-                                        curr_rel_pos_to_target=curr_rel_pos_to_target,
+                goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
-                action_pred = model_outputs
-
-                losses = compute_losses(
-                    action_label=action_label,
-                    action_pred=action_pred,
-                    action_mask=action_mask,
-                )
                 
-                loss = losses["total_loss"]
+                final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                final_encoded_condition = self.model("goal_masking",
+                                                    final_encoded_condition=final_encoded_condition,
+                                                    goal_mask = goal_mask)
+
+            else:      # TODO: next refactoring # No Goal condition >> take the obs_encoding as the tokens
+                goal_mask = None
+                final_encoded_condition = obs_encoding_condition
+
+            noise_pred = self.model("noise_pred",
+                                    noisy_action=noisy_action,
+                                    timesteps=timesteps,
+                                    final_encoded_condition=final_encoded_condition)
+
+            losses = compute_noise_losses(noise_pred=noise_pred,
+                    noise=noise,
+                    action_mask=action_mask)
+            loss = losses["diffusion_noise_loss"]
             
             loss.backward()
 
@@ -265,41 +247,38 @@ class PiDiffTrainer(BasicTrainer):
             if self.use_ema:
                 self.ema.step(self.model.parameters())
             
-            if self.model_name == "pidiff": ### TODO: add eme implementation
+            if i % self.print_log_freq == 0 :
 
-                if i % self.print_log_freq == 0 :
-                    
-                    
-                    # initialize action from Gaussian noise
-                    noisy_diffusion_output = torch.randn(
-                        (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
-                    diffusion_output = noisy_diffusion_output
-                    
-                    for k in self.noise_scheduler.timesteps():
-                        # predict noise
-                        noise_pred = self.model("noise_pred",
-                                        noisy_action=diffusion_output,
-                                        timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                        final_encoded_condition=final_encoded_condition)
+                # initialize action from Gaussian noise
+                noisy_diffusion_output = torch.randn(
+                    (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
+                diffusion_output = noisy_diffusion_output
+                
+                for k in self.noise_scheduler.timesteps():
+                    # predict noise
+                    noise_pred = self.model("noise_pred",
+                                    noisy_action=diffusion_output,
+                                    timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                    final_encoded_condition=final_encoded_condition)
 
-                        # inverse diffusion step (remove noise)
-                        diffusion_output = self.noise_scheduler.remove_noise(
-                            model_output=noise_pred,
-                            timestep=k,
-                            sample=diffusion_output
-                        )
+                    # inverse diffusion step (remove noise)
+                    diffusion_output = self.noise_scheduler.remove_noise(
+                        model_output=noise_pred,
+                        timestep=k,
+                        sample=diffusion_output
+                    )
 
-                    # action_pred = action_pred[:,:self.action_horizon,:]
-                    action_pred = deltas_to_actions(deltas=diffusion_output,
-                                                    pred_horizon=self.pred_horizon,
-                                                    action_horizon=self.action_horizon,
-                                                    learn_angle=self.learn_angle)
+                # action_pred = action_pred[:,:self.action_horizon,:]
+                action_pred = deltas_to_actions(deltas=diffusion_output,
+                                                pred_horizon=self.pred_horizon,
+                                                action_horizon=self.action_horizon,
+                                                learn_angle=self.learn_angle)
 
-                    action_losses  = compute_losses(action_label=action_label,
-                                                                        action_pred=action_pred,
-                                                                        action_mask=action_mask,
-                                                                        )
-                    losses.update(action_losses)
+                action_losses  = compute_losses(action_label=action_label,
+                                                                    action_pred=action_pred,
+                                                                    action_mask=action_mask,
+                                                                    )
+                losses.update(action_losses)
                     
                 # step lr scheduler every batch
                 # this is different from standard pytorch behavior
@@ -380,11 +359,10 @@ class PiDiffTrainer(BasicTrainer):
             loggers["action_orien_cos_sim"] = action_orien_cos_sim_logger
             loggers["multi_action_orien_cos_sim"] = multi_action_orien_cos_sim_logger
 
-        if self.model_name == "pidiff":
-            diffusion_noise_loss = Logger(
-                "diffusion_noise_loss", eval_type, window_size=self.eval_log_freq
-            )
-            loggers["diffusion_noise_loss"] = diffusion_noise_loss
+        diffusion_noise_loss = Logger(
+            "diffusion_noise_loss", eval_type, window_size=self.eval_log_freq
+        )
+        loggers["diffusion_noise_loss"] = diffusion_noise_loss
         
         num_batches = len(dataloader)
         num_batches = max(int(num_batches * self.eval_fraction), 1)
@@ -438,126 +416,109 @@ class PiDiffTrainer(BasicTrainer):
                 action_mask = action_mask.to(self.device)
 
                 # Infer model
-                if self.model_name == "pidiff":
-                    action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
-                    action_label_pred_rel_orientations = action_label_pred[:,:,2:]
-                    action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
+                action_label_pred_deltas_pos = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                action_label_pred_rel_orientations = action_label_pred[:,:,2:]
+                action_label_pred_deltas = torch.cat([action_label_pred_deltas_pos, action_label_pred_rel_orientations], dim=2)
+                
+                # Take action label deltas
+                action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                
+                if self.learn_angle:
+                    # We don't take the deltas of yaw
+                    action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
+
+                # Sample noise to add to actions
+                noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
+
+                # Sample a diffusion iteration for each data point
+                timesteps = torch.randint(
+                    0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
+                    (action_label_pred_deltas.shape[0],), device=self.device
+                ).long()
+                
+                # Add noise to the "clean" action_label_pred_deltas
+                noisy_action = self.noise_scheduler.add_noise(   
+                    action_label_pred_deltas, noise, timesteps)
+
+                # Predict the noise residual
+                obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image_transformed)
+
+                # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
+                if self.goal_condition:
+
+                    goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
+
+                    linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                                normalized_prev_actions.flatten(1)], axis=1)
+                    # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
+                    lin_encoding = self.model("linear_encoder",
+                                            curr_rel_pos_to_target=linear_input)
                     
-                    # Take action label deltas
-                    action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y,cos_yaw, sin_yaw
+                    modalities = [obs_encoding_condition, lin_encoding]
+                    modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+
+                    fused_modalities_encoding = eval_model("fuse_modalities",
+                                                        modalities=modalities,
+                                                        mask=modal_dropout_mask)
+
+                    goal_encoding = eval_model("goal_encoder",
+                                            goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
-                    if self.learn_angle:
-                        # We don't take the deltas of yaw
-                        action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
-
-                    # Sample noise to add to actions
-                    noise = torch.randn(action_label_pred_deltas.shape, device=self.device)
-
-                    # Sample a diffusion iteration for each data point
-                    timesteps = torch.randint(
-                        0, self.noise_scheduler.noise_scheduler.config.num_train_timesteps,
-                        (action_label_pred_deltas.shape[0],), device=self.device
-                    ).long()
+                    final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                    # final_encoded_condition = self.model("goal_masking",
+                    #                                     final_encoded_condition=final_encoded_condition,
+                    #                                     goal_mask = goal_mask)
                     
-                    # Add noise to the "clean" action_label_pred_deltas
-                    noisy_action = self.noise_scheduler.add_noise(   
-                        action_label_pred_deltas, noise, timesteps)
-
-                    # Predict the noise residual
-                    obs_encoding_condition = eval_model("vision_encoder",obs_img=obs_image_transformed)
-
-                    # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
-                    if self.goal_condition:
-
-                        goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
-
-                        linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
-                                                    normalized_prev_actions.flatten(1)], axis=1)
-                        # linear_input = torch.cat((curr_rel_pos_to_target, goal_rel_pos_to_target.unsqueeze(1)), dim=1)
-                        lin_encoding = self.model("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input)
-                        
-                        modalities = [obs_encoding_condition, lin_encoding]
-                        modal_dropout_mask = get_modal_dropout_mask(B,modalities_size=len(modalities),curr_rel_pos_to_target=curr_rel_pos_to_target,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-
-                        fused_modalities_encoding = eval_model("fuse_modalities",
-                                                            modalities=modalities,
-                                                            mask=modal_dropout_mask)
-
-                        goal_encoding = eval_model("goal_encoder",
-                                                goal_rel_pos_to_target=goal_rel_pos_to_target)
-                        
-                        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                        # final_encoded_condition = self.model("goal_masking",
-                        #                                     final_encoded_condition=final_encoded_condition,
-                        #                                     goal_mask = goal_mask)
-                        
-                        final_encoded_condition = eval_model("goal_masking",
-                                                            final_encoded_condition=final_encoded_condition,
-                                                            goal_mask = goal_mask)
+                    final_encoded_condition = eval_model("goal_masking",
+                                                        final_encoded_condition=final_encoded_condition,
+                                                        goal_mask = goal_mask)
 
 
-                    ## TODO: next refactoring
-                    else:       # No Goal condition >> take the obs_encoding as the tokens
-                        final_encoded_condition = obs_encoding_condition
+                ## TODO: next refactoring
+                else:       # No Goal condition >> take the obs_encoding as the tokens
+                    final_encoded_condition = obs_encoding_condition
 
-                    noise_pred = eval_model("noise_pred",
-                                        noisy_action=noisy_action,
-                                        timesteps=timesteps,
+                noise_pred = eval_model("noise_pred",
+                                    noisy_action=noisy_action,
+                                    timesteps=timesteps,
+                                    final_encoded_condition=final_encoded_condition)
+
+                losses = compute_noise_losses(noise_pred=noise_pred,
+                        noise=noise,
+                        action_mask=action_mask)
+                loss = losses["diffusion_noise_loss"]
+
+                if i % self.eval_log_freq == 0 :
+
+                    # initialize action from Gaussian noise
+                    noisy_diffusion_output = torch.randn(
+                        (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
+                    diffusion_output = noisy_diffusion_output
+                    
+                    for k in self.noise_scheduler.timesteps():
+                        # predict noise
+                        noise_pred = eval_model("noise_pred",
+                                        noisy_action=diffusion_output,
+                                        timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
                                         final_encoded_condition=final_encoded_condition)
 
-                    losses = compute_noise_losses(noise_pred=noise_pred,
-                            noise=noise,
-                            action_mask=action_mask)
-                    loss = losses["diffusion_noise_loss"]
+                        # inverse diffusion step (remove noise)
+                        diffusion_output = self.noise_scheduler.remove_noise(
+                            model_output=noise_pred,
+                            timestep=k,
+                            sample=diffusion_output
+                        )
 
-                    if i % self.eval_log_freq == 0 :
-
-                        # initialize action from Gaussian noise
-                        noisy_diffusion_output = torch.randn(
-                            (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
-                        diffusion_output = noisy_diffusion_output
-                        
-                        for k in self.noise_scheduler.timesteps():
-                            # predict noise
-                            noise_pred = eval_model("noise_pred",
-                                            noisy_action=diffusion_output,
-                                            timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                            final_encoded_condition=final_encoded_condition)
-
-                            # inverse diffusion step (remove noise)
-                            diffusion_output = self.noise_scheduler.remove_noise(
-                                model_output=noise_pred,
-                                timestep=k,
-                                sample=diffusion_output
-                            )
-
-                        action_pred = deltas_to_actions(deltas=diffusion_output,
-                                                        pred_horizon=self.pred_horizon,
-                                                        action_horizon=self.action_horizon,
-                                                        learn_angle=self.learn_angle)
-                        
-                        action_losses  = compute_losses(action_label=action_label,
-                                                                                action_pred=action_pred,
-                                                                                action_mask=action_mask,
-                                                                            )
-                        losses.update(action_losses)
-
-                # Not in use -> TODO: refactor for another models
-                else:
-                    model_outputs = self.model("action_pred",
-                                            obs_img=obs_image_transformed,
-                                            curr_rel_pos_to_target=curr_rel_pos_to_target,
-                                            goal_rel_pos_to_target=goal_rel_pos_to_target)
-                    action_pred = model_outputs
-
-                    losses = compute_losses(
-                        action_label=action_label,
-                        action_pred=action_pred,
-                        action_mask=action_mask,
-                    )
+                    action_pred = deltas_to_actions(deltas=diffusion_output,
+                                                    pred_horizon=self.pred_horizon,
+                                                    action_horizon=self.action_horizon,
+                                                    learn_angle=self.learn_angle)
                     
-                    loss = losses["total_loss"]
+                    action_losses  = compute_losses(action_label=action_label,
+                                                                            action_pred=action_pred,
+                                                                            action_mask=action_mask,
+                                                                        )
+                    losses.update(action_losses)
 
                 for key, value in losses.items():
                     if key in loggers:

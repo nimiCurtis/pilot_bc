@@ -87,12 +87,12 @@ class PilotDataset(Dataset):
         self.action_context_size = data_cfg.action_context_size
         self.target_dim = data_cfg.target_dim
         assert self.action_context_size<=self.context_size, "Action context size is bigger the the visual context"
-        
+        self.waypoint_spacing_action = 1
         # Possible distances for predicting distance
         self.distance_categories = list(
             range(data_cfg.distance.min_dist_cat,
                 data_cfg.distance.max_dist_cat + 1,
-                self.waypoint_spacing)
+                self.waypoint_spacing_action) # was self.waypoint_spacing
         )
         self.min_dist_cat = self.distance_categories[0]
         self.max_dist_cat = self.distance_categories[-1]
@@ -251,12 +251,12 @@ class PilotDataset(Dataset):
             tuple: The trajectory name, goal time, and a boolean indicating if the goal is negative.
         """
         
-        goal_offset = np.random.randint(0, (max_goal_dist/self.waypoint_spacing) + 1)
+        goal_offset = np.random.randint(0, (max_goal_dist/self.waypoint_spacing_action) + 1)
         if goal_offset == 0:
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
         else:
-            goal_time = curr_time + goal_offset*self.waypoint_spacing
+            goal_time = curr_time + goal_offset*self.waypoint_spacing_action
             return trajectory_name, goal_time, False
 
     def _sample_negative(self):
@@ -327,7 +327,7 @@ class PilotDataset(Dataset):
         
         # Define the start and end indices for slicing the trajectory data
         start_index = curr_time
-        end_index = curr_time + self.pred_horizon * self.waypoint_spacing + 1
+        end_index = curr_time + self.pred_horizon * self.waypoint_spacing_action + 1
         
         
         # Define the start and end indices for slicing the actions history data
@@ -335,8 +335,8 @@ class PilotDataset(Dataset):
         end_index_prev = curr_time + self.waypoint_spacing
         
         # Extract yaw and position data from the trajectory
-        yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing])
-        positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing])
+        yaw = np.array(traj_data["yaw"][start_index:end_index:self.waypoint_spacing_action])
+        positions = np.array(traj_data["position"][start_index:end_index:self.waypoint_spacing_action])
 
         prev_yaw = np.array(traj_data["yaw"][start_index_prev: end_index_prev: self.waypoint_spacing])
         prev_positions =  np.array(traj_data["position"][start_index_prev: end_index_prev: self.waypoint_spacing])
@@ -475,7 +475,9 @@ class PilotDataset(Dataset):
         assert curr_time < curr_traj_len, f"{curr_time} >= {curr_traj_len}"
 
         # Compute the actions and normalized goal position
-        action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
+        # was self.waypoint_spacing
+        action_stats = get_action_stats(curr_properties, self.waypoint_spacing_action)
+
         normalized_actions, normalized_prev_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
 
         if self.goal_condition:
@@ -529,8 +531,8 @@ class PilotDataset(Dataset):
         if goal_is_negative:
             distance = self.max_dist_cat
         else:
-            distance = (goal_time - curr_time) // self.waypoint_spacing
-            assert (goal_time - curr_time) % self.waypoint_spacing == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}, target_traj_len = {goal_target_traj_data_len}"
+            distance = (goal_time - curr_time) // self.waypoint_spacing_action
+            assert (goal_time - curr_time) % self.waypoint_spacing_action == 0, f"{goal_time} and {curr_time} should be separated by an integer multiple of {self.waypoint_spacing}, target_traj_len = {goal_target_traj_data_len}"
 
         # Determine if the action should be masked
         action_mask = (
