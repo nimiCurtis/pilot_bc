@@ -103,8 +103,10 @@ log:
 
   run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off
+  
+  ## TODO: handle with log and iamges פרןמאד
   num_images_log: 4
-  print_log_freq: 200 # in iterations
+  print_log_freq: 300 # in iterations
   eval_log_freq: 5  # in iterations
   image_log_freq: 3 # # in iterations
   eval_fraction: 0.25

@@ -16,7 +16,7 @@ go2:
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/go2
   time: 35.4657
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/go2
-  waypoint_spacing: 2
+  waypoint_spacing: 1
 max_depth: 10000
 nimrod:
   end_slack: 0
@@ -35,8 +35,8 @@ nimrod:
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/nimrod
   time: 104.2855
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/nimrod
-  waypoint_spacing: 2
-nimrod2:
+  waypoint_spacing: 1
+nimrod_wpt2:
   end_slack: 0
   goals_per_obs: 1
   negative_mining: false
@@ -54,7 +54,28 @@ nimrod2:
   time: 104.2855
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/nimrod
   waypoint_spacing: 2
+
+go2_wpt2:
+  end_slack: 0
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 232
+  stats:
+    max_ang_vel: 43.9167
+    max_lin_vel: 2.139
+    mean_ang_vel: -0.0106
+    mean_lin_vel: 0.2418
+    min_ang_vel: -43.918
+    min_lin_vel: -2.0568
+    std_ang_vel: 1.8474
+    std_lin_vel: 0.3858
+  test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/go2
+  time: 35.4657
+  train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/go2
+  waypoint_spacing: 2
+
 robots:
 - go2
 - nimrod
-# - nimrod2
+- go2_wpt2
+# - nimrod_wpt2

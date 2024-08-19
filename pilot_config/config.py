@@ -53,6 +53,7 @@ def get_robot_config(robot_name: str):
     FileNotFoundError: If the configuration file does not exist.
     ValueError: If the configuration file is not in a supported format.
     """
+    robot_name = robot_name.split('_')[0]
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                "robot",
                                f"{robot_name}.yaml")
