@@ -75,7 +75,7 @@ data:
 
   distance:
     min_dist_cat: 0
-    max_dist_cat: 12
+    max_dist_cat: 16
   action:
     min_dist_cat: 3
     max_dist_cat: 12
