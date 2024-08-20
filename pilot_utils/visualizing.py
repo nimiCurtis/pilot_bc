@@ -370,6 +370,7 @@ class Visualizer:
                 dataset_name in self.datasets_cfg
         ), f"Dataset {dataset_name} not found in datasets_cfg"
 
+        # robot_prefix = dataset_name.split('_')[0]
         robot_config = get_robot_config(robot_name=dataset_name)
         
         ax.imshow(img)

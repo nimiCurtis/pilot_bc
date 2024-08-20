@@ -25,30 +25,12 @@ def transform_images(pil_imgs: List[PILImage.Image],
         transf_imgs.append(transf_img)
     return torch.cat(transf_imgs)
 
-# def transform_images(pil_imgs: List[Image.Image], transform: transforms.Compose) -> torch.Tensor:
-#     """Transforms a list of PIL images to a torch tensor using batch processing."""
-#     # Convert all images to RGB mode if necessary
-#     pil_imgs = [img.convert('RGB') if img.mode == 'RGBA' else img for img in pil_imgs]
-#     # Apply the transform to each image individually
-#     transf_imgs = [transform(img) for img in pil_imgs]
-#     return torch.stack(transf_imgs)
-
-# def transform_images(pil_imgs: List[Image.Image], transform: transforms.Compose) -> torch.Tensor:
-#     """Transforms a list of PIL images to a torch tensor using batch processing."""
-#     # Convert all images to RGB mode if necessary
-#     pil_imgs = [img.convert('RGB') if img.mode == 'RGBA' else img for img in pil_imgs]
-#     # Apply the transform to the entire batch
-#     transf_imgs = transform(pil_imgs)
-#     return torch.cat(transf_imgs)
 
 # Define a custom data_cfg
 class CustomDataConfig:
     def __init__(self, image_size: Tuple[int, int], img_type: str):
         self.image_size = image_size
         self.img_type = img_type
-
-
-
 
 class ObservationTransform:
     def __init__(self, data_cfg,

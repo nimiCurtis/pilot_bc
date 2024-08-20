@@ -275,7 +275,7 @@ class PilotDataset(Dataset):
         """
         index_to_data_path = os.path.join(
             self.data_split_folder,
-            f"dataset_dist_{self.min_dist_cat}_to_{self.max_dist_cat}_context_{self.context_type}_obs_{self.img_type}_n{self.context_size}_slack_{self.end_slack}.json",
+            f"dataset_dist_{self.min_dist_cat}_to_{self.max_dist_cat}_context_{self.context_type}_obs_{self.img_type}_n{self.context_size}_slack_{self.end_slack}_wpt_spc_{self.waypoint_spacing}.json",
         )
         try:
             # load the index_to_data if it already exists (to save time)
