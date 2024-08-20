@@ -198,7 +198,7 @@ class PilotAgent(nn.Module):
                 policy_model_cfg: DictConfig,
                 vision_encoder_cfg: DictConfig,
                 linear_encoder_cfg: DictConfig,
-                robot: str, wpt_i: int, frame_rate: float, waypoint_spacing: int = 2):
+                robot: str, wpt_i: int, frame_rate: float, waypoint_spacing: int = 1):
         """
         Initialize the PilotAgent instance.
 
