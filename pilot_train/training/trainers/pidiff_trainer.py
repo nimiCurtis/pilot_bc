@@ -254,7 +254,6 @@ class PiDiffTrainer(BasicTrainer):
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
-
             if i % self.print_log_freq == 0 :
 
                 # initialize action from Gaussian noise
