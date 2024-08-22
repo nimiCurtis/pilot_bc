@@ -6,7 +6,7 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -111,7 +111,7 @@ log:
   image_log_freq: 3 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
-  save_model_freq: 5
+  save_model_freq: 10
   wandb: 
     run: 
       enable: true

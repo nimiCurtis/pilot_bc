@@ -1,31 +1,7 @@
 from pilot_models.linear_encoder.base_model import BaseModel
 import torch
 from torch import nn
-
 class MLP(BaseModel):
-
-    def __init__(self, linear_encoder_config, data_config) -> None:
-
-        super().__init__(linear_encoder_config, data_config)
-
-        self.fc = nn.Sequential(nn.Linear(self.linear_input_dim, self.lin_encoding_size // 4),
-                                        nn.ReLU(),
-                                        nn.Linear(self.lin_encoding_size // 4, self.lin_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(self.lin_encoding_size // 2, self.lin_encoding_size))
-
-    def get_model(self):
-        return self
-
-    def extract_features(self, curr_rel_pos_to_target):
-        # curr_rel_pos_to_target = torch.flatten(curr_rel_pos_to_target,start_dim=1)
-        linear_features = self.fc(curr_rel_pos_to_target)
-        # goal_encoding = self.fc_goal(goal_rel_pos_to_target)
-        # linear_input = torch.cat((curr_obs_encoding, goal_encoding), dim=1)
-        # linear_features = self.fc_head(linear_input)
-        return linear_features
-
-class MlpModel(torch.nn.Module):
     """Multilayer Perceptron with last layer linear.
 
     Args:
@@ -35,14 +11,18 @@ class MlpModel(torch.nn.Module):
         nonlinearity: torch nonlinearity Module (not Functional).
     """
 
-    def __init__(
-            self,
-            input_size,
-            hidden_sizes,  # Can be empty list or None for none.
-            output_size=None,  # if None, last layer has nonlinearity applied.
-            nonlinearity=torch.nn.ReLU,  # Module, not Functional.
+    def __init__(self,
+            linear_encoder_config, data_config,  # Module, not Functional.
             ):
-        super().__init__()
+        
+        super().__init__(linear_encoder_config, data_config)
+        
+        
+        nonlinearity = getattr(nn,linear_encoder_config.nonlinearity)
+        input_size = self.linear_input_dim
+        output_size = self.lin_encoding_size
+        hidden_sizes = linear_encoder_config.hidden_sizes
+        
         if isinstance(hidden_sizes, int):
             hidden_sizes = [hidden_sizes]
         elif hidden_sizes is None:
@@ -59,7 +39,7 @@ class MlpModel(torch.nn.Module):
         self._output_size = (hidden_sizes[-1] if output_size is None
             else output_size)
 
-    def forward(self, input):
+    def extract_features(self, input):
         """Compute the model on the input, assuming input shape [B,input_size]."""
         return self.model(input)
 
@@ -67,30 +47,3 @@ class MlpModel(torch.nn.Module):
     def output_size(self):
         """Retuns the output size of the model."""
         return self._output_size
-
-# Test script for MlpModel
-
-# # Define the model parameters
-# input_size = 10
-# hidden_sizes = [20, 30]
-# output_size = 5
-
-# # Initialize the model
-# model = MlpModel(input_size=input_size, hidden_sizes=hidden_sizes, output_size=output_size)
-
-# # Print the model architecture
-# print("Model architecture:\n", model)
-
-# # Create a random input tensor with batch size 8 and the specified input size
-# batch_size = 8
-# random_input = torch.randn(batch_size, input_size)
-
-# # Perform inference
-# output = model(random_input)
-
-# # Print the input and output shapes to verify
-# print("Input shape:", random_input.shape)
-# print("Output shape:", output.shape)
-
-# # Print the output
-# print("Output:\n", output)
