@@ -1,6 +1,7 @@
 from pilot_models.linear_encoder.base_model import BaseModel
 import torch
 from torch import nn
+from torch.nn.utils import spectral_norm
 class MLP(BaseModel):
     """Multilayer Perceptron with last layer linear.
 
@@ -38,6 +39,7 @@ class MLP(BaseModel):
         self.model = torch.nn.Sequential(*sequence)
         self._output_size = (hidden_sizes[-1] if output_size is None
             else output_size)
+        
 
     def extract_features(self, input):
         """Compute the model on the input, assuming input shape [B,input_size]."""
@@ -47,3 +49,22 @@ class MLP(BaseModel):
     def output_size(self):
         """Retuns the output size of the model."""
         return self._output_size
+
+
+
+# class SpectralNormModel(nn.Module):
+#     def __init__(self):
+#         super(SpectralNormModel, self).__init__()
+#         self.conv = spectral_norm(nn.Conv2d(3, 64, 3))
+#         self.fc = spectral_norm(nn.Linear(64, 10))
+
+#     def forward(self, x):
+#         x = self.conv(x)
+#         x = x.view(x.size(0), -1)
+#         x = self.fc(x)
+#         return x
+
+
+# if __name__ == "__main__":
+#     model = SpectralNormModel()
+#     a=1

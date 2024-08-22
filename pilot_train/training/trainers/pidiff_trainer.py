@@ -114,7 +114,10 @@ class PiDiffTrainer(BasicTrainer):
         )
         loggers["diffusion_noise_loss"] = diffusion_noise_loss
 
-
+        diffusion_noise_loss_reg = Logger(
+            "diffusion_noise_loss_reg", "train", window_size=self.eval_log_freq
+        )
+        loggers["diffusion_noise_loss_reg"] = diffusion_noise_loss_reg
         # Generate random goal mask
         
         num_batches = len(self.dataloader)
@@ -233,9 +236,13 @@ class PiDiffTrainer(BasicTrainer):
             losses = compute_noise_losses(noise_pred=noise_pred,
                     noise=noise,
                     action_mask=action_mask)
-            loss = losses["diffusion_noise_loss"]
-    
+            loss_dif = losses["diffusion_noise_loss"]
+            loss_reg = 0.001 * sum(torch.norm(p) for p in self.model.parameters())
             
+            
+            losses["diffusion_noise_loss_reg"] = loss_reg + loss_dif
+
+            loss = losses["diffusion_noise_loss_reg"]
             loss.backward()
 
             # step optimizer
@@ -356,6 +363,8 @@ class PiDiffTrainer(BasicTrainer):
             "diffusion_noise_loss", eval_type, window_size=self.eval_log_freq
         )
         loggers["diffusion_noise_loss"] = diffusion_noise_loss
+
+        
         
         num_batches = len(dataloader)
         num_batches = max(int(num_batches * self.eval_fraction), 1)
