@@ -3,18 +3,18 @@ go2:
   end_slack: 0
   goals_per_obs: 1
   negative_mining: false
-  number_of_bags: 272
+  number_of_bags: 279
   stats:
     max_ang_vel: 43.9167
-    max_lin_vel: 2.139
-    mean_ang_vel: -0.0111
-    mean_lin_vel: 0.2183
+    max_lin_vel: 5.2246
+    mean_ang_vel: -0.0092
+    mean_lin_vel: 0.2359
     min_ang_vel: -43.918
-    min_lin_vel: -2.0568
-    std_ang_vel: 1.7612
-    std_lin_vel: 0.3393
+    min_lin_vel: -9.21
+    std_ang_vel: 1.7353
+    std_lin_vel: 0.3521
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/test/go2
-  time: 46.6051
+  time: 50.6307
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking/train/go2
   waypoint_spacing: 1
 go2_wpt2:
@@ -40,7 +40,7 @@ nimrod:
   end_slack: 0
   goals_per_obs: 1
   negative_mining: false
-  number_of_bags: 272
+  number_of_bags: 279
   stats:
     max_ang_vel: 43.9604
     max_lin_vel: 2.2882
