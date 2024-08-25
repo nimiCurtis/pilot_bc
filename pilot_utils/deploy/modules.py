@@ -192,26 +192,26 @@ class GoalPositionEstimator:
 
 
 def slerp_wxyz(quat1, quat2, alpha):
-    w, x, y, z = quat1
+    x, y, z, w = quat1
     start_rot = Rotation.from_quat([x, y, z, w])
-    w, x, y, z = quat2
+    x, y, z, w = quat2
     end_rot = Rotation.from_quat([x, y, z, w])
     orientation_slerp = Slerp(
         times=[0, 1], rotations=Rotation.concatenate([start_rot, end_rot])
     )
     x, y, z, w = orientation_slerp([alpha])[0].as_quat()
-    return np.array([w, x, y, z])
+    return np.array([x, y, z, w])
 
 class RealtimeTraj:
     def __init__(self):
         self.translations = np.zeros((0, 3), dtype=np.float64)
-        self.quaternions_wxyz = np.zeros((0, 4), dtype=np.float64)
+        self.quaternions_xyzw = np.zeros((0, 4), dtype=np.float64)
         self.timestamps = np.zeros((0,), dtype=np.float64)  # in seconds
 
     def update(
         self,
         translations: npt.NDArray[np.float64],
-        quaternions_wxyz: npt.NDArray[np.float64],
+        quaternions_xyzw: npt.NDArray[np.float64],
         timestamps: npt.NDArray[np.float64],
         current_timestamp: float,
         adaptive_latency_matching: bool = False,
@@ -221,14 +221,14 @@ class RealtimeTraj:
             translations.shape[1] == 3
         ), f"Invalid shape {translations.shape[1]} for translations!"
         assert (
-            quaternions_wxyz.shape[1] == 4
-        ), f"Invalid shape {quaternions_wxyz.shape[1]} for quaternions_wxyz!"
+            quaternions_xyzw.shape[1] == 4
+        ), f"Invalid shape {quaternions_xyzw.shape[1]} for quaternions_xyzw!"
         assert (
             len(timestamps.shape) == 1
         ), f"Invalid shape {timestamps.shape} for timestamps!"
         assert (
             translations.shape[0]
-            == quaternions_wxyz.shape[0]
+            == quaternions_xyzw.shape[0]
             == timestamps.shape[0]
         ), f"Input number inconsistent!"
         if len(timestamps) > 1 and np.any(timestamps[1:] - timestamps[:-1] <= 0):
@@ -236,13 +236,13 @@ class RealtimeTraj:
 
         if self.translations.shape[0] == 0:
             self.translations = np.array(translations)
-            self.quaternions_wxyz = np.array(quaternions_wxyz)
+            self.quaternions_xyzw = np.array(quaternions_xyzw)
             self.timestamps = np.array(timestamps)
         else:
             input_traj = RealtimeTraj()
             input_traj.update(
                 translations=translations,
-                quaternions_wxyz=quaternions_wxyz,
+                quaternions_xyzw=quaternions_xyzw,
                 timestamps=timestamps,
                 current_timestamp=timestamps[0],
             )
@@ -287,7 +287,7 @@ class RealtimeTraj:
                     if input_traj.timestamps[i] <= current_timestamp:
                         t, q = self.interpolate(input_traj.timestamps[i])
                         input_traj.translations[i] = t
-                        input_traj.quaternions_wxyz[i] = q
+                        input_traj.quaternions_xyzw[i] = q
                     elif input_traj.timestamps[i] <= current_timestamp + smoothen_time:
                         alpha = (
                             input_traj.timestamps[i] - current_timestamp
@@ -296,25 +296,25 @@ class RealtimeTraj:
                         input_traj.translations[i] = (
                             alpha * input_traj.translations[i] + (1 - alpha) * t
                         )
-                        input_traj.quaternions_wxyz[i] = (
-                            alpha * input_traj.quaternions_wxyz[i] + (1 - alpha) * q
+                        input_traj.quaternions_xyzw[i] = (
+                            alpha * input_traj.quaternions_xyzw[i] + (1 - alpha) * q
                         )
                     else:
                         break
 
             # Find the last timestamp prior to the first timestamp of the input data
             idx = np.searchsorted(self.timestamps, input_traj.timestamps[0])
-
+            # print(idx)
             # Remove all data after this timestamp
             self.translations = self.translations[:idx]
-            self.quaternions_wxyz = self.quaternions_wxyz[:idx]
+            self.quaternions_xyzw = self.quaternions_xyzw[:idx]
             self.timestamps = self.timestamps[:idx]
 
             self.translations = np.concatenate(
                 [self.translations, input_traj.translations]
             )
-            self.quaternions_wxyz = np.concatenate(
-                [self.quaternions_wxyz, input_traj.quaternions_wxyz]
+            self.quaternions_xyzw = np.concatenate(
+                [self.quaternions_xyzw, input_traj.quaternions_xyzw]
             )
 
             self.timestamps = np.concatenate([self.timestamps, input_traj.timestamps])
@@ -327,7 +327,7 @@ class RealtimeTraj:
         # Only keep one data point before the current timestamp (for interpolation)
         if current_idx >= 2:
             self.translations = self.translations[current_idx - 1 :]
-            self.quaternions_wxyz = self.quaternions_wxyz[current_idx - 1 :]
+            self.quaternions_xyzw = self.quaternions_xyzw[current_idx - 1 :]
             self.timestamps = self.timestamps[current_idx - 1 :]
     
     def interpolate_translation(self, timestamp: float):
@@ -354,12 +354,12 @@ class RealtimeTraj:
         if timestamp <= self.timestamps[0]:
             return (
                 self.translations[0].copy(),
-                self.quaternions_wxyz[0].copy(),
+                self.quaternions_xyzw[0].copy(),
             )
         if timestamp >= self.timestamps[-1]:
             return (
                 self.translations[-1].copy(),
-                self.quaternions_wxyz[-1].copy(),
+                self.quaternions_xyzw[-1].copy(),
             )
 
         idx = np.searchsorted(self.timestamps, timestamp)
@@ -370,7 +370,7 @@ class RealtimeTraj:
             idx - 1
         ] + alpha * self.translations[idx]
         
-        quaternion_wxyz = slerp_wxyz(self.quaternions_wxyz[idx-1], self.quaternions_wxyz[idx], alpha)
+        quaternion_wxyz = slerp_wxyz(self.quaternions_xyzw[idx-1], self.quaternions_xyzw[idx], alpha)
 
 
         return (
@@ -383,16 +383,16 @@ class RealtimeTraj:
         assert len(timestamps) >= 1, "Not enough timestamps"
         
         translations = []
-        quaternions_wxyz = []
+        quaternions_xyzw = []
 
         for timestamp in timestamps:
             t, q = self.interpolate(timestamp)
             translations.append(t)
-            quaternions_wxyz.append(q)
+            quaternions_xyzw.append(q)
         
         return (
             np.stack(translations), # (N, 3)
-            np.stack(quaternions_wxyz), # (N, 4)
+            np.stack(quaternions_xyzw), # (N, 4)
         )
 
 
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 
     # Example: Initial trajectory data (simulating data at t=0 to t=2 seconds)
     translations1 = np.array([[0.0, 0.0, 0.0], [0.6, 0.5, 0.5], [1.8, 1.0, 1.0], [1.5, 1.5, 1.5], [2.0, 2.0, 2.0]])
-    quaternions_wxyz1 = np.array([
+    quaternions_xyzw1 = np.array([
         [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
         [0.707, 0.707, 0.0, 0.0],  # Quaternion representing 90 degrees rotation around X-axis
         [0.707, 0.0, 0.707, 0.0],  # Quaternion representing 90 degrees rotation around Y-axis
@@ -425,11 +425,11 @@ if __name__ == "__main__":
     timestamps1 = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
 
     # Update the trajectory with the initial data
-    traj.update(translations=translations1, quaternions_wxyz=quaternions_wxyz1, timestamps=timestamps1, current_timestamp=2.0)
+    traj.update(translations=translations1, quaternions_xyzw=quaternions_xyzw1, timestamps=timestamps1, current_timestamp=2.0)
 
     # New trajectory data (simulating data at t=2 to t=3 seconds)
     translations2 = np.array([[1.0, 2.0, 2.0], [2.5, 2.5, 2.5], [3.0, 3.0, 3.0]])
-    quaternions_wxyz2 = np.array([
+    quaternions_xyzw2 = np.array([
         [0.0, 0.0, 0.0, 1.0],  # Continuation of 180 degrees rotation around Z-axis
         [0.707, 0.0, 0.707, 0.0],  # Another 90 degrees rotation around Y-axis
         [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
@@ -439,7 +439,7 @@ if __name__ == "__main__":
     # Update the trajectory with the new data, enabling smoothing
     traj.update(
         translations=translations2,
-        quaternions_wxyz=quaternions_wxyz2,
+        quaternions_xyzw=quaternions_xyzw2,
         timestamps=timestamps2,
         current_timestamp=1.1,
         smoothen_time=1.5  # Smooth transition over 1 second
