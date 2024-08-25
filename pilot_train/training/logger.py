@@ -114,7 +114,7 @@ class LoggingManager:
         if self.use_wandb and i % self.wandb_log_freq == 0 and self.wandb_log_freq != 0:
             wandb.log(data_log, commit=wandb_increment_step)
 
-        if i !=0 and self.image_log_freq != 0 and  i % (self.image_log_freq*self.print_log_freq) == 0:
+        if i !=0 and self.image_log_freq != 0 and  i % (self.image_log_freq*freq_log) == 0:
             print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) Visualize Figures ...")
             
             self.visualizer.visualize_traj_pred(

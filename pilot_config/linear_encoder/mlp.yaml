@@ -1,2 +1,4 @@
 name: mlp
 lin_encoding_size: 256
+nonlinearity: ReLU # ReLU
+hidden_sizes: [64,128]

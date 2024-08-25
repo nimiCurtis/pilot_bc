@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.nn.init as init
 from pilot_models.vision_encoder.base_model import BaseModel
+from torch.nn.utils import spectral_norm
 
 class DepthFeatureExtractor(BaseModel):
     def __init__(self, vision_encoder_config, data_config):
@@ -36,13 +37,6 @@ class DepthFeatureExtractor(BaseModel):
             nn.MaxPool2d(2, 2),  # Output: 5x5
         )
 
-        # Flattening the tensor and passing through Fully Connected layers
-        # self.fc = nn.Sequential(
-        #     nn.Linear(128 * 5 * 5, 512),
-        #     nn.ReLU(),
-        #     nn.Dropout(0.5),
-        #     nn.Linear(512, self.output_dim)
-        # )
 
         # Initialize weights
         self._initialize_weights()
