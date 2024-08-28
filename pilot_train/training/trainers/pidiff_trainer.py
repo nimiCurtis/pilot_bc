@@ -215,7 +215,7 @@ class PiDiffTrainer(BasicTrainer):
                 fused_modalities_encoding = self.model("fuse_modalities",
                                                     modalities=modalities,
                                                     mask=modal_dropout_mask)
-                
+                 
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 

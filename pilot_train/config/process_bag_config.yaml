@@ -1,8 +1,9 @@
-bags_folder: "/media/roblab20/Expansion/pilot/go2_broadcom_bags"
+# bags_folder: "/media/roblab20/Expansion/pilot/go2_broadcom_bags"
 # bags_folder: "/media/nimrod/Expansion/pilot/raanana_bags"
 destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking"
-
-save_raw: true                        # I dont see a reason why to set it to false
+bags_folder: /media/roblab20/Expansion/pilot/university_bags
+save_raw: False                        # I dont see a reason why to set it to false
+force: False
 
 nimrod:                               # dataset name
   aligned_topics: ["odom", "rgb", "depth", "target_object"]     # pick topics to be aligned
@@ -12,18 +13,17 @@ nimrod:                               # dataset name
   pre_truncated: 0.5                    # number in seconds -> when to start storing data = 0 + pre_truncated.
                                     # usefull when standing few seconds at the begining. 
   post_truncated: 0.5                   # number in seconds -> when to finish storing data = end_time - post_truncated.
-  max_depth: 10000
+  max_depth: 9000
 
 go2: 
   aligned_topics: ["odom", "rgb", "depth", "target_object"]     # pick topics to be aligned
-  sync_rate: 7                    # alignment rate, if null we will 
+  sync_rate: 12                    # alignment rate, if null we will 
                                       # use the min frequency, from the aligned topics frequency
   save_vid: true                      # saving video
   pre_truncated: 0.5                    # number in seconds -> when to start storing data = 0 + pre_truncated.
                                     # usefull when standing few seconds at the begining. 
-  post_truncated: 0.5                   # number in seconds -> when to finish storing data = end_time - post_truncated.
-  max_depth: 10000
-
+  post_truncated: 1.0                   # number in seconds -> when to finish storing data = end_time - post_truncated.
+  max_depth: 9000
 # turtlebot: 
 #   aligned_topics: ["odom", "rgb", "depth", "target_object"]     # pick topics to be aligned
 #   sync_rate: 6                    # alignment rate, if null we will 
