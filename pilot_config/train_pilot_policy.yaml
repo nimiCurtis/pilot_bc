@@ -6,7 +6,7 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
+  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -68,17 +68,17 @@ data:
   # context
   context_type: temporal
   target_observation_enable: True
-  context_size: 6
-  action_context_size: 5 # modify to 0 for not using actions history
+  context_size: 5
+  action_context_size: 3 # modify to 0 for not using actions history
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
   distance:
     min_dist_cat: 1
-    max_dist_cat: 20
+    max_dist_cat: 10
   action:
-    min_dist_cat: 1
-    max_dist_cat: 20
+    min_dist_cat: 0
+    max_dist_cat: 12
 
   # action output params
   pred_horizon: 8 

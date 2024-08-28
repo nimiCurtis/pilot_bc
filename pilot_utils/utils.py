@@ -75,7 +75,7 @@ def get_data_stats(data):
     }
     return stats
 
-def normalize_data(data, stats):
+def normalize_data(data, stats, norm_type="standard"):
     """
     Normalizes the data to the range [-1, 1].
 
@@ -86,27 +86,42 @@ def normalize_data(data, stats):
     Returns:
         np.ndarray: The normalized data.
     """
-    # Normalize to [0,1]
-    ndata = (data - stats['min']) / (stats['max'] - stats['min'])
-    # Normalize to [-1, 1]
-    ndata = ndata * 2 - 1
+    
+    if norm_type == "maxmin":
+        # Normalize to [0,1]
+        ndata = (data - stats['min']) / (stats['max'] - stats['min'])
+        # Normalize to [-1, 1]
+        ndata = ndata * 2 - 1
+    elif norm_type == "standard":
+        # Standardize using mean and standard deviation
+        ndata = (data - stats['mean']) / stats['std']
     return ndata
 
-def unnormalize_data(ndata, stats):
+
+
+
+
+
+def unnormalize_data(ndata, stats, norm_type="standard"):
     """
-    Unnormalizes the data from the range [-1, 1] back to its original range.
+    Unstandardizes the data back to its original scale.
 
     Args:
-        ndata (np.ndarray): The normalized data.
-        stats (dict): The statistics used for unnormalization.
+        standardized_data (np.ndarray): The standardized data to unstandardize.
+        stats (dict): The statistics used for standardization, should contain 'mean' and 'std'.
 
     Returns:
-        np.ndarray: The unnormalized data.
+        np.ndarray: The unstandardized data.
     """
-    # Back to [0, 1]
-    ndata = (ndata + 1) / 2
-    # Back to [min, max]
-    data = ndata * (stats['max'] - stats['min']) + stats['min']
+    if norm_type == "maxmin":
+        # Back to [0, 1]
+        ndata = (ndata + 1) / 2
+        # Back to [min, max]
+        data = ndata * (stats['max'] - stats['min']) + stats['min']
+        
+    elif norm_type == "standard":
+        # Unstandardize using mean and standard deviation
+        data = ndata * stats['std'] + stats['mean']
     return data
 
 def get_delta(actions):
@@ -314,11 +329,19 @@ def get_action_stats(properties, waypoint_spacing):
         """
         
         frame_rate = properties['frame_rate']
-        lin_vel_lim = properties['max_lin_vel']
+        
+        max_lin_vel = properties['max_lin_vel']
+        min_lin_vel = properties['min_lin_vel']
+        mean_lin_vel = properties['mean_lin_vel']
+        std_lin_vel = properties['std_lin_vel']
         ang_vel_lim = properties['max_ang_vel']
         
-        return {'pos': {'max': (lin_vel_lim / frame_rate)*waypoint_spacing,
-                        'min': -(lin_vel_lim /frame_rate)*waypoint_spacing},
+        return {'pos': {
+                        'max': (max_lin_vel / frame_rate)*waypoint_spacing,
+                        'min': (min_lin_vel /frame_rate)*waypoint_spacing,
+                        'mean': (mean_lin_vel / frame_rate)*waypoint_spacing,
+                        'std': (std_lin_vel /frame_rate)*waypoint_spacing,
+                        },
                 'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
                         'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}
 

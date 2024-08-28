@@ -251,13 +251,13 @@ class PilotDataset(Dataset):
             tuple: The trajectory name, goal time, and a boolean indicating if the goal is negative.
         """
         
-        goal_offset = np.random.randint(0, (max_goal_dist/self.waypoint_spacing_action) + 1)
-        if goal_offset == 0:
-            trajectory_name, goal_time = self._sample_negative()
-            return trajectory_name, goal_time, True
-        else:
-            goal_time = curr_time + goal_offset*self.waypoint_spacing_action
-            return trajectory_name, goal_time, False
+        goal_offset = np.random.randint(1, (max_goal_dist/self.waypoint_spacing_action) + 1)
+        # if goal_offset == 0:
+        #     trajectory_name, goal_time = self._sample_negative()
+        #     return trajectory_name, goal_time, True
+        # else:
+        goal_time = curr_time + goal_offset*self.waypoint_spacing_action
+        return trajectory_name, goal_time, False
 
     def _sample_negative(self):
         """
@@ -311,7 +311,7 @@ class PilotDataset(Dataset):
             print(f"Failed to load image {image_path}")
 
         
-    def _compute_actions(self, traj_data, curr_time, goal_time, action_stats):
+    def _compute_actions(self, traj_data, curr_time, goal_time, action_stats, context_action_stats):
         """
         Computes the actions required to reach the goal from the current trajectory data.
 
@@ -382,7 +382,7 @@ class PilotDataset(Dataset):
         if self.normalize:
             # Normalize the actions based on provided action statistics
             normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
-            normalized_prev_action = actions_forward_pass(prev_actions,action_stats,self.learn_angle)
+            normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle)
             # Normalize the goal position in local coordinates
             normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
 
@@ -477,8 +477,8 @@ class PilotDataset(Dataset):
         # Compute the actions and normalized goal position
         # was self.waypoint_spacing
         action_stats = get_action_stats(curr_properties, self.waypoint_spacing_action)
-
-        normalized_actions, normalized_prev_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats)
+        context_action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
+        normalized_actions, normalized_prev_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
 
         if self.goal_condition:
             # Load the current and goal target trajectory data
@@ -493,9 +493,9 @@ class PilotDataset(Dataset):
                 
                 if self.target_dim == 3:
                     goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
                 elif self.target_dim == 2:
-                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
             else:
                 goal_rel_pos_to_target = np.zeros((self.target_dim,))
 
@@ -514,9 +514,9 @@ class PilotDataset(Dataset):
             
             if self.target_dim == 3:
                 np_curr_rel_pos[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
-                np_curr_rel_pos[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+                np_curr_rel_pos[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
             elif self.target_dim == 2:
-                np_curr_rel_pos[~target_context_mask] = normalize_data(data=np_curr_rel_pos_to_target[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000})
+                np_curr_rel_pos[~target_context_mask] = normalize_data(data=np_curr_rel_pos_to_target[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
             
             # Convert the context of relative positions to target into a tensor
             curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos)
@@ -570,13 +570,21 @@ class PilotDataset(Dataset):
         frame_rate = recording_config['sync_rate']
 
         robot_properties = get_robot_config(robot)
-        lin_vel_lim = robot_properties[robot]['max_lin_vel']
+        max_lin_vel = robot_properties[robot]['max_lin_vel']
+        min_lin_vel = robot_properties[robot]['min_lin_vel']
+        mean_lin_vel = robot_properties[robot]['mean_lin_vel']
+        std_lin_vel = robot_properties[robot]['std_lin_vel']
+
+
         ang_vel_lim = robot_properties[robot]['max_ang_vel']
 
         return {
             'robot': robot,
             'frame_rate': frame_rate,
-            'max_lin_vel': lin_vel_lim,
+            'max_lin_vel': max_lin_vel,
+            'min_lin_vel': min_lin_vel,
+            'mean_lin_vel': mean_lin_vel,
+            'std_lin_vel': std_lin_vel,
             'max_ang_vel': ang_vel_lim
         }
 
