@@ -36,11 +36,21 @@ MAGENTA = np.array([1, 0, 1])
 
 class Visualizer:
 
-    def __init__(self,datasets_cfg, log_cfg) -> None:
+    def __init__(self,datasets_cfg, log_cfg=None, log_path = None) -> None:
         self.datasets_cfg = datasets_cfg
-        self.use_wandb = log_cfg.wandb.run.enable
-        log_folder_path = os.path.join(log_cfg.project_folder,
-                                    log_cfg.run_name)
+        
+        
+        ## TODO: refactore
+        if log_cfg is not None:
+            self.use_wandb = log_cfg.wandb.run.enable 
+            log_folder_path = os.path.join(log_cfg.project_folder,
+                                        log_cfg.run_name)
+            self.offline = False
+        else:
+            self.use_wandb = False
+            log_folder_path = log_path
+            self.offline = True
+            
         self.log_folder = log_folder_path
         
     def visualize_dist_pred(
@@ -131,7 +141,6 @@ class Visualizer:
             epoch: int,
             num_images_preds: int = 8,
             display: bool = False,
-            
     ):
         """
         Compare predicted path with the gt path of waypoints using egocentric visualization. This visualization is for the last batch in the dataset.
@@ -217,6 +226,7 @@ class Visualizer:
             action_mask,
             save_path: Optional[str] = None,
             display: Optional[bool] = False,
+            diff_img = None,
     ):
         """
         Compare predicted path with the gt path of waypoints using egocentric visualization.
@@ -231,8 +241,12 @@ class Visualizer:
             save_path: path to save the figure
             display: whether to display the figure
         """
-
-        fig, ax = plt.subplots(1, 3)
+        
+        if diff_img is not None:
+            fig, ax = plt.subplots(1, 4)
+        else:
+            fig, ax = plt.subplots(1, 3)
+        
         start_pos = np.array([0, 0])
         robot_pos = start_pos
         points = [start_pos, goal_pos, robot_pos]
@@ -316,6 +330,10 @@ class Visualizer:
         ax[1].imshow(goal_img)
         ax[2].imshow(obs_img)
         
+        if diff_img is not None:
+            ax[3].imshow(diff_img)
+            ax[3].set_title(f"Observations Difference",color=points_colors[0])
+
         ## TODO        
         # self.plot_trajs_and_points_on_image(
         #     ax[2],
@@ -328,7 +346,7 @@ class Visualizer:
         # )
         
 
-        fig.set_size_inches(18.5, 10.5)
+        fig.set_size_inches(15, 10)
         ax[0].set_title(f"Action Prediction")
         ax[1].set_title(f"Observation @ first action / context",color=points_colors[0])
         ax[2].set_title(f"Observation @ Now",color=points_colors[-1])
@@ -431,6 +449,95 @@ class Visualizer:
             ax.set_ylim((VIZ_IMAGE_SIZE[1] - 0.5, 0.5))
 
 
+    def visualize_traj_pred_offline(
+            self,
+            batch_obs_images: np.ndarray,
+            batch_goal_images: np.ndarray,
+            batch_viz_difference: np.ndarray,
+            dataset_indices: np.ndarray,
+            batch_goals: np.ndarray,
+            batch_pred_waypoints: np.ndarray,
+            batch_label_waypoints: np.ndarray,
+            batch_waypoints_context: np.ndarray,
+            batch_action_mask: np.ndarray,
+            policy_model: str,
+            model_name: str,
+            model_version: str,
+            eval_type: str,
+            normalized: bool,
+            n_img: int,
+            num_images_preds: int = 8,
+            display: bool = False,
+    ):
+        """
+        Compare predicted path with the gt path of waypoints using egocentric visualization. This visualization is for the last batch in the dataset.
+
+        Args:
+            batch_obs_images (np.ndarray): batch of observation images [batch_size, height, width, channels]
+            batch_goal_images (np.ndarray): batch of goal images [batch_size, height, width, channels]
+            dataset_names: indices corresponding to the dataset name
+            batch_goals (np.ndarray): batch of goal positions [batch_size, 2]
+            batch_pred_waypoints (np.ndarray): batch of predicted waypoints [batch_size, horizon, 4] or [batch_size, horizon, 2] or [batch_size, num_trajs_sampled horizon, {2 or 4}]
+            batch_label_waypoints (np.ndarray): batch of label waypoints [batch_size, T, 4] or [batch_size, horizon, 2]
+            eval_type (string): f"{data_type}_{eval_type}" (e.g. "recon_train", "gs_test", etc.)
+            normalized (bool): whether the waypoints are normalized
+            epoch (int): current epoch number
+            num_images_preds (int): number of images to visualize
+            display (bool): whether to display the images
+        """
+        visualize_path = None
+        if self.log_folder is not None:
+            visualize_path = os.path.join(
+                self.log_folder,policy_model,model_name, "visualize", eval_type, "inference_test",model_version
+            )
+        
+        if not os.path.exists(visualize_path):
+            os.makedirs(visualize_path)
+
+        assert (
+                len(batch_obs_images)
+                == len(batch_goal_images)
+                == len(batch_goals)
+                == len(batch_pred_waypoints)
+                == len(batch_label_waypoints)
+        )
+
+        dataset_names = self.datasets_cfg.robots
+        dataset_names.sort()
+
+        batch_size = batch_obs_images.shape[0]
+        for i in range(min(batch_size, num_images_preds)):
+            obs_img = numpy_to_img(batch_obs_images[i])
+            goal_img = numpy_to_img(batch_goal_images[i])
+            diff_img = numpy_to_img(batch_viz_difference[i])
+            dataset_name = dataset_names[int(dataset_indices[i])]
+            robot_config = get_robot_config(robot_name=dataset_name)
+            goal_pos = batch_goals[i]
+            pred_waypoints = batch_pred_waypoints[i]
+            label_waypoints = batch_label_waypoints[i]
+            context_waypoints = batch_waypoints_context[i]
+            action_mask = int(batch_action_mask[i])
+            #TODO: modify with unormalizing based on the dataset
+
+            save_path = None
+            if visualize_path is not None:
+                save_path = os.path.join(visualize_path, f"{str(n_img).zfill(4)}.png")
+
+            self.compare_waypoints_pred_to_label(
+                obs_img,
+                goal_img,
+                dataset_name,
+                goal_pos,
+                pred_waypoints,
+                label_waypoints,
+                context_waypoints,
+                action_mask,
+                save_path,
+                display,
+                diff_img = diff_img,
+            )
+
+
 def plot_trajs_and_points(
         ax: plt.Axes,
         list_trajs: list,
@@ -468,7 +575,7 @@ def plot_trajs_and_points(
             traj_labels is None or len(list_trajs) == len(traj_labels) or default_coloring
     ), "Not enough labels for trajectories"
     assert point_labels is None or len(list_points) == len(point_labels), "Not enough labels for points"
-
+    
     for i, traj in enumerate(list_trajs):
         if traj_labels is None:
             ax.plot(
@@ -533,9 +640,10 @@ def plot_trajs_and_points(
     # put the legend below the plot
     if traj_labels is not None or point_labels is not None:
         ax.legend()
-        ax.legend(bbox_to_anchor=(0.0, -0.5), loc="upper left", ncol=2)
+        ax.legend(loc="upper left", bbox_to_anchor=(1, 0.1),ncol=2)
     ax.set_aspect("equal", "box")
-
+    # plt.tight_layout()
+    
 def angle_to_unit_vector(theta):
     """Converts an angle to a unit vector."""
     return np.array([np.cos(theta), np.sin(theta)])
@@ -588,9 +696,7 @@ def project_points(
         [xy, -camera_height * np.ones(list(xy.shape[:-1]) + [1])], axis=-1
     )
 
-    # create dummy rotation and translation vectors
-    rvec = tvec = (0, 0, 0)
-
+    # create dummy rotation and-data_cfg.action_context_size
     xyz[..., 0] += camera_x_offset
     xyz_cv = np.stack([xyz[..., 1], -xyz[..., 2], xyz[..., 0]], axis=-1)
     uv, _ = cv2.projectPoints(
