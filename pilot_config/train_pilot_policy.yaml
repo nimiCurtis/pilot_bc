@@ -81,8 +81,8 @@ data:
     max_dist_cat: 12
 
   # action output params
-  pred_horizon: 8 
-  action_horizon: 5
+  pred_horizon: 64 
+  action_horizon: 32
   learn_angle: True
   # dataset specific parameters
   image_size: [96, 96] # width, height

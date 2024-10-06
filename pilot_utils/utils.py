@@ -58,22 +58,6 @@ def is_tensor(x):
     """
     return torch.is_tensor(x)
 
-def get_data_stats(data):
-    """
-    Computes the minimum and maximum values of the data.
-
-    Args:
-        data (np.ndarray): The data to compute stats for.
-
-    Returns:
-        dict: A dictionary containing the min and max values of the data.
-    """
-    data = data.reshape(-1, data.shape[-1])
-    stats = {
-        'min': np.min(data, axis=0),
-        'max': np.max(data, axis=0)
-    }
-    return stats
 
 def normalize_data(data, stats, norm_type="standard"):
     """
@@ -96,10 +80,6 @@ def normalize_data(data, stats, norm_type="standard"):
         # Standardize using mean and standard deviation
         ndata = (data - stats['mean']) / stats['std']
     return ndata
-
-
-
-
 
 
 def unnormalize_data(ndata, stats, norm_type="standard"):
@@ -345,20 +325,28 @@ def get_action_stats(properties, waypoint_spacing):
                 'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
                         'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}
 
-def clip_angle(theta: float) -> float:
-    """
-    Clips an angle to the range [-π, π].
 
-    Args:
-        theta (float): Input angle in radians.
+# def clip_angle(theta: float) -> float:
+#     """
+#     Clips an angle to the range [-π, π].
 
-    Returns:
-        float: Clipped angle within the range [-π, π].
-    """
-    theta %= 2 * np.pi
-    if -np.pi < theta < np.pi:
-        return theta
-    return theta - 2 * np.pi
+#     Args:
+#         theta (float): Input angle in radians.
+
+#     Returns:
+#         float: Clipped angle within the range [-π, π].
+#     """
+#     theta %= 2 * np.pi
+#     if -np.pi < theta < np.pi:
+#         return theta
+#     return theta - 2 * np.pi
+
+# def clip_angles(angles):
+#     # Use modulo operation to keep the angles in the range [-pi, pi]
+#     return (angles + np.pi) % (2 * np.pi) - np.pi
+
+def clip_angles(angles):
+    return np.arctan2(np.sin(angles), np.cos(angles))
 
 def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
     # diffusion output should be denoised action deltas
@@ -373,8 +361,8 @@ def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
     action_pred = torch.zeros_like(action_pred_deltas)
 
     ## Cumsum 
-    action_pred[:, :, :2] = torch.cumsum(
-        action_pred_deltas[:, :, :2], dim=1
+    action_pred[:, :, :] = torch.cumsum(
+        action_pred_deltas[:, :, :], dim=1
     )  # convert position and orientation deltas into waypoints in local coords
 
     if learn_angle:

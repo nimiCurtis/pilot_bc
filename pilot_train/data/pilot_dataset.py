@@ -15,6 +15,7 @@ from pilot_utils.data.data_utils import (
     img_path_to_data,
     get_data_path,
     to_local_coords,
+    get_robot_data_properties
 )
 
 from pilot_utils.utils import (
@@ -22,7 +23,9 @@ from pilot_utils.utils import (
     normalize_data,
     xy_to_d_cos_sin,
     actions_forward_pass,
-    get_action_stats
+    get_action_stats,
+    calculate_sin_cos,
+    clip_angles
 )
 
 from pilot_utils.transforms import transform_images
@@ -213,7 +216,8 @@ class PilotDataset(Dataset):
         for traj_name in tqdm.tqdm(self.traj_names, disable=not use_tqdm, dynamic_ncols=True):
             # Retrieve trajectory data and properties for the current trajectory
             traj_data = self._get_trajectory(traj_name)
-            properties = self._get_properties(traj_name)
+            properties = get_robot_data_properties(data_folder=self.data_folder,
+                                                trajectory_name=traj_name)
             traj_len = len(traj_data["position"])
             
             # Check that the lengths of robot and target data are equal if goal_condition is true
@@ -232,7 +236,7 @@ class PilotDataset(Dataset):
 
             # Add samples to the samples index with their respective max goal distances
             for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1)  # Keep max distance in range
+                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)  # Keep max distance in range
                 samples_index.append((traj_name, properties, curr_time, max_goal_distance))
 
         # Return the constructed samples index and goals index
@@ -364,6 +368,8 @@ class PilotDataset(Dataset):
         waypoints = to_local_coords(positions, positions[0], yaw[0])
         goal_in_local = to_local_coords(goal_pos, positions[0], yaw[0])
 
+        
+        #TODO: check
         prev_waypoints = to_local_coords(prev_positions, prev_positions[0], prev_yaw[0])
         # Ensure waypoints have the correct shape
         assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
@@ -381,16 +387,63 @@ class PilotDataset(Dataset):
             
         if self.normalize:
             # Normalize the actions based on provided action statistics
-            normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
-            normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle)
+
+            actions = get_delta(actions=actions)
+            actions[:,2] = clip_angles(actions[:,2])
+            actions[:,:2] = normalize_data(data=actions[:,:2],stats=action_stats['pos'])
+            normalized_actions = calculate_sin_cos(actions)
+            
+            prev_actions = get_delta(actions=prev_actions)
+            prev_actions[:,2] = clip_angles(prev_actions[:,2])
+            prev_actions[:,:2] = normalize_data(data=prev_actions[:,:2],stats=context_action_stats['pos'])
+            normalized_actions_context = calculate_sin_cos(prev_actions)
+            
             # Normalize the goal position in local coordinates
             normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
 
         # Assertion to ensure the shape of normalized actions is correct
         assert normalized_actions.shape == (self.pred_horizon, self.num_action_params), f"{normalized_actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 
-        return normalized_actions,normalized_prev_action, normalized_goal_pos
+        return normalized_actions,normalized_actions_context, normalized_goal_pos
     
+    
+    def _compute_rel_pos_to_target(self,target_traj_data_context,target_traj_data_goal,goal_time, curr_time, context):
+            # Get the goal position relative to the target
+            goal_rel_pos_to_target = np.array(target_traj_data_goal[goal_time]["position"][:2])
+            
+            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
+                goal_pos_to_target_mask = True
+                if self.target_dim == 3:
+                    goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
+                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+                elif self.target_dim == 2:
+                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+                    pass
+            else:
+                goal_rel_pos_to_target = np.zeros((self.target_dim,))
+                goal_pos_to_target_mask = False
+
+            if self.target_context:
+                # Get the context of target positions relative to the current trajectory
+                rel_pos_to_target_context_tmp = np.array([
+                    target_traj_data_context[t]["position"][:2] for f, t in context
+                ])
+            else:
+                # For now, this is not in use
+                rel_pos_to_target_context_tmp = np.array(target_traj_data_context[curr_time]["position"][:2])
+
+            #TODO: add implementation for not goal condition
+            target_context_mask = np.sum(rel_pos_to_target_context_tmp == np.zeros((2,)), axis=1) == 2
+            rel_pos_to_target_context = np.zeros((rel_pos_to_target_context_tmp.shape[0], self.target_dim))
+            
+            if self.target_dim == 3:
+                rel_pos_to_target_context[~target_context_mask] = xy_to_d_cos_sin(rel_pos_to_target_context_tmp[~target_context_mask])
+                rel_pos_to_target_context[~target_context_mask, 0] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+            elif self.target_dim == 2:
+                rel_pos_to_target_context[~target_context_mask] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+
+            return rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask
+
     def _get_trajectory(self, trajectory_name, target:bool = False):
         """
         Retrieves trajectory data from the cache or loads it from disk.
@@ -443,7 +496,7 @@ class PilotDataset(Dataset):
         """
 
         # Retrieve the current trajectory name, properties, current time, and max goal distance from the index
-        f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
+        f_curr, curr_data_properties, curr_time, max_goal_dist = self.index_to_data[i]
 
         # Sample a goal from the current trajectory or a different trajectory
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
@@ -464,10 +517,10 @@ class PilotDataset(Dataset):
             raise ValueError(f"Invalid context type {self.context_type}")
 
         # Load images for each context time step
-        obs_image = [self._load_image(f, t) for f, t in context]
+        imgs_context = [self._load_image(f, t) for f, t in context]
 
         # Apply transformations to the context images
-        obs_image_transformed = transform_images(obs_image, self.transform)
+        imgs_context = transform_images(imgs_context, self.transform)
 
         # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
@@ -476,55 +529,30 @@ class PilotDataset(Dataset):
 
         # Compute the actions and normalized goal position
         # was self.waypoint_spacing
-        action_stats = get_action_stats(curr_properties, self.waypoint_spacing_action)
-        context_action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
-        normalized_actions, normalized_prev_actions, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
+        action_stats = get_action_stats(curr_data_properties, self.waypoint_spacing_action)
+        context_action_stats = get_action_stats(curr_data_properties, self.waypoint_spacing)
+        
+        
+        # Stay with normalized actions (Deltas)
+        normalized_actions, normalized_actions_context, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
+
 
         if self.goal_condition:
             # Load the current and goal target trajectory data
-            curr_target_traj_data = self._get_trajectory(f_curr, target=True) #fcur
-            goal_target_traj_data = self._get_trajectory(f_goal, target=True) #fgoal
-            goal_target_traj_data_len = len(goal_target_traj_data)
-            assert goal_time < goal_target_traj_data_len, f"{goal_time} and {goal_target_traj_data_len}"
+            target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
+            target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
+            target_traj_data_goal_len = len(target_traj_data_goal)
+            assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
-            # Get the goal position relative to the target
-            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2])
-            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
-                
-                if self.target_dim == 3:
-                    goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-                elif self.target_dim == 2:
-                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            else:
-                goal_rel_pos_to_target = np.zeros((self.target_dim,))
-
-            if self.target_context:
-                # Get the context of target positions relative to the current trajectory
-                np_curr_rel_pos_to_target = np.array([
-                    curr_target_traj_data[t]["position"][:2] for f, t in context
-                ])
-            else:
-                # For now, this is not in use
-                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
-
-            #TODO: add implementation for not goal condition
-            target_context_mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
-            np_curr_rel_pos = np.zeros((np_curr_rel_pos_to_target.shape[0], self.target_dim))
-            
-            if self.target_dim == 3:
-                np_curr_rel_pos[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
-                np_curr_rel_pos[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            elif self.target_dim == 2:
-                np_curr_rel_pos[~target_context_mask] = normalize_data(data=np_curr_rel_pos_to_target[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            
-            # Convert the context of relative positions to target into a tensor
-            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos)
-            normalized_prev_actions_tensor = torch.as_tensor(normalized_prev_actions)
-            # curr_rel_pos_to_target = torch.concatenate([curr_rel_pos_to_target,normalized_prev_actions_tensor],axis=1)
+            # Compute the relative position to target 
+            rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+                                                                                                                        target_traj_data_goal,
+                                                                                                                        goal_time,
+                                                                                                                        curr_time,
+                                                                                                                        context)
         else:
             # Not in use
-            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
+            rel_pos_to_target_context = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
             goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
 
         # Compute the timestep distances
@@ -543,48 +571,49 @@ class PilotDataset(Dataset):
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            torch.as_tensor(obs_image_transformed, dtype=torch.float32),  # [C*(context+1),H,W]
-            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(imgs_context, dtype=torch.float32),  # [C*(context+1),H,W]
+            torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
-            torch.as_tensor(normalized_prev_actions_tensor, dtype=torch.float32),
+            torch.as_tensor(normalized_actions_context, dtype=torch.float32),
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
+            torch.as_tensor(goal_pos_to_target_mask, dtype=torch.float32),
         )
 
-    def _get_properties(self,trajectory_name):
-        """
-        Retrieves the properties of the robot for the given trajectory.
+    # def _get_properties(self,trajectory_name):
+    #     """
+    #     Retrieves the properties of the robot for the given trajectory.
 
-        Args:
-            trajectory_name (str): Name of the trajectory.
+    #     Args:
+    #         trajectory_name (str): Name of the trajectory.
 
-        Returns:
-            dict: Robot properties.
-        """
+    #     Returns:
+    #         dict: Robot properties.
+    #     """
         
-        recording_config = get_recording_config(data_folder=self.data_folder,
-                                                trajectory_name=trajectory_name)
-        robot = recording_config['demonstrator']
-        frame_rate = recording_config['sync_rate']
+    #     recording_config = get_recording_config(data_folder=self.data_folder,
+    #                                             trajectory_name=trajectory_name)
+    #     robot = recording_config['demonstrator']
+    #     frame_rate = recording_config['sync_rate']
 
-        robot_properties = get_robot_config(robot)
-        max_lin_vel = robot_properties[robot]['max_lin_vel']
-        min_lin_vel = robot_properties[robot]['min_lin_vel']
-        mean_lin_vel = robot_properties[robot]['mean_lin_vel']
-        std_lin_vel = robot_properties[robot]['std_lin_vel']
+    #     robot_properties = get_robot_config(robot)
+    #     max_lin_vel = robot_properties[robot]['max_lin_vel']
+    #     min_lin_vel = robot_properties[robot]['min_lin_vel']
+    #     mean_lin_vel = robot_properties[robot]['mean_lin_vel']
+    #     std_lin_vel = robot_properties[robot]['std_lin_vel']
 
+    #     # Not in use
+    #     ang_vel_lim = robot_properties[robot]['max_ang_vel']
 
-        ang_vel_lim = robot_properties[robot]['max_ang_vel']
-
-        return {
-            'robot': robot,
-            'frame_rate': frame_rate,
-            'max_lin_vel': max_lin_vel,
-            'min_lin_vel': min_lin_vel,
-            'mean_lin_vel': mean_lin_vel,
-            'std_lin_vel': std_lin_vel,
-            'max_ang_vel': ang_vel_lim
-        }
+    #     return {
+    #         'robot': robot,
+    #         'frame_rate': frame_rate,
+    #         'max_lin_vel': max_lin_vel,
+    #         'min_lin_vel': min_lin_vel,
+    #         'mean_lin_vel': mean_lin_vel,
+    #         'std_lin_vel': std_lin_vel,
+    #         'max_ang_vel': ang_vel_lim
+    #     }
 

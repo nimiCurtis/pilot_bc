@@ -17,7 +17,7 @@ import wandb
 import yaml
 import torch
 import torch.nn as nn
-from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angle
+from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angles
 from pilot_utils.data.data_utils import yaw_rotmat
 
 
@@ -280,11 +280,11 @@ class Visualizer:
                 last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
                 yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
                 yaws = yaws + last_yaw
-                yaws = np.array([clip_angle(yaw) for yaw in yaws])
+                yaws = clip_angles(yaws)
                 
                 gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
                 gt_yaws = gt_yaws + last_yaw
-                gt_yaws = np.array([clip_angle(yaw) for yaw in gt_yaws])
+                gt_yaws = clip_angles(gt_yaws)
             
             
                 rotmat = yaw_rotmat(last_yaw)

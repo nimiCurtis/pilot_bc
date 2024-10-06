@@ -9,60 +9,48 @@ class DepthFeatureExtractor(BaseModel):
     def __init__(self, vision_encoder_config, data_config):
         
         in_channels = vision_encoder_config.get("in_channels")
+        
         pretrained = vision_encoder_config.get("pretrained")
+        
+        output_dim = vision_encoder_config.get("vision_encoding_size")*2
+        
         super().__init__(in_channels=in_channels, pretrained=pretrained)
         
         self.input_dim = self.in_channels
-        self.output_dim = 1024
+        self.output_dim = output_dim
         # Convolutional layers
         self.features = nn.Sequential(
             nn.Conv2d(self.input_dim, 32, 3, stride=2, padding=1),
             nn.BatchNorm2d(32),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 80x80
+            nn.MaxPool2d(2, 2), 
 
             nn.Conv2d(32, 64, 3, stride=2, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 20x20
+            nn.MaxPool2d(2, 2),  
 
             nn.Conv2d(64, 128, 3, stride=1, padding=1),
             nn.BatchNorm2d(128),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 10x10
+            nn.MaxPool2d(2, 2), 
 
-            nn.Conv2d(128, 512, 3, stride=1, padding=1),
-            nn.BatchNorm2d(512),
+            nn.Conv2d(128, self.output_dim, 3, stride=1, padding=1),
+            nn.BatchNorm2d(self.output_dim),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 5x5
+            nn.MaxPool2d(2, 2), 
         )
-
 
         # Initialize weights
         self._initialize_weights()
 
-    # def forward(self, x):
-    #     x = self.extract_features(x)
-    #     # x = x.view(x.size(0), -1)  # Flatten the tensor
-    #     # x = self.fc(x)
-    #     return x
-    
     def extract_features(self, img):
-        
-        # get the observation encoding
         obs_encoding = self.features(img)
-        # currently the size is [batch_size*(self.context_size + 1), 1280, H/32, W/32]
-        # obs_encoding = self.model._avg_pooling(obs_encoding)
-        # currently the size is [batch_size*(self.context_size + 1), 1280, 1, 1]
-        # if self.model._global_params.include_top:
         obs_encoding = obs_encoding.flatten(start_dim=1)
-            # obs_encoding = self.model._dropout(obs_encoding)
-        # currently, the size is [batch_size, self.context_size+2, self.obs_encoding_size]
-        
         return obs_encoding
     
     def get_in_feateures(self):
-        return 512
+        return self.output_dim
     
     def _initialize_weights(self):
         for m in self.modules():

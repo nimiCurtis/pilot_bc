@@ -11,6 +11,9 @@ import io
 from typing import Union
 
 
+from pilot_config.config import get_robot_config, get_recording_config
+
+
 VISUALIZATION_IMAGE_SIZE = (160, 120)
 IMAGE_ASPECT_RATIO = (
     4 / 3
@@ -61,42 +64,89 @@ def to_local_coords(
 
     return (positions - curr_pos).dot(rotmat)
 
-## why he did that. Not in use.
-def calculate_deltas(waypoints: torch.Tensor) -> torch.Tensor:
+
+def get_robot_data_properties(data_folder, trajectory_name):
     """
-    Calculate deltas between waypoints
+    Retrieves the properties of the robot for the given trajectory.
 
     Args:
-        waypoints (torch.Tensor): waypoints
+        trajectory_name (str): Name of the trajectory.
+
     Returns:
-        torch.Tensor: deltas
+        dict: Robot properties.
     """
-    num_params = waypoints.shape[1]
-    origin = torch.zeros(1, num_params)
-    prev_waypoints = torch.concat((origin, waypoints[:-1]), axis=0)
-    deltas = waypoints - prev_waypoints
-    if num_params > 2:
-        return calculate_sin_cos(deltas)
-    return deltas
+    
+    recording_config = get_recording_config(data_folder=data_folder,
+                                            trajectory_name=trajectory_name)
+    robot = recording_config['demonstrator']
+    frame_rate = recording_config['sync_rate']
+
+    robot_properties = get_robot_config(robot)
+    max_lin_vel = robot_properties[robot]['max_lin_vel']
+    min_lin_vel = robot_properties[robot]['min_lin_vel']
+    mean_lin_vel = robot_properties[robot]['mean_lin_vel']
+    std_lin_vel = robot_properties[robot]['std_lin_vel']
 
 
-def calculate_sin_cos(waypoints: torch.Tensor) -> torch.Tensor:
-    """
-    Calculate sin and cos of the angle
+    ang_vel_lim = robot_properties[robot]['max_ang_vel']
 
-    Args:
-        waypoints (torch.Tensor): waypoints
-    Returns:
-        torch.Tensor: waypoints with sin and cos of the angle
-    """
-    assert waypoints.shape[1] == 3
-    angle_repr = torch.zeros_like(waypoints[:, :2])
-    angle_repr[:, 0] = torch.cos(waypoints[:, 2])
-    angle_repr[:, 1] = torch.sin(waypoints[:, 2])
-    return torch.concat((waypoints[:, :2], angle_repr), axis=1)
+    return {
+        'robot': robot,
+        'frame_rate': frame_rate,
+        'max_lin_vel': max_lin_vel,
+        'min_lin_vel': min_lin_vel,
+        'mean_lin_vel': mean_lin_vel,
+        'std_lin_vel': std_lin_vel,
+        'max_ang_vel': ang_vel_lim
+    }
+
+
+
+
+
+
+
+
+
 
 
 ### Not in use
+
+# ## why he did that. Not in use.
+# def calculate_deltas(waypoints: torch.Tensor) -> torch.Tensor:
+#     """
+#     Calculate deltas between waypoints
+
+#     Args:
+#         waypoints (torch.Tensor): waypoints
+#     Returns:
+#         torch.Tensor: deltas
+#     """
+#     num_params = waypoints.shape[1]
+#     origin = torch.zeros(1, num_params)
+#     prev_waypoints = torch.concat((origin, waypoints[:-1]), axis=0)
+#     deltas = waypoints - prev_waypoints
+#     if num_params > 2:
+#         return calculate_sin_cos(deltas)
+#     return deltas
+
+
+# def calculate_sin_cos(waypoints: torch.Tensor) -> torch.Tensor:
+#     """
+#     Calculate sin and cos of the angle
+
+#     Args:
+#         waypoints (torch.Tensor): waypoints
+#     Returns:
+#         torch.Tensor: waypoints with sin and cos of the angle
+#     """
+#     assert waypoints.shape[1] == 3
+#     angle_repr = torch.zeros_like(waypoints[:, :2])
+#     angle_repr[:, 0] = torch.cos(waypoints[:, 2])
+#     angle_repr[:, 1] = torch.sin(waypoints[:, 2])
+#     return torch.concat((waypoints[:, :2], angle_repr), axis=1)
+
+
 # def transform_image(
 #     img: Image.Image, transform: transforms, image_resize_size: Tuple[int, int], aspect_ratio: float = IMAGE_ASPECT_RATIO
 # ):
