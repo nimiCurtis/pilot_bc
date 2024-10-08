@@ -47,7 +47,7 @@ training:
     min_decay: 0.0
     decay: 0.9999
 
-  goal_mask_prob: 0.5 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0.2 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
   modal_dropout_prob: 0.00 # 0 for no no dropout , 1 for dropout one modal anytime
@@ -74,15 +74,15 @@ data:
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
   distance:
-    min_dist_cat: 1
-    max_dist_cat: 10
+    min_dist_cat: 10
+    max_dist_cat: 60
   action:
-    min_dist_cat: 0
-    max_dist_cat: 12
+    min_dist_cat: 10
+    max_dist_cat: 50
 
   # action output params
-  pred_horizon: 8 
-  action_horizon: 5
+  pred_horizon: 64 
+  action_horizon: 32
   learn_angle: True
   # dataset specific parameters
   image_size: [96, 96] # width, height
