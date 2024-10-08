@@ -155,7 +155,7 @@ def calculate_sin_cos(waypoints):
         cos_angle = library.cos(angle)
         return library.concatenate((waypoints[:2], library.array([cos_angle, sin_angle])))
     
-    else:
+    elif waypoints.ndim == 2:
         assert waypoints.shape[1] == 3, "2D Waypoints should have shape [N, 3]."
         angle = waypoints[:, 2]
         sin_angle = library.sin(angle)
@@ -167,6 +167,17 @@ def calculate_sin_cos(waypoints):
         else:
             angle_repr = np.stack((cos_angle, sin_angle), axis=1)
             return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
+    elif waypoints.ndim == 3:
+        angle = waypoints[:, :, 2]
+        sin_angle = library.sin(angle)
+        cos_angle = library.cos(angle)
+
+        if library is torch:
+                    angle_repr = torch.stack((cos_angle, sin_angle), dim=2)
+                    return torch.cat((waypoints[:,:, :2], angle_repr), dim=2)
+        else:
+                    angle_repr = np.stack((cos_angle, sin_angle), axis=2)
+                    return np.concatenate((waypoints[:, :, :2], angle_repr), axis=2)
 
 def xy_to_d_cos_sin(xy):
     """
@@ -348,31 +359,64 @@ def get_action_stats(properties, waypoint_spacing):
 def clip_angles(angles):
     return np.arctan2(np.sin(angles), np.cos(angles))
 
-def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
+def deltas_to_actions(deltas, actions_pred_horizon, actions_execute_horizon, learn_angle=True):
+    # Ensure all tensors are on the same device as deltas
+    device = deltas.device
+    
     # diffusion output should be denoised action deltas
-    action_pred_deltas = deltas
+    actions_deltas = deltas.to(device)
     
     # augment outputs to match labels size-wise
-    action_pred_deltas = action_pred_deltas.reshape(
-        (action_pred_deltas.shape[0], pred_horizon, action_pred_deltas.shape[-1])
-    )
-
-    # Init action traj
-    action_pred = torch.zeros_like(action_pred_deltas)
-
-    ## Cumsum 
-    action_pred[:, :, :] = torch.cumsum(
-        action_pred_deltas[:, :, :], dim=1
-    )  # convert position and orientation deltas into waypoints in local coords
-
+    # actions_deltas = actions_deltas.reshape(
+    #     (actions_deltas.shape[0], actions_pred_horizon, actions_deltas.shape[-1])
+    # )
+    
     if learn_angle:
-        action_pred[:, :, 2:] = F.normalize(
-            action_pred_deltas[:, :, 2:].clone(), dim=-1
+        # Init action traj, ensure it's on the correct device
+        actions_execute = torch.zeros(actions_deltas.shape[0], actions_deltas.shape[1], 3, device=device)
+        
+        ## Cumsum 
+        actions_execute[:, :, :2] = torch.cumsum(
+            actions_deltas[:, :, :2], dim=1
+        )  # convert position and orientation deltas into waypoints in local coords
+
+        actions_cos_sin = F.normalize(
+            actions_deltas[:, :, 2:].clone(), dim=-1
         )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
 
-    action_pred = action_pred[:,:action_horizon,:]
+        # from cos_sin to yaw
+        actions_yaw = compute_angles_from_waypoints(actions_cos_sin)
+        # cumsum
+        actions_yaw = torch.cumsum(
+            actions_yaw, dim=1
+        )  # convert position and orientation deltas into waypoints in local coords
+        
+        actions_execute[:, :, 2] = actions_yaw
+        
+        # from yaw to cos_sin
+        actions_execute = calculate_sin_cos(actions_execute)
+
+    else:
+        ## Cumsum 
+        actions_execute = torch.cumsum(
+            actions_deltas[:, :, :2], dim=1
+        )  # convert position and orientation deltas into waypoints in local coords
+
+    # Slice the output to match the execution horizon
+    actions_execute = actions_execute[:, :actions_execute_horizon, :]
+
+    return actions_execute
+
     
-    return action_pred
+    
+    
+    
+
+
+    
+
+
+    
 
 def mask_target_context(lin_encoding, target_context_mask):
     # Expand target_context_mask to have the same number of features as lin_encoding
@@ -382,3 +426,22 @@ def mask_target_context(lin_encoding, target_context_mask):
     masked_lin_encoding = lin_encoding * (1 - target_context_mask_expanded)
     
     return masked_lin_encoding
+
+def compute_angles_from_waypoints(waypoints):
+    """
+    Compute angles from waypoints represented by [cos(angle), sin(angle)] values.
+
+    Args:
+        waypoints (torch.Tensor): A tensor of shape (N, 2) where each row contains [cos(angle), sin(angle)].
+
+    Returns:
+        torch.Tensor: A tensor of computed angles in radians, shape (N,).
+    """
+    # waypoints is a tensor of shape (N, 2) with [cos(angle), sin(angle)] values
+    cos_values = waypoints[:,:,0]  # Extract cos(angle)
+    sin_values = waypoints[:,:,1]  # Extract sin(angle)
+    
+    # Use atan2 to compute the angles
+    angles = torch.atan2(sin_values, cos_values)
+    
+    return angles

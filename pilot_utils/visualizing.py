@@ -279,9 +279,13 @@ class Visualizer:
             if context_waypoints.shape[1] == 4:
                 last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
                 yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
+                # last_yaw = np.arctan2(context_waypoints[-1][-2],context_waypoints[-1][-1])
+                # yaws = np.arctan2(pred_waypoints[:,-2],pred_waypoints[:,-1])
                 yaws = yaws + last_yaw
                 yaws = clip_angles(yaws)
                 
+                # gt_yaws = np.arctan2(label_waypoints[:,-2],label_waypoints[:,-1])
+
                 gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
                 gt_yaws = gt_yaws + last_yaw
                 gt_yaws = clip_angles(gt_yaws)

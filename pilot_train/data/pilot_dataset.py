@@ -237,12 +237,13 @@ class PilotDataset(Dataset):
             # Add samples to the samples index with their respective max goal distances
             for curr_time in range(begin_time, end_time):
                 max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)  # Keep max distance in range
-                samples_index.append((traj_name, properties, curr_time, max_goal_distance))
+                min_goal_distance = min(self.min_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)
+                samples_index.append((traj_name, properties, curr_time, max_goal_distance, min_goal_distance))
 
         # Return the constructed samples index and goals index
         return samples_index, goals_index
 
-    def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
+    def _sample_goal(self, trajectory_name, curr_time, max_goal_dist, min_goal_dist):
         """
         Samples a goal from the future in the same trajectory.
 
@@ -255,8 +256,10 @@ class PilotDataset(Dataset):
             tuple: The trajectory name, goal time, and a boolean indicating if the goal is negative.
         """
         
-        goal_offset = np.random.randint(1, (max_goal_dist/self.waypoint_spacing_action) + 1)
-        # if goal_offset == 0:
+        
+        ## TODO: check
+        goal_offset = np.random.randint((min_goal_dist/self.waypoint_spacing_action) + 1, (max_goal_dist/self.waypoint_spacing_action) + 1)
+        # if goal_offset == 0:waypoint_spacing_action
         #     trajectory_name, goal_time = self._sample_negative()
         #     return trajectory_name, goal_time, True
         # else:
@@ -496,10 +499,10 @@ class PilotDataset(Dataset):
         """
 
         # Retrieve the current trajectory name, properties, current time, and max goal distance from the index
-        f_curr, curr_data_properties, curr_time, max_goal_dist = self.index_to_data[i]
+        f_curr, curr_data_properties, curr_time, max_goal_dist, min_goal_dist = self.index_to_data[i]
 
         # Sample a goal from the current trajectory or a different trajectory
-        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
+        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist, min_goal_dist)
 
         # Initialize the context list
         context = []
