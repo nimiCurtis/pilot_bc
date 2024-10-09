@@ -59,6 +59,7 @@ class PilotDataset(Dataset):
         self.waypoint_spacing=robot_dataset_cfg.waypoint_spacing
         self.negative_mining=robot_dataset_cfg.negative_mining
         self.end_slack=robot_dataset_cfg.end_slack
+        self.start_from=robot_dataset_cfg.start_from
         self.goals_per_obs=robot_dataset_cfg.goals_per_obs
         self.data_config = robot_dataset_cfg
 
@@ -231,15 +232,19 @@ class PilotDataset(Dataset):
                 goals_index.append((traj_name, goal_time))
 
             # Define the range for current times based on context size, end slack, and prediction horizon
-            begin_time = self.context_size * self.waypoint_spacing
-            end_time = traj_len - self.end_slack - self.pred_horizon * self.waypoint_spacing
+            end_time = traj_len - self.end_slack - self.pred_horizon * self.waypoint_spacing_action
+            
+            begin_time = max(self.context_size * self.waypoint_spacing, self.start_from)
 
+            # assert begin_time < end_time, "Begin time must be less then end time"
             # Add samples to the samples index with their respective max goal distances
-            for curr_time in range(begin_time, end_time):
-                max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)  # Keep max distance in range
-                min_goal_distance = min(self.min_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)
-                samples_index.append((traj_name, properties, curr_time, max_goal_distance, min_goal_distance))
-
+            if(begin_time < end_time):
+                for curr_time in range(begin_time, end_time):
+                    max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)  # Keep max distance in range
+                    min_goal_distance = min(self.min_dist_cat * self.waypoint_spacing_action, traj_len - curr_time - 1)
+                    samples_index.append((traj_name, properties, curr_time, max_goal_distance, min_goal_distance))
+            else:
+                print(f"begin_time < end_time: {traj_name} | waypoints_spacing: {self.waypoint_spacing}")
         # Return the constructed samples index and goals index
         return samples_index, goals_index
 
@@ -574,38 +579,5 @@ class PilotDataset(Dataset):
             torch.as_tensor(goal_pos_to_target_mask, dtype=torch.float32),
         )
 
-    # def _get_properties(self,trajectory_name):
-    #     """
-    #     Retrieves the properties of the robot for the given trajectory.
 
-    #     Args:
-    #         trajectory_name (str): Name of the trajectory.
-
-    #     Returns:
-    #         dict: Robot properties.
-    #     """
-        
-    #     recording_config = get_recording_config(data_folder=self.data_folder,
-    #                                             trajectory_name=trajectory_name)
-    #     robot = recording_config['demonstrator']
-    #     frame_rate = recording_config['sync_rate']
-
-    #     robot_properties = get_robot_config(robot)
-    #     max_lin_vel = robot_properties[robot]['max_lin_vel']
-    #     min_lin_vel = robot_properties[robot]['min_lin_vel']
-    #     mean_lin_vel = robot_properties[robot]['mean_lin_vel']
-    #     std_lin_vel = robot_properties[robot]['std_lin_vel']
-
-
-    #     ang_vel_lim = robot_properties[robot]['max_ang_vel']
-
-    #     return {
-    #         'robot': robot,
-    #         'frame_rate': frame_rate,
-    #         'max_lin_vel': max_lin_vel,
-    #         'min_lin_vel': min_lin_vel,
-    #         'mean_lin_vel': mean_lin_vel,
-    #         'std_lin_vel': std_lin_vel,
-    #         'max_ang_vel': ang_vel_lim
-    #     }
 

@@ -18,7 +18,7 @@ import yaml
 import torch
 import torch.nn as nn
 from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angles
-from pilot_utils.data.data_utils import yaw_rotmat
+from pilot_utils.data.data_utils import yaw_rotmat, get_robot_data_properties
 
 
 
@@ -34,7 +34,7 @@ class Visualizer:
 
     def __init__(self,datasets_cfg, log_cfg=None, log_path = None) -> None:
         self.datasets_cfg = datasets_cfg
-        
+        self.data_folder = datasets_cfg.data_folder
         
         ## TODO: refactore
         if log_cfg is not None:
@@ -180,7 +180,6 @@ class Visualizer:
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
-            robot_config = get_robot_config(robot_name=dataset_name)
             goal_pos = batch_goals[i]
             pred_waypoints = batch_pred_waypoints[i]
             label_waypoints = batch_label_waypoints[i]
@@ -254,7 +253,9 @@ class Visualizer:
         traj_labels = ["prediction", "ground truth"]
         traj_colors=[CYAN, MAGENTA]
         
-        
+
+        properties = get_robot_config(dataset_name)
+
         if context_waypoints.shape[0] > 0:
             
             traj_colors.append(BLUE)
@@ -294,10 +295,12 @@ class Visualizer:
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
             
-            goal_pos = (goal_pos ).dot(rotmat) + last_pos
+            goal_pos = (goal_pos).dot(rotmat) + last_pos
             points[1] = goal_pos
-            pred_waypoints[:,:2] = (positions ).dot(rotmat) + last_pos
-            label_waypoints[:,:2] = (gt_positions ).dot(rotmat) + last_pos
+            pred_waypoints[:,:2] = (positions).dot(rotmat) + last_pos
+            label_waypoints[:,:2] = (gt_positions).dot(rotmat) + last_pos
+            
+            
 
             #shape
             if context_waypoints.shape[1] == 4:

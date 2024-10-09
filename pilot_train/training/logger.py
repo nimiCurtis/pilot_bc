@@ -95,7 +95,7 @@ class LoggingManager:
         Log data to wandb and print to console.
         """
         data_log = {}
-        
+        num_images_log = self.num_images_log
         if mode == 'train':
             freq_log = self.print_log_freq
         else:
@@ -129,4 +129,5 @@ class LoggingManager:
                 mode,
                 normalized,
                 epoch,
+                num_images_log
             )

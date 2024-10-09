@@ -1,0 +1,81 @@
+data_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking_static
+go2:
+  end_slack: 10
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 110
+  start_from: 5
+  stats:
+    max_ang_vel: 75.2899
+    max_lin_vel: 1.7949
+    mean_ang_vel: -0.0037
+    mean_lin_vel: 0.2368
+    min_ang_vel: -75.1415
+    min_lin_vel: -1.5218
+    std_ang_vel: 1.6187
+    std_lin_vel: 0.3209
+  test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/test/go2
+  time: 13.0609
+  train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/train/go2
+  waypoint_spacing: 1
+go2_wpt2:
+  end_slack: 5
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 232
+  start_from: 10
+  stats:
+    max_ang_vel: 75.2899
+    max_lin_vel: 2.6298
+    mean_ang_vel: 0.002
+    mean_lin_vel: 0.2862
+    min_ang_vel: -75.1727
+    min_lin_vel: -3.4832
+    std_ang_vel: 2.1887
+    std_lin_vel: 0.384
+  test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/test/go2
+  time: 35.4657
+  train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/train/go2
+  waypoint_spacing: 2
+max_depth: 9000
+nimrod:
+  end_slack: 5
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 110
+  start_from: 10
+  stats:
+    max_ang_vel: 43.94
+    max_lin_vel: 1.8613
+    mean_ang_vel: -0.0195
+    mean_lin_vel: 0.257
+    min_ang_vel: -43.9511
+    min_lin_vel: -1.6696
+    std_ang_vel: 1.5683
+    std_lin_vel: 0.3937
+  test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/test/nimrod
+  time: 21.0568
+  train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/train/nimrod
+  waypoint_spacing: 1
+nimrod_wpt2:
+  end_slack: 0
+  goals_per_obs: 1
+  negative_mining: false
+  number_of_bags: 232
+  stats:
+    max_ang_vel: 43.9604
+    max_lin_vel: 2.1859
+    mean_ang_vel: -0.0038
+    mean_lin_vel: 0.2881
+    min_ang_vel: -43.8814
+    min_lin_vel: -1.6696
+    std_ang_vel: 2.5702
+    std_lin_vel: 0.4031
+  test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/test/nimrod
+  time: 104.2855
+  train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/train/nimrod
+  waypoint_spacing: 2
+robots:
+- go2
+- nimrod
+- go2_wpt2

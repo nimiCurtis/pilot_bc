@@ -8,7 +8,7 @@ defaults:
   - linear_encoder: mlp       # mlp | tcn | ..
   - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: pilot_target_tracking # all | go_to_the_picture
+  - datasets: pilot_target_tracking_static # all | go_to_the_picture
   # - log: defaults
 
 
@@ -54,7 +54,7 @@ training:
 
   debug:
     # steps per epoch
-    max_train_steps: 2
+    max_train_steps: null
     max_val_steps: null
 
 
@@ -73,12 +73,13 @@ data:
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
+# Take the distances with relate to the horizon
   distance:
     min_dist_cat: 10
-    max_dist_cat: 60
+    max_dist_cat: 40
   action:
     min_dist_cat: 10
-    max_dist_cat: 50
+    max_dist_cat: 38
 
   # action output params
   pred_horizon: 32 
@@ -94,7 +95,7 @@ data:
 
 # logging config
 log:
-  desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ph${data.pred_horizon}"
+  desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ph${data.pred_horizon}_"
   # desc: batch_experiment_b${training.batch_size}_
   
   project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
@@ -105,10 +106,10 @@ log:
   ## =0 turns off
   
   ## TODO: handle with log and iamges 
-  num_images_log: 4
-  print_log_freq: 300 # in iterations
-  eval_log_freq: 5  # in iterations
-  image_log_freq: 3 # # in iterations
+  num_images_log: 16
+  print_log_freq: 100 # in iterations
+  eval_log_freq: 1  # in iterations
+  image_log_freq: 3 #  
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 10
