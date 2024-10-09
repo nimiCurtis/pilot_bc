@@ -27,7 +27,7 @@ from pilot_utils.utils import (
     to_numpy,
     # get_goal_mask_tensor,
     get_action_stats,
-    clip_angle,
+    clip_angles,
 )
 
 from pilot_utils.transforms import transform_images, ObservationTransform
@@ -428,8 +428,6 @@ class PilotAgent(nn.Module):
         
         
         if curr_rel_pos_to_target is not None:
-            # print(curr_rel_pos_to_target)
-            # goal_mask = get_goal_mask_tensor(curr_rel_pos_to_target).to(self.device)
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
             
             target_context_mask = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
@@ -569,7 +567,7 @@ def angle_error(predicted: np.ndarray, target: np.ndarray) -> float:
         float: The mean angular error.
     """
     
-    error_arr = [clip_angle(predicted[i]) - clip_angle(target[i]) for i in range(len(predicted))]
+    error_arr = [clip_angles(predicted[i]) - clip_angles(target[i]) for i in range(len(predicted))]
     
     return np.mean(error_arr)
 

@@ -3,7 +3,7 @@ import numpy as np
 import numpy.typing as npt
 from numba.experimental import jitclass
 from filterpy.kalman import KalmanFilter, UnscentedKalmanFilter
-from pilot_utils.utils import clip_angle
+from pilot_utils.utils import clip_angles
 from typing import List
 from scipy.spatial.transform import Rotation, Slerp
 import matplotlib.pyplot as plt

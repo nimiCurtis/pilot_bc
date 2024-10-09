@@ -58,22 +58,6 @@ def is_tensor(x):
     """
     return torch.is_tensor(x)
 
-def get_data_stats(data):
-    """
-    Computes the minimum and maximum values of the data.
-
-    Args:
-        data (np.ndarray): The data to compute stats for.
-
-    Returns:
-        dict: A dictionary containing the min and max values of the data.
-    """
-    data = data.reshape(-1, data.shape[-1])
-    stats = {
-        'min': np.min(data, axis=0),
-        'max': np.max(data, axis=0)
-    }
-    return stats
 
 def normalize_data(data, stats, norm_type="standard"):
     """
@@ -96,10 +80,6 @@ def normalize_data(data, stats, norm_type="standard"):
         # Standardize using mean and standard deviation
         ndata = (data - stats['mean']) / stats['std']
     return ndata
-
-
-
-
 
 
 def unnormalize_data(ndata, stats, norm_type="standard"):
@@ -175,7 +155,7 @@ def calculate_sin_cos(waypoints):
         cos_angle = library.cos(angle)
         return library.concatenate((waypoints[:2], library.array([cos_angle, sin_angle])))
     
-    else:
+    elif waypoints.ndim == 2:
         assert waypoints.shape[1] == 3, "2D Waypoints should have shape [N, 3]."
         angle = waypoints[:, 2]
         sin_angle = library.sin(angle)
@@ -187,6 +167,17 @@ def calculate_sin_cos(waypoints):
         else:
             angle_repr = np.stack((cos_angle, sin_angle), axis=1)
             return np.concatenate((waypoints[:, :2], angle_repr), axis=1)
+    elif waypoints.ndim == 3:
+        angle = waypoints[:, :, 2]
+        sin_angle = library.sin(angle)
+        cos_angle = library.cos(angle)
+
+        if library is torch:
+                    angle_repr = torch.stack((cos_angle, sin_angle), dim=2)
+                    return torch.cat((waypoints[:,:, :2], angle_repr), dim=2)
+        else:
+                    angle_repr = np.stack((cos_angle, sin_angle), axis=2)
+                    return np.concatenate((waypoints[:, :, :2], angle_repr), axis=2)
 
 def xy_to_d_cos_sin(xy):
     """
@@ -345,29 +336,32 @@ def get_action_stats(properties, waypoint_spacing):
                 'yaw': {'max': (ang_vel_lim /frame_rate)*waypoint_spacing,
                         'min': -(ang_vel_lim /frame_rate)*waypoint_spacing }}
 
-def clip_angle(theta: float) -> float:
-    """
-    Clips an angle to the range [-π, π].
 
-    Args:
-        theta (float): Input angle in radians.
+# def clip_angle(theta: float) -> float:
+#     """
+#     Clips an angle to the range [-π, π].
 
-    Returns:
-        float: Clipped angle within the range [-π, π].
-    """
-    theta %= 2 * np.pi
-    if -np.pi < theta < np.pi:
-        return theta
-    return theta - 2 * np.pi
+#     Args:
+#         theta (float): Input angle in radians.
+
+#     Returns:
+#         float: Clipped angle within the range [-π, π].
+#     """
+#     theta %= 2 * np.pi
+#     if -np.pi < theta < np.pi:
+#         return theta
+#     return theta - 2 * np.pi
+
+# def clip_angles(angles):
+#     # Use modulo operation to keep the angles in the range [-pi, pi]
+#     return (angles + np.pi) % (2 * np.pi) - np.pi
+
+def clip_angles(angles):
+    return np.arctan2(np.sin(angles), np.cos(angles))
 
 def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
-    # diffusion output should be denoised action deltas
+    # diffusion output should be denoised action deltas of x , y and cos , sin with relate to the current state
     action_pred_deltas = deltas
-    
-    # augment outputs to match labels size-wise
-    action_pred_deltas = action_pred_deltas.reshape(
-        (action_pred_deltas.shape[0], pred_horizon, action_pred_deltas.shape[-1])
-    )
 
     # Init action traj
     action_pred = torch.zeros_like(action_pred_deltas)
@@ -386,6 +380,17 @@ def deltas_to_actions(deltas, pred_horizon, action_horizon, learn_angle=True):
     
     return action_pred
 
+    
+    
+    
+    
+
+
+    
+
+
+    
+
 def mask_target_context(lin_encoding, target_context_mask):
     # Expand target_context_mask to have the same number of features as lin_encoding
     target_context_mask_expanded = target_context_mask.unsqueeze(-1).expand_as(lin_encoding)
@@ -394,3 +399,22 @@ def mask_target_context(lin_encoding, target_context_mask):
     masked_lin_encoding = lin_encoding * (1 - target_context_mask_expanded)
     
     return masked_lin_encoding
+
+def compute_angles_from_waypoints(waypoints):
+    """
+    Compute angles from waypoints represented by [cos(angle), sin(angle)] values.
+
+    Args:
+        waypoints (torch.Tensor): A tensor of shape (N, 2) where each row contains [cos(angle), sin(angle)].
+
+    Returns:
+        torch.Tensor: A tensor of computed angles in radians, shape (N,).
+    """
+    # waypoints is a tensor of shape (N, 2) with [cos(angle), sin(angle)] values
+    cos_values = waypoints[:,:,0]  # Extract cos(angle)
+    sin_values = waypoints[:,:,1]  # Extract sin(angle)
+    
+    # Use atan2 to compute the angles
+    angles = torch.atan2(sin_values, cos_values)
+    
+    return angles

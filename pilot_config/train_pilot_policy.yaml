@@ -54,7 +54,7 @@ training:
 
   debug:
     # steps per epoch
-    max_train_steps: null
+    max_train_steps: 2
     max_val_steps: null
 
 
@@ -68,8 +68,8 @@ data:
   # context
   context_type: temporal
   target_observation_enable: True
-  context_size: 5
-  action_context_size: 3 # modify to 0 for not using actions history
+  context_size: 2
+  action_context_size: 2 # modify to 0 for not using actions history
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
@@ -81,8 +81,8 @@ data:
     max_dist_cat: 50
 
   # action output params
-  pred_horizon: 64 
-  action_horizon: 32
+  pred_horizon: 32 
+  action_horizon: 16
   learn_angle: True
   # dataset specific parameters
   image_size: [96, 96] # width, height

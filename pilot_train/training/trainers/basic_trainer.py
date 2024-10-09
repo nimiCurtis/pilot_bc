@@ -95,6 +95,8 @@ class BasicTrainer:
         # Training and Model config
         self.current_epoch=training_cfg.current_epoch
         self.epochs=training_cfg.epochs
+        self.train_batch_size = training_cfg.batch_size
+        self.eval_batch_size = training_cfg.eval_batch_size
 
         # Data config
         self.goal_condition = data_cfg.goal_condition

@@ -17,13 +17,9 @@ import wandb
 import yaml
 import torch
 import torch.nn as nn
-from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angle
+from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angles
 from pilot_utils.data.data_utils import yaw_rotmat
 
-
-# # load data_config.yaml
-# with open(os.path.join(os.path.dirname(__file__), "../data/data_config.yaml"), "r") as f:
-#     data_config = yaml.safe_load(f)
 
 
 VIZ_IMAGE_SIZE = (640, 480)
@@ -279,12 +275,16 @@ class Visualizer:
             if context_waypoints.shape[1] == 4:
                 last_yaw = np.arctan2(context_waypoints[-1][-1],context_waypoints[-1][-2])
                 yaws = np.arctan2(pred_waypoints[:,-1],pred_waypoints[:,-2])
+                # last_yaw = np.arctan2(context_waypoints[-1][-2],context_waypoints[-1][-1])
+                # yaws = np.arctan2(pred_waypoints[:,-2],pred_waypoints[:,-1])
                 yaws = yaws + last_yaw
-                yaws = np.array([clip_angle(yaw) for yaw in yaws])
+                yaws = clip_angles(yaws)
                 
+                # gt_yaws = np.arctan2(label_waypoints[:,-2],label_waypoints[:,-1])
+
                 gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
                 gt_yaws = gt_yaws + last_yaw
-                gt_yaws = np.array([clip_angle(yaw) for yaw in gt_yaws])
+                gt_yaws = clip_angles(gt_yaws)
             
             
                 rotmat = yaw_rotmat(last_yaw)
@@ -294,10 +294,10 @@ class Visualizer:
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
             
-            goal_pos = (goal_pos + last_pos).dot(rotmat)
+            goal_pos = (goal_pos ).dot(rotmat) + last_pos
             points[1] = goal_pos
-            pred_waypoints[:,:2] = (positions + last_pos).dot(rotmat)
-            label_waypoints[:,:2] = (gt_positions + last_pos).dot(rotmat)
+            pred_waypoints[:,:2] = (positions ).dot(rotmat) + last_pos
+            label_waypoints[:,:2] = (gt_positions ).dot(rotmat) + last_pos
 
             #shape
             if context_waypoints.shape[1] == 4:
@@ -579,7 +579,7 @@ def plot_trajs_and_points(
     for i, traj in enumerate(list_trajs):
         if traj_labels is None:
             ax.plot(
-                traj[:, 1],
+                -1*traj[:, 1],
                 traj[:, 0],
                 color=traj_colors[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
@@ -587,7 +587,7 @@ def plot_trajs_and_points(
             )
         else:
             ax.plot(
-                traj[:, 1],
+                -1*traj[:, 1],
                 traj[:, 0],
                 color=traj_colors[i],
                 label=traj_labels[i],
@@ -597,10 +597,10 @@ def plot_trajs_and_points(
         if traj.shape[1] > 2 and quiver_freq > 0:  # traj data also includes yaw of the robot
             bearings = gen_bearings_from_waypoints(traj)
             ax.quiver(
-                traj[::quiver_freq, 1],
+                -1*traj[::quiver_freq, 1],
                 traj[::quiver_freq, 0],
                 -1*bearings[::quiver_freq, 1], ## for right hand system
-                bearings[::quiver_freq, 0],
+                1*bearings[::quiver_freq, 0],
                 color=traj_colors[i] * 0.5,
                 scale=1.0,
             )
@@ -617,7 +617,7 @@ def plot_trajs_and_points(
         else:
             if point_labels[i] == "goal" and not(action_mask):
                 ax.plot(
-                    pt[1],
+                    -1*pt[1],
                     pt[0],
                     color=point_colors[i],
                     alpha=point_alphas[i] if point_alphas is not None else 1.0,
@@ -628,7 +628,7 @@ def plot_trajs_and_points(
                 )
             else:
                 ax.plot(
-                    pt[1],
+                    -1*pt[1],
                     pt[0],
                     color=point_colors[i],
                     alpha=point_alphas[i] if point_alphas is not None else 1.0,
