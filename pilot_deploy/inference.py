@@ -423,6 +423,7 @@ class PilotAgent(nn.Module):
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
         
         if prev_actions is not None:
+            ## take deltas
             normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle)
             normalized_action_context_queue = normalized_action_context_queue.unsqueeze(0).to(self.device)
         

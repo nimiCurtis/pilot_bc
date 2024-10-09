@@ -298,10 +298,10 @@ class Visualizer:
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
             
-            goal_pos = (goal_pos + last_pos).dot(rotmat)
+            goal_pos = (goal_pos ).dot(rotmat) + last_pos
             points[1] = goal_pos
-            pred_waypoints[:,:2] = (positions + last_pos).dot(rotmat)
-            label_waypoints[:,:2] = (gt_positions + last_pos).dot(rotmat)
+            pred_waypoints[:,:2] = (positions ).dot(rotmat) + last_pos
+            label_waypoints[:,:2] = (gt_positions ).dot(rotmat) + last_pos
 
             #shape
             if context_waypoints.shape[1] == 4:
@@ -583,7 +583,7 @@ def plot_trajs_and_points(
     for i, traj in enumerate(list_trajs):
         if traj_labels is None:
             ax.plot(
-                traj[:, 1],
+                -1*traj[:, 1],
                 traj[:, 0],
                 color=traj_colors[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
@@ -591,7 +591,7 @@ def plot_trajs_and_points(
             )
         else:
             ax.plot(
-                traj[:, 1],
+                -1*traj[:, 1],
                 traj[:, 0],
                 color=traj_colors[i],
                 label=traj_labels[i],
@@ -601,10 +601,10 @@ def plot_trajs_and_points(
         if traj.shape[1] > 2 and quiver_freq > 0:  # traj data also includes yaw of the robot
             bearings = gen_bearings_from_waypoints(traj)
             ax.quiver(
-                traj[::quiver_freq, 1],
+                -1*traj[::quiver_freq, 1],
                 traj[::quiver_freq, 0],
                 -1*bearings[::quiver_freq, 1], ## for right hand system
-                bearings[::quiver_freq, 0],
+                1*bearings[::quiver_freq, 0],
                 color=traj_colors[i] * 0.5,
                 scale=1.0,
             )
@@ -621,7 +621,7 @@ def plot_trajs_and_points(
         else:
             if point_labels[i] == "goal" and not(action_mask):
                 ax.plot(
-                    pt[1],
+                    -1*pt[1],
                     pt[0],
                     color=point_colors[i],
                     alpha=point_alphas[i] if point_alphas is not None else 1.0,
@@ -632,7 +632,7 @@ def plot_trajs_and_points(
                 )
             else:
                 ax.plot(
-                    pt[1],
+                    -1*pt[1],
                     pt[0],
                     color=point_colors[i],
                     alpha=point_alphas[i] if point_alphas is not None else 1.0,

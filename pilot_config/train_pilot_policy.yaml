@@ -6,7 +6,7 @@ hydra:
 defaults:
   - _self_
   - linear_encoder: mlp       # mlp | tcn | ..
-  - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
+  - vision_encoder: efficientnet # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking # all | go_to_the_picture
   # - log: defaults
@@ -20,7 +20,7 @@ training:
   # goal_condition: True
   batch_size: 20
   eval_batch_size: 32
-  epochs: 50
+  epochs: 100
   current_epoch: 0
   gpu_ids: [0]
   num_workers: 12
@@ -68,8 +68,8 @@ data:
   # context
   context_type: temporal
   target_observation_enable: True
-  context_size: 5
-  action_context_size: 3 # modify to 0 for not using actions history
+  context_size: 2
+  action_context_size: 2 # modify to 0 for not using actions history
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
@@ -81,8 +81,8 @@ data:
     max_dist_cat: 60
 
   # action output params
-  pred_horizon: 64 
-  action_horizon: 32
+  pred_horizon: 32 
+  action_horizon: 16
   learn_angle: True
   # dataset specific parameters
   image_size: [96, 96] # width, height
@@ -108,7 +108,7 @@ log:
   num_images_log: 4
   print_log_freq: 300 # in iterations
   eval_log_freq: 5  # in iterations
-  image_log_freq: 5 # # in iterations
+  image_log_freq: 3 # # in iterations
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 10
