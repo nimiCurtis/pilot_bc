@@ -198,17 +198,17 @@ Now, all that remains is to deploy the agent by using the [waypoints_follower_co
 Static experiments:
 
 <div style="display: flex; justify-content: center;">
-  <img src="web/exp1.gif" alt="GIF 1" width="200px" style="margin-right: 10px;" />
-  <img src="web/exp2.gif" alt="GIF 2" width="200px" style="margin-right: 10px;" />
-  <img src="web/exp3.gif" alt="GIF 3" width="200px" />
+  <img src="web/exp1.gif" alt="GIF 1" width="100px" style="margin-right: 10px;" />
+  <img src="web/exp2.gif" alt="GIF 2" width="100px" style="margin-right: 10px;" />
+  <img src="web/exp3.gif" alt="GIF 3" width="100px" />
 </div>
 
 Dynamic experiments:
 
 <div style="display: flex; justify-content: center;">
-  <img src="web/exp5.gif" alt="GIF 5" width="200px" style="margin-right: 10px;" />
-  <img src="web/exp4.gif" alt="GIF 4" width="200px" style="margin-right: 10px;" />
-  <img src="web/exp7.gif" alt="GIF 7" width="200px" />
+  <img src="web/exp5.gif" alt="GIF 5" width="100px" style="margin-right: 10px;" />
+  <img src="web/exp4.gif" alt="GIF 4" width="100px" style="margin-right: 10px;" />
+  <img src="web/exp7.gif" alt="GIF 7" width="100px" />
 </div>
 
 
