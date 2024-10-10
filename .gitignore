@@ -22,7 +22,7 @@ logs
 *.jpg
 *.pth
 *.mp4
-*.gif
+# *.gif
 *.pth
 *.lmdb
 *.mdb
