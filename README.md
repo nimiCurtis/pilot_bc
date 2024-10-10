@@ -38,7 +38,8 @@ by non-experts.
 
 
 <p align="center">
-  <img src="web/Pilot_project.gif" alt="animated" />
+  <img src="web/Pilot_project.gif" alt="animated" width="800px" 
+  height="400px"/>
 </p>
 
 This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
