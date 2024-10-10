@@ -181,19 +181,46 @@ log:
 
 #### Deploy
 
+The deployment stage is organized under the `pilot_deploy` directory. 
+
+First, create a `checkpoints` folder and a subfolder for your pilot agent:
+
+```bash
+cd pilot_deploy && mkdir checkpoints
+cd checkpoints && mkdir <agent name>
+```
+
+Once you have a trained agent, copy (from the logs dir) its `config.yaml` file and model weights to `pilot_deploy/checkpoints/<agent name>`.
+
+
+Now, all that remains is to deploy the agent by using the [waypoints_follower_control](https://github.com/nimiCurtis/waypoints_follower_control) ROS package and enjoy some rollouts.
+
+Static experiments:
+
+<div style="display: flex; justify-content: center;">
+  <img src="web/exp1.gif" alt="GIF 1" width="200px" style="margin-right: 10px;" />
+  <img src="web/exp2.gif" alt="GIF 2" width="200px" style="margin-right: 10px;" />
+  <img src="web/exp3.gif" alt="GIF 3" width="200px" />
+</div>
+
+Dynamic experiments:
+
+<div style="display: flex; justify-content: center;">
+  <img src="web/exp5.gif" alt="GIF 5" width="200px" style="margin-right: 10px;" />
+  <img src="web/exp4.gif" alt="GIF 4" width="200px" style="margin-right: 10px;" />
+  <img src="web/exp7.gif" alt="GIF 7" width="200px" />
+</div>
+
+
 ---
 
 
 ## License
 
+This repository is licensed under the Apache [License](/LICENSE). Feel free to use, modify, and distribute the code as per the terms of this license.
+
 
 ---
-
-
----
-
-
 
 [↑ Return](#Top)
 
----
