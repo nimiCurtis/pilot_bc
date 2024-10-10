@@ -35,7 +35,11 @@ robot to track a subject and to navigate
 around obstacles. This approach has the potential to simplifies and scale data collection and facilitates deployment in new environments (no need in mapping process) and robots (data is robot agnostic),
 by non-experts.
 
-![](web/Pilot_project.gif)
+
+
+<p align="center">
+  <img src="web/Pilot_project.gif" alt="animated" />
+</p>
 
 This is research code, expect that it changes often and any fitness for a particular purpose is disclaimed.
 
