@@ -150,12 +150,33 @@ Once the dataset is prepared,split and calculate stats by:
 python pilot_train/data/data_split_and_stats.py -r <dataset folder name> -i <dataset folder path>
 ```
 
-Stats will be saved at ```pilot_config``` relevant files which will be used in trianing phase.
-
+The stats will be saved in the relevant files located in the `pilot_config` directory, which will be used during the training phase.
 
 #### Train
 
+First, configure the main training configuration file at `pilot_config/train_pilot_policy.yaml` to match your training requirements (e.g., models, hyperparameters, etc.).
 
+**Note:** Ensure a few absolute paths are updated accordingly.
+
+Configuration files in this project are managed using the hydra lib, so it's recommended to familiarize yourself with hydra for efficient configuration management.
+
+
+Once config is prepared, train a pilot agent with:
+
+```bash
+pyothon pilot_train/train.py
+```
+
+**Note:** All configs, logs, and model weights are saved in a folder within ```pilot_train/logs```, with the folder name generated from the configuration file as follows:
+
+```yaml
+... (some params)
+log:
+  ...
+  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
+  ...
+
+```
 
 
 #### Deploy
