@@ -396,7 +396,45 @@ class RealtimeTraj:
         )
 
 
+class SubgoalsGen(object):
+    def __init__(self, threshold: float) -> None:
+        """
+        Initializes the SubgoalsGen class with a threshold.
+        
+        Args:
+            threshold (float): The minimum distance to maintain between the current position 
+                               and the subgoal.
+        """
+        self.threshold = threshold
 
+    def sample_subgoal(self, curr_rel_pos: np.ndarray, goal_rel_pos: np.ndarray) -> np.ndarray:
+        """
+        Samples a subgoal based on the current relative position and goal relative position.
+        
+        If the distance between the current position and the goal is less than the threshold,
+        the method returns the goal position. Otherwise, it returns a subgoal located 
+        along the line connecting the current position and the goal, but far enough from 
+        the current position by the threshold.
+
+        Args:
+            curr_rel_pos (np.ndarray): The current relative position [x, y] of the robot or target.
+            goal_rel_pos (np.ndarray): The goal relative position [x, y] to be achieved.
+            
+        Returns:
+            np.ndarray: The subgoal position [x, y].
+        """
+        # Calculate the Euclidean distance between the current position and the goal position
+        distance_to_goal = np.linalg.norm(goal_rel_pos - curr_rel_pos)
+        
+        # If the distance is less than the threshold, return the goal position
+        if distance_to_goal <= self.threshold:
+            return goal_rel_pos
+        
+        # Otherwise, calculate a subgoal along the line towards the goal, at the threshold distance
+        direction_vector = (goal_rel_pos - curr_rel_pos) / distance_to_goal
+        subgoal_pos = curr_rel_pos + direction_vector * self.threshold
+        
+        return subgoal_pos
 
 
 
@@ -410,63 +448,77 @@ if __name__ == "__main__":
     
     # Example usage
 
+    test_traj = False
     # Instantiate the RealtimeTraj class
-    traj = RealtimeTraj()
+    
+    if test_traj:
+        traj = RealtimeTraj()
 
-    # Example: Initial trajectory data (simulating data at t=0 to t=2 seconds)
-    translations1 = np.array([[0.0, 0.0, 0.0], [0.6, 0.5, 0.5], [1.8, 1.0, 1.0], [1.5, 1.5, 1.5], [2.0, 2.0, 2.0]])
-    quaternions_xyzw1 = np.array([
-        [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
-        [0.707, 0.707, 0.0, 0.0],  # Quaternion representing 90 degrees rotation around X-axis
-        [0.707, 0.0, 0.707, 0.0],  # Quaternion representing 90 degrees rotation around Y-axis
-        [0.5, 0.5, 0.5, 0.5],  # Quaternion representing 90 degrees rotation around an arbitrary axis
-        [0.0, 0.0, 0.0, 1.0],  # Quaternion representing 180 degrees rotation around Z-axis
-    ])
-    timestamps1 = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
+        # Example: Initial trajectory data (simulating data at t=0 to t=2 seconds)
+        translations1 = np.array([[0.0, 0.0, 0.0], [0.6, 0.5, 0.5], [1.8, 1.0, 1.0], [1.5, 1.5, 1.5], [2.0, 2.0, 2.0]])
+        quaternions_xyzw1 = np.array([
+            [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
+            [0.707, 0.707, 0.0, 0.0],  # Quaternion representing 90 degrees rotation around X-axis
+            [0.707, 0.0, 0.707, 0.0],  # Quaternion representing 90 degrees rotation around Y-axis
+            [0.5, 0.5, 0.5, 0.5],  # Quaternion representing 90 degrees rotation around an arbitrary axis
+            [0.0, 0.0, 0.0, 1.0],  # Quaternion representing 180 degrees rotation around Z-axis
+        ])
+        timestamps1 = np.array([0.0, 0.5, 1.0, 1.5, 2.0])
 
-    # Update the trajectory with the initial data
-    traj.update(translations=translations1, quaternions_xyzw=quaternions_xyzw1, timestamps=timestamps1, current_timestamp=2.0)
+        # Update the trajectory with the initial data
+        traj.update(translations=translations1, quaternions_xyzw=quaternions_xyzw1, timestamps=timestamps1, current_timestamp=2.0)
 
-    # New trajectory data (simulating data at t=2 to t=3 seconds)
-    translations2 = np.array([[1.0, 2.0, 2.0], [2.5, 2.5, 2.5], [3.0, 3.0, 3.0]])
-    quaternions_xyzw2 = np.array([
-        [0.0, 0.0, 0.0, 1.0],  # Continuation of 180 degrees rotation around Z-axis
-        [0.707, 0.0, 0.707, 0.0],  # Another 90 degrees rotation around Y-axis
-        [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
-    ])
-    timestamps2 = np.array([1.0, 2.0, 3.0])
+        # New trajectory data (simulating data at t=2 to t=3 seconds)
+        translations2 = np.array([[1.0, 2.0, 2.0], [2.5, 2.5, 2.5], [3.0, 3.0, 3.0]])
+        quaternions_xyzw2 = np.array([
+            [0.0, 0.0, 0.0, 1.0],  # Continuation of 180 degrees rotation around Z-axis
+            [0.707, 0.0, 0.707, 0.0],  # Another 90 degrees rotation around Y-axis
+            [1.0, 0.0, 0.0, 0.0],  # Quaternion representing no rotation
+        ])
+        timestamps2 = np.array([1.0, 2.0, 3.0])
 
-    # Update the trajectory with the new data, enabling smoothing
-    traj.update(
-        translations=translations2,
-        quaternions_xyzw=quaternions_xyzw2,
-        timestamps=timestamps2,
-        current_timestamp=1.1,
-        smoothen_time=1.5  # Smooth transition over 1 second
-    )
+        # Update the trajectory with the new data, enabling smoothing
+        traj.update(
+            translations=translations2,
+            quaternions_xyzw=quaternions_xyzw2,
+            timestamps=timestamps2,
+            current_timestamp=1.1,
+            smoothen_time=1.5  # Smooth transition over 1 second
+        )
 
-    plt.plot(timestamps1, translations1[:,0],'x-', label="Translation 1")
-    plt.plot(timestamps2, translations2[:,0],'x-', label="Translation 2")
+        plt.plot(timestamps1, translations1[:,0],'x-', label="Translation 1")
+        plt.plot(timestamps2, translations2[:,0],'x-', label="Translation 2")
 
-    # Plot the updated trajectory
-    plt.plot(traj.timestamps, traj.translations[:, 0], 'x-', label="Updated X Translation")
+        # Plot the updated trajectory
+        plt.plot(traj.timestamps, traj.translations[:, 0], 'x-', label="Updated X Translation")
 
-    # Interpolate the trajectory at specific timestamps (e.g., for t=0.1, 0.9, 2.5 seconds)
-    interpolated_timestamps = [0.1, 0.9, 2.5]
-    interpolated_translations, _= traj.interpolate_traj(interpolated_timestamps)
+        # Interpolate the trajectory at specific timestamps (e.g., for t=0.1, 0.9, 2.5 seconds)
+        interpolated_timestamps = [0.1, 0.9, 2.5]
+        interpolated_translations, _= traj.interpolate_traj(interpolated_timestamps)
 
-    # Print interpolated X translations
-    for t, x in zip(interpolated_timestamps, interpolated_translations[:, 0]):
-        print(f"Interpolated X Translation at t={t}: {x}")
+        # Print interpolated X translations
+        for t, x in zip(interpolated_timestamps, interpolated_translations[:, 0]):
+            print(f"Interpolated X Translation at t={t}: {x}")
 
-    # Plot the interpolated points
-    plt.plot(interpolated_timestamps, interpolated_translations[:, 0], 's', label="Interpolated X Translation")
+        # Plot the interpolated points
+        plt.plot(interpolated_timestamps, interpolated_translations[:, 0], 's', label="Interpolated X Translation")
 
-    # Set plot labels and legend
-    plt.xlabel("Time (s)")
-    plt.ylabel("X Translation")
-    plt.title("X Translation Over Time with Updates and Interpolations")
-    plt.legend()
+        # Set plot labels and legend
+        plt.xlabel("Time (s)")
+        plt.ylabel("X Translation")
+        plt.title("X Translation Over Time with Updates and Interpolations")
+        plt.legend()
 
-    # Display the plot
-    plt.show()
+        # Display the plot
+        plt.show()
+    
+    test_subgoalgen = True
+    
+    if test_subgoalgen:
+        generator = SubgoalsGen(threshold=1.0)
+    
+        curr_pos = np.array([0.0, 0.0])
+        goal_pos = np.array([3.0, 4.0])  # 5 units away from curr_pos
+        
+        subgoal = generator.sample_subgoal(curr_pos, goal_pos)
+        print(f"Subgoal: {subgoal}")
