@@ -11,12 +11,12 @@ prettytable==3.10.0
 py3rosmsgs==1.18.2
 PyYAML==6.0.1
 setuptools==45.2.0
-# torch==2.1.0
-# torchvision==0.16.0
+torch==2.1.0
+torchvision==0.16.0
 tqdm==4.64.1
 warmup_scheduler==0.3
 wandb==0.14.0
 diffusers==0.29.0
-# vit-pytorch==1.7.0
+vit-pytorch==1.7.0
 einops==0.8.0
 filterpy==1.4.5

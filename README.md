@@ -36,13 +36,30 @@ around obstacles. This approach has the potential to simplifies and scale data c
 by non-experts.
 
 
-
+**&rarr; Collect data by hand in your environment**
 <p align="center">
-  <img src="web/Pilot_project.gif" alt="animated"
-  width="800px"
-  height="400px"
-
+  <img src="web/data_collect.gif" alt="animated"
+  width="400px"
+  height="250px"
 </p>
+
+
+
+
+**&rarr; Clone behavior using Diffusion Policy**
+<p align="center">
+  <img src="web/arch.gif" alt="animated"
+  width="400px"
+  height="230px"
+</p>
+
+**&rarr; Deploy on your robot**
+<p align="center">
+  <img src="web/exp8.gif" alt="animated"
+  width="200px"
+  height="380px"
+</p>
+
 
 
 
@@ -196,21 +213,23 @@ Once you have a trained agent, copy (from the logs dir) its `config.yaml` file a
 Now, all that remains is to deploy the agent by using the [waypoints_follower_control](https://github.com/nimiCurtis/waypoints_follower_control) ROS package and enjoy some rollouts.
 
 Static experiments:
-
+<p align="center">
 <div style="display: flex; justify-content: center;">
   <img src="web/exp1.gif" alt="GIF 1" width="100px" style="margin-right: 10px;" />
   <img src="web/exp2.gif" alt="GIF 2" width="100px" style="margin-right: 10px;" />
   <img src="web/exp3.gif" alt="GIF 3" width="100px" />
 </div>
+</p>
 
 Dynamic experiments:
 
+<p align="center">
 <div style="display: flex; justify-content: center;">
   <img src="web/exp5.gif" alt="GIF 5" width="100px" style="margin-right: 10px;" />
   <img src="web/exp4.gif" alt="GIF 4" width="100px" style="margin-right: 10px;" />
   <img src="web/exp7.gif" alt="GIF 7" width="100px" />
 </div>
-
+</p>
 
 ---
 
