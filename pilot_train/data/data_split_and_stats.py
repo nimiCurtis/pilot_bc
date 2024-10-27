@@ -58,15 +58,17 @@ def main(args: argparse.Namespace):
             folders_robots_mapping[robot_name].append(folder_name)
 
     # For each robot in the dataset create dir and throw the pathes to the traj_names in the folders of the robot
-    robot_demo_time = 0
-    robot_number_of_bags = 0
+
     for robot_name in folders_robots_mapping:
         robot_folder_names = folders_robots_mapping.get(robot_name)
 
-        if len(robot_folder_names)>0:
+        robot_demo_time = 0
+        robot_number_of_bags = len(robot_folder_names)
+    
+        if robot_number_of_bags>0:
             # Randomly shuffle the names of the folders
             random.shuffle(robot_folder_names)
-            robot_number_of_bags = len(folder_names)
+
             # Split the names of the folders into train and test sets or use the same folder if only one exists
             if len(folder_names) == 1:
                 train_folder_names = folder_names
@@ -96,7 +98,6 @@ def main(args: argparse.Namespace):
                 for folder_name in test_folder_names:
                     f.write(folder_name + "\n")
         
-            # TODO:
             # Take dataset stats and push to dataset config 
             max_lin_vel = []
             min_lin_vel = []
@@ -115,10 +116,11 @@ def main(args: argparse.Namespace):
                     metadata =  json.load(file)
                     stats = metadata["stats"]
                     ## Think about combine the dy velocity
-                    max_lin_vel.append(stats["dx"]["max"])
-                    min_lin_vel.append(stats["dx"]["min"])
-                    mean_lin_vel.append(stats["dx"]["mean"])
-                    std_lin_vel.append(stats["dx"]["std"])
+                    ## TODO: add list of x and y
+                    max_lin_vel.append([stats["dx"]["max"],stats["dy"]["max"]])
+                    min_lin_vel.append([stats["dx"]["min"],stats["dy"]["min"]])
+                    mean_lin_vel.append([stats["dx"]["mean"],stats["dy"]["mean"]])
+                    std_lin_vel.append([stats["dx"]["std"],stats["dy"]["std"]])
 
                     max_ang_vel.append(stats["dyaw"]["max"])
                     min_ang_vel.append(stats["dyaw"]["min"])
@@ -128,10 +130,10 @@ def main(args: argparse.Namespace):
                     # accumulate time
                     time.append(metadata["time"]) # in seconds
 
-            tot_max_lin_vel = np.max(max_lin_vel)
-            tot_min_lin_vel = np.min(min_lin_vel)
-            tot_mean_lin_vel = np.mean(mean_lin_vel)
-            tot_std_lin_vel = np.mean(std_lin_vel)
+            tot_max_lin_vel = np.max(max_lin_vel,axis=0)
+            tot_min_lin_vel = np.min(min_lin_vel,axis=0)
+            tot_mean_lin_vel = np.mean(mean_lin_vel,axis=0)
+            tot_std_lin_vel = np.mean(std_lin_vel,axis=0)
             
             tot_max_ang_vel = np.max(max_ang_vel)
             tot_min_ang_vel = np.min(min_ang_vel)
@@ -140,10 +142,10 @@ def main(args: argparse.Namespace):
             
             robot_demo_time = np.sum(time) / 60 # in minutes
             dataset_config = recursive_update(d=dataset_config, u = {robot_name:   
-                                            {"stats" : {"max_lin_vel": float(np.round(tot_max_lin_vel,4)),
-                                            "min_lin_vel": float(np.round(tot_min_lin_vel,4)),
-                                            "mean_lin_vel": float(np.round(tot_mean_lin_vel,4)),
-                                            "std_lin_vel": float(np.round(tot_std_lin_vel,4)),
+                                            {"stats" : {"max_lin_vel": [float(x) for x in np.round(tot_max_lin_vel,4)],
+                                            "min_lin_vel": [float(x) for x in np.round(tot_min_lin_vel,4)],
+                                            "mean_lin_vel": [float(x) for x in np.round(tot_mean_lin_vel,4)],
+                                            "std_lin_vel": [float(x) for x in np.round(tot_std_lin_vel,4)],
                                             
                                             "max_ang_vel": float(np.round(tot_max_ang_vel,4)),
                                             "min_ang_vel": float(np.round(tot_min_ang_vel,4)),
@@ -153,7 +155,7 @@ def main(args: argparse.Namespace):
                                             "time": float(np.round(robot_demo_time,4)),
                                             "number_of_bags": robot_number_of_bags,
                                             }})
-            
+
             set_dataset_config(dataset_name=args.dataset_name, config=dataset_config)
             print(f"Update {args.dataset_name} : {robot_name} stats")
 
@@ -162,11 +164,11 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        "--data-dir", "-i", help="Directory containing the data", required=True
+        "--data-dir", "-i", help="Directory containing the data",default="/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking", required=False
     )
     
     parser.add_argument(
-        "--dataset-name", "-r", help="Name of the dataset",  required=True, 
+        "--dataset-name", "-r", help="Name of the dataset",default="pilot_target_tracking",  required=False, 
     )
     
     parser.add_argument(

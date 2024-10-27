@@ -321,10 +321,19 @@ def get_action_stats(properties, waypoint_spacing):
         
         frame_rate = properties['frame_rate']
         
+        # List of properties to convert if they're lists
+        velocity_properties = ['max_lin_vel', 'min_lin_vel', 'mean_lin_vel', 'std_lin_vel']
+
+        # Convert properties in 'properties' dict to numpy arrays if they are lists
+        for prop in velocity_properties:
+            if isinstance(properties[prop], list):
+                properties[prop] = np.array(properties[prop])
+        
         max_lin_vel = properties['max_lin_vel']
         min_lin_vel = properties['min_lin_vel']
         mean_lin_vel = properties['mean_lin_vel']
         std_lin_vel = properties['std_lin_vel']
+
         ang_vel_lim = properties['max_ang_vel']
         
         return {'pos': {

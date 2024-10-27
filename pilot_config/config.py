@@ -4,6 +4,9 @@ import yaml
 from omegaconf import OmegaConf, DictConfig
 from typing import Tuple
 
+
+
+
 def get_main_config_dir():
     return os.path.dirname(os.path.realpath(__file__))
 
@@ -63,6 +66,7 @@ def get_robot_config(robot_name: str):
 def _represent_float(dumper, value):
     return dumper.represent_scalar('tag:yaml.org,2002:float', '{:.4f}'.format(value))
 
+
 def set_robot_config(robot_name: str, config: dict, file_format: str = 'yaml'):
     """
     Save the configuration for a specific robot based on its name.
@@ -111,16 +115,31 @@ def set_dataset_config(dataset_name: str, config: dict, file_format: str = 'yaml
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
                                "datasets",
                                f"{dataset_name}.{file_format}")
-
+    # Example usage:
+    config_serializable = serialize_data(config)
+    
     if file_format.lower() == 'json':
         with open(config_path, 'w') as file:
-            json.dump(config, file, indent=4)
+            json.dump(config_serializable, file, indent=4)
     elif file_format.lower() == 'yaml':
-        yaml.add_representer(float, _represent_float)
         with open(config_path, 'w') as file:
-            yaml.safe_dump(config, file)
+            yaml.safe_dump(config_serializable, file)
 
     print(f"{config_path} was saved.")
+
+def serialize_data(data):
+    if isinstance(data, dict):
+        return {k: serialize_data(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [serialize_data(item) for item in data]
+    elif isinstance(data, float):
+        yaml.add_representer(float, _represent_float)
+        return data  # Convert floats to strings with a set precision
+    elif isinstance(data, (int, str, bool)) or data is None:
+        return data
+    else:
+        return str(data)  # Convert any other unrecognized object to string
+
 
 def get_dataset_config(dataset_name: str):
     """
