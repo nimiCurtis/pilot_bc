@@ -18,7 +18,7 @@ device: cuda
 # training setup
 training:
   # goal_condition: True
-  batch_size: 20
+  batch_size: 16
   eval_batch_size: 32
   epochs: 20
   current_epoch: 0
@@ -68,8 +68,8 @@ data:
   # context
   context_type: temporal
   target_observation_enable: True
-  context_size: 2
-  action_context_size: 2 # modify to 0 for not using actions history
+  context_size: 0
+  action_context_size: 1 # modify to 0 for not using actions history
   target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
@@ -98,9 +98,9 @@ log:
   desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ph${data.pred_horizon}_"
   # desc: batch_experiment_b${training.batch_size}_
   
-  # project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
+  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
   # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
-  project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
+  # project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
 
   run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
   ## =0 turns off

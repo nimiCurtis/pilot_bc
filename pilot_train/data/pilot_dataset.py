@@ -90,7 +90,8 @@ class PilotDataset(Dataset):
         
         self.action_context_size = data_cfg.action_context_size
         self.target_dim = data_cfg.target_dim
-        assert self.action_context_size<=self.context_size, "Action context size is bigger the the visual context"
+        # assert self.action_context_size<=self.context_size, "Action context size is bigger the the visual context"
+        
         self.waypoint_spacing_action = 1
         # Possible distances for predicting distance
         self.distance_categories = list(
