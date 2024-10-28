@@ -107,7 +107,7 @@ class BasicTrainer:
         self.action_horizon = data_cfg.action_horizon
         self.pred_horizon=data_cfg.pred_horizon
         self.action_context_size= data_cfg.action_context_size
-
+        self.context_size = data_cfg.context_size
         self.latest_path = os.path.join(self.project_log_folder, f"latest.pth")
 
         self.best_loss = float('inf')
