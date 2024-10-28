@@ -393,7 +393,7 @@ class PiDiffTrainer(BasicTrainer):
                 # visual context ###TODO: refactore
                 viz_images = torch.split(vision_obs_context, 1, dim=1)
                 viz_obs_image = TF.resize(viz_images[-1], VISUALIZATION_IMAGE_SIZE)
-            viz_context_t0_image = TF.resize(viz_images[max(-self.action_context_size,-self.context_size)], VISUALIZATION_IMAGE_SIZE)
+                viz_context_t0_image = TF.resize(viz_images[max(-self.action_context_size,-self.context_size)], VISUALIZATION_IMAGE_SIZE)
 
                 vision_obs_context = vision_obs_context.to(self.device)
                 
