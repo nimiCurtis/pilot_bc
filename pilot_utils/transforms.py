@@ -62,11 +62,11 @@ class ObservationTransform:
         # random_crop = RandomAspectCrop(aspect_ratio=self.image_aspect_ratio, offset=10)
         # center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
         
-        random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.1)
-        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
+        random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.12)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.2)
         
         random_rotation = transforms.RandomRotation(degrees=20)
-        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.4)
+        random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.5)
         
         ## TODO: modify it to rgb as well
         normalize = transforms.Normalize(mean=[0.5], std=[0.5]) 
@@ -75,7 +75,14 @@ class ObservationTransform:
                                 interpolation=transforms.InterpolationMode.BILINEAR,
                                 # ratio=self.image_aspect_ratio,
                                 antialias=True)
-        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.1)
+        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.2)
+        
+        # Brightness adjustment transform with a probability of 0.1
+        brightness_adjustment = transforms.ColorJitter(brightness=0.1)  # Adjust brightness factor
+        brightness_adjustment = transforms.RandomApply(transforms=[brightness_adjustment], p=0.2)
+        
+        gaussian_blur = transforms.GaussianBlur(kernel_size=3)  # Adjust brightness factor
+        gaussian_blur = transforms.RandomApply(transforms=[gaussian_blur], p=0.2)
         
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([
@@ -84,8 +91,9 @@ class ObservationTransform:
                                             to_uint8,
                                             random_crop,
                                             resize,
+                                            brightness_adjustment,
+                                            gaussian_blur,
                                             ## main transforms
-                                            # TODO: try to run with transforms
                                             # random_erasing,
                                             random_rotation,
                                             random_mask,
@@ -216,7 +224,7 @@ def show_transformed_images(image_path, transform, num_transforms=10):
 if __name__ == "__main__":
     
     # Define a sample image path
-    image_path = '/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking/nimrod_bag-2024-06-30-17-11-31-data/visual_data/depth/3.jpg'
+    image_path = '/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking_static/go2_bag-2024-08-04-16-34-10-data/visual_data/depth/3.jpg'
     # Instantiate the custom data configuration
     data_cfg = CustomDataConfig(image_size=(96, 96), img_type="depth")
     # Define a simple transform for demonstration purposes

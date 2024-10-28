@@ -68,6 +68,7 @@ class PilotDataset(Dataset):
 
         self.image_size= data_cfg.image_size
         self.normalize=data_cfg.normalize
+        self.norm_type = data_cfg.norm_type
         self.goal_type=data_cfg.goal_type
         self.obs_type = data_cfg.obs_type
         self.img_type = data_cfg.img_type 
@@ -357,7 +358,8 @@ class PilotDataset(Dataset):
         # prev_action_delta = np.concatenate([positions[0] - prev_position, np.array([yaw[0] - prev_yaw])])
         
         # Get the goal position, ensuring it does not exceed the length of the trajectory
-        goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
+        # goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
+        goal_pos = np.array(traj_data["position"][start_index:min(goal_time, len(traj_data["position"]) - 1):self.waypoint_spacing_action])
 
         # Handle the case where yaw has an extra dimension
         if len(yaw.shape) == 2:
@@ -396,11 +398,12 @@ class PilotDataset(Dataset):
         # Always for now
         if self.normalize:
             # Normalize the actions based on provided action statistics
-            normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
-            normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle)
+            normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle, norm_type=self.norm_type)
+            normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle, norm_type=self.norm_type)
             # Normalize the goal position in local coordinates
-            normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
-
+            # normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
+            normalized_goal_pos = actions_forward_pass(goal_in_local, action_stats, learn_angle=False, norm_type=self.norm_type)
+            normalized_goal_pos = normalized_goal_pos[-1]
         # Assertion to ensure the shape of normalized actions is correct
         assert normalized_actions.shape == (self.pred_horizon, self.num_action_params), f"{normalized_actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 

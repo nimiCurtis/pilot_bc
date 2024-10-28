@@ -47,7 +47,7 @@ training:
     min_decay: 0.0
     decay: 0.9999
 
-  goal_mask_prob: 0.2 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0.1 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
   modal_dropout_prob: 0.00 # 0 for no no dropout , 1 for dropout one modal anytime
@@ -65,6 +65,8 @@ data:
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
   normalize: True
+  norm_type: maxmin   # maxmin | standard
+  
   # context
   context_type: temporal
   target_observation_enable: True
@@ -75,11 +77,11 @@ data:
 
 # Take the distances with relate to the horizon
   distance:
-    min_dist_cat: 10
-    max_dist_cat: 20
+    min_dist_cat: 24
+    max_dist_cat: 40
   action:
-    min_dist_cat: 10
-    max_dist_cat: 18
+    min_dist_cat: 24
+    max_dist_cat: 40
 
   # action output params
   pred_horizon: 32 

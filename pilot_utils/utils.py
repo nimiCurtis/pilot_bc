@@ -59,7 +59,7 @@ def is_tensor(x):
     return torch.is_tensor(x)
 
 
-def normalize_data(data, stats, norm_type="standard"):
+def normalize_data(data, stats, norm_type="maxmin"):
     """
     Normalizes the data to the range [-1, 1].
 
@@ -227,7 +227,7 @@ def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.0):
     
     return goal_mask
 
-def actions_forward_pass(actions,action_stats, learn_angle):
+def actions_forward_pass(actions,action_stats, learn_angle, norm_type = "standard"):
     """
     Forward pass for actions, normalizing and converting deltas to trajectory.
 
@@ -251,13 +251,13 @@ def actions_forward_pass(actions,action_stats, learn_angle):
         actions_deltas = get_delta(actions[:, :2])
         
         # Normalize deltas based on provided statistics
-        normalized_actions_deltas = normalize_data(actions_deltas, action_stats['pos'])
+        normalized_actions_deltas = normalize_data(actions_deltas, action_stats['pos'], norm_type=norm_type)
         
         # Compute cumulative sum for normalized trajectory
         normalized_actions[:, :2] = library.cumsum(normalized_actions_deltas, axis=0)
     else:
         # Normalize actions for one-dimensional case
-        normalized_actions[:2] = normalize_data(actions[:2], action_stats['pos'])
+        normalized_actions[:2] = normalize_data(actions[:2], action_stats['pos'], norm_type=norm_type)
 
     if learn_angle:
         # Calculate sine and cosine for the angle
