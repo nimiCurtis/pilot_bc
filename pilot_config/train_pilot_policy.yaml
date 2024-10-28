@@ -52,6 +52,7 @@ training:
                       # p ~ (0,1) -> task specific with some explorations capabilities
   modal_dropout_prob: 0.00 # 0 for no no dropout , 1 for dropout one modal anytime
 
+  regularized_loss: True # l2 regularization
   debug:
     # steps per epoch
     max_train_steps: null

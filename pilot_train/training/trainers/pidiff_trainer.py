@@ -240,7 +240,7 @@ class PiDiffTrainer(BasicTrainer):
 
             losses["diffusion_noise_loss_reg"] = loss_reg + loss_dif
 
-            loss = losses["diffusion_noise_loss"]
+            loss = losses["diffusion_noise_loss"] if not(self.regularized_loss) else losses["diffusion_noise_loss_reg"]
             loss.backward()
 
             # step optimizer

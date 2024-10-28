@@ -97,6 +97,7 @@ class BasicTrainer:
         self.epochs=training_cfg.epochs
         self.train_batch_size = training_cfg.batch_size
         self.eval_batch_size = training_cfg.eval_batch_size
+        self.regularized_loss = training_cfg.regularized_loss
 
         # Data config
         self.goal_condition = data_cfg.goal_condition
