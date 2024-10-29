@@ -92,42 +92,31 @@ class ViNT(BaseModel):
         
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
-        self.sa_layer = nn.TransformerEncoderLayer(
-            d_model=self.obs_encoding_size, 
-            nhead=mha_num_attention_heads, 
-            dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
-            activation="gelu", 
-            batch_first=True, 
-            norm_first=True
-        )
-        self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+        # self.sa_layer = nn.TransformerEncoderLayer(
+        #     d_model=self.obs_encoding_size, 
+        #     nhead=mha_num_attention_heads, 
+        #     dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
+        #     activation="gelu", 
+        #     batch_first=True, 
+        #     norm_first=True
+        # )
+        # self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
 
         ## TODO:
-        # self.decoder = MultiLayerDecoder(
-        #     embed_dim=self.obs_encoding_size,
-        #     seq_len=seq_len,
-        #     output_layers=[256, 128, 64, 32],
-        #     nhead=mha_num_attention_heads,
-        #     num_layers=mha_num_attention_layers,
-        #     ff_dim_factor=mha_ff_dim_factor,
-        # )
+        self.decoder = MultiLayerDecoder(
+            embed_dim=self.obs_encoding_size,
+            seq_len=seq_len,
+            output_layers=[256, 128, 64],
+            nhead=mha_num_attention_heads,
+            num_layers=mha_num_attention_layers,
+            ff_dim_factor=mha_ff_dim_factor,
+        )
 
         # self.action_predictor = nn.Sequential(
         #     nn.Linear(32, self.action_horizon * self.action_dim),
         # )
 
-        self.action_predictor = nn.Sequential(nn.Linear(self.obs_encoding_size, self.obs_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(self.obs_encoding_size // 2, self.obs_encoding_size // 4),
-                                        nn.ReLU(),
-                                        nn.Linear(self.obs_encoding_size // 4, self.action_horizon * self.action_dim))
-
-        # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
-        self.goal_mask = torch.zeros((1, seq_len), dtype=torch.bool)
-        self.goal_mask[:, -1] = True # Mask out the goal 
-        self.no_mask = torch.zeros((1, seq_len), dtype=torch.bool) 
-        self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
-        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
+        self.action_predictor = nn.Sequential(nn.Linear(64, self.action_horizon * self.action_dim))
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
@@ -168,31 +157,9 @@ class ViNT(BaseModel):
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         return goal_encoding
     
-    def infer_goal_masking(self,final_encoded_condition, goal_mask):
+    def infer_decoder(self,tokens):
         
-        # If a goal mask is provided, mask some of the goal tokens
-        if goal_mask is not None:
-            no_goal_mask = goal_mask.long()
-            self.all_masks = self.all_masks.to(no_goal_mask.device)
-            # select from all_masks a tensor based on the no_goal_mask tensor
-            src_key_padding_mask = torch.index_select(self.all_masks, 0, no_goal_mask)
-
-        else:
-            src_key_padding_mask = None
-        
-        # Apply positional encoding 
-        if self.positional_encoding:
-            final_encoded_condition = self.positional_encoding(final_encoded_condition)
-
-        final_encoded_condition = self.sa_encoder(final_encoded_condition, src_key_padding_mask=src_key_padding_mask)
-
-        if src_key_padding_mask is not None:
-            self.avg_pool_mask = self.avg_pool_mask.to(no_goal_mask.device)
-            avg_mask = torch.index_select(self.avg_pool_mask, 0, no_goal_mask).unsqueeze(-1)
-
-            final_encoded_condition = final_encoded_condition * avg_mask
-        
-        final_encoded_condition = torch.mean(final_encoded_condition, dim=1)
+        final_encoded_condition = self.decoder(tokens)
         
         return final_encoded_condition
 
@@ -268,11 +235,11 @@ class ViNT(BaseModel):
             else:
                 output = self.fuse_modalities(kwargs["modalities"])
 
-        elif func_name == "goal_masking":
-            output = self.infer_goal_masking(kwargs["final_encoded_condition"], kwargs["goal_mask"])
+        elif func_name == "decoder":
+            output = self.infer_decoder(kwargs["tokens"])
 
         elif func_name == "action_pred":
-            output = self.infer_action(kwargs["tokens"])
+            output = self.infer_action(kwargs["final_encoded_condition"])
         else:
             raise NotImplementedError
         
@@ -293,8 +260,5 @@ class ViNT(BaseModel):
         Override the default `to` method to move mask tensors to the specified device.
         """
         super(ViNT, self).to(device)
-        self.goal_mask = self.goal_mask.to(self.device)
-        self.no_mask = self.no_mask.to(self.device)
-        self.all_masks = self.all_masks.to(self.device)
-        self.avg_pool_mask = self.avg_pool_mask.to(self.device)
+
         return self
