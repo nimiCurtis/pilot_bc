@@ -38,48 +38,43 @@ class PiDiff(BaseModel):
                                 channels)
 
         # Data config
-        self.target_obs_enable = data_cfg.target_observation_enable
-        self.target_context = data_cfg.target_context
+        self.target_context_enable = data_cfg.target_context_enable
         self.goal_condition = data_cfg.goal_condition
 
-        # Final sequence length  = context size +
-        #                           current observation (1) + encoded lin observation and target (1) 
-
+        seq_len = self.context_size + 1
         if self.goal_condition:
-            seq_len = self.context_size + 3
-            # seq_len = self.context_size + 2
-        else:
-            seq_len = self.context_size + 1
+            seq_len+=1
+            if self.target_context_enable:
+                seq_len+=1
 
         self.action_horizon = data_cfg.action_horizon
         
-        # Linear encoder for time series target position
-        self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
-
         # Vision encoder for context images
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
         self.vision_encoder = replace_bn_with_gn(self.vision_encoder)
-
-        target_dim = data_cfg.target_dim 
-        lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
-        self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
-                                        nn.ReLU(),
-                                        nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(lin_encoding_size // 2, lin_encoding_size))
-
-        ## TODO: add variables assignment for obe_target_enable = false -> only one target context! 
-
         vision_encoding_size=vision_encoder_model_cfg.vision_encoding_size
         vision_features_dim = self.vision_encoder.get_in_feateures()
+        self.obs_encoding_size = vision_encoding_size ## TODO: check
         if vision_features_dim != vision_encoding_size:
             self.compress_obs_enc = nn.Linear(vision_features_dim, vision_encoding_size)
         else:
             self.compress_obs_enc = nn.Identity()
+        
+        if self.goal_condition:
+            # Linear encoder for time series target position
+            target_dim = data_cfg.target_dim 
+            lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
+            self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+            if self.target_context_enable:
+                self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
+            
+            # Observations encoding size
+            assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
 
-        # Observations encoding size
-        assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
-        self.obs_encoding_size = vision_encoding_size
 
         #### Policy model ###
         ## Noise predictor##
@@ -264,7 +259,7 @@ class PiDiff(BaseModel):
         super(PiDiff, self).eval()
         torch.cuda.empty_cache()
         return self
-    
+
     def to(self, device):
         """
         Override the default `to` method to move mask tensors to the specified device.

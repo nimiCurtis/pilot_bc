@@ -28,6 +28,8 @@ training:
   optimizer: adamw
   clipping: True # Clip gradients
   clipping_max_norm: 1.
+  scheduler: cosine  # cyclic | cosine | plateau
+  warmup_steps: 500
   gradient_accumulate_every: 1
 
   warmup: True 
@@ -59,7 +61,8 @@ training:
 
 # data config
 data:
-  goal_condition: True
+  goal_condition: True # Always 
+  target_context_enable: False
 
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
@@ -68,10 +71,8 @@ data:
   
   # context
   context_type: temporal
-  target_observation_enable: True
   context_size: 1
   action_context_size: 1 # modify to 0 for not using actions history
-  target_context: True
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
 # Take the distances with relate to the horizon
@@ -108,9 +109,9 @@ log:
   
   ## TODO: handle with log and iamges 
   num_images_log: 16
-  print_log_freq: 100 # in iterations
-  eval_log_freq: 1  # in iterations
-  image_log_freq: 3 #  
+  print_log_freq: 300 # in iterations
+  eval_log_freq: 3  # in iterations
+  image_log_freq: 2 #  
   eval_fraction: 0.25
   eval_freq: 1 # in epochs
   save_model_freq: 10

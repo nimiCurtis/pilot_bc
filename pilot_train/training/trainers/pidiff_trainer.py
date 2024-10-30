@@ -242,7 +242,7 @@ class PiDiffTrainer(BasicTrainer):
             loss_dif = losses["diffusion_noise_loss"]
             
             
-            loss_reg = 0.0002 * sum(torch.norm(p) for p in self.model.parameters())
+            loss_reg = 0.0001 * sum(torch.norm(p) for p in self.model.parameters())
 
             losses["diffusion_noise_loss_reg"] = loss_reg + loss_dif
 
