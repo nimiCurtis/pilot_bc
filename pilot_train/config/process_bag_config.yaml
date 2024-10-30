@@ -1,9 +1,9 @@
 # bags_folder: "/media/roblab20/Expansion/pilot/go2_broadcom_bags"
 # bags_folder: "/media/nimrod/Expansion/pilot/raanana_bags"
-destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking"
+destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking_static"
 bags_folder: /media/roblab20/Expansion/pilot/university_bags
 save_raw: False                        # I dont see a reason why to set it to false
-force: False
+force: True
 
 nimrod:                               # dataset name
   aligned_topics: ["odom", "rgb", "depth", "target_object"]     # pick topics to be aligned

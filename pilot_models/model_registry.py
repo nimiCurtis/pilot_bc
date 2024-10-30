@@ -98,11 +98,13 @@ def get_policy_model(policy_model_cfg: DictConfig,
     
     from pilot_models.policy.vint import ViNT
     from pilot_models.policy.pidiff import PiDiff
+    from pilot_models.policy.cnn_mlp import CNNMLPPolicy
     
     # Registry of available models
     policy_model_registry = {
     'vint': ViNT,
-    'pidiff': PiDiff
+    'pidiff': PiDiff,
+    'cnn_mlp': CNNMLPPolicy,
     }
     
     model_name = policy_model_cfg.get('name')

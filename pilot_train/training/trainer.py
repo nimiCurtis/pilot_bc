@@ -9,11 +9,14 @@ from torch.utils.data import DataLoader
 
 from pilot_train.training.trainers.pidiff_trainer import PiDiffTrainer
 from pilot_train.training.trainers.vint_trainer import ViNTTrainer
+from pilot_train.training.trainers.cnn_mlp_trainer import CNNMLPTrainer
+
 
 # Registry of available trainers
 TRAINERS = {
     'pidiff': PiDiffTrainer,
     'vint': ViNTTrainer,
+    'cnn_mlp': CNNMLPTrainer
 }
 
 def register_trainer(model: nn.Module,

@@ -1,17 +1,24 @@
+import torch.nn as nn
+from torch.nn import functional as F
+import torchvision.transforms as transforms
+
 from typing import Tuple
 from omegaconf import DictConfig
 from typing import List
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.model_registry import get_linear_encoder_model, get_vision_encoder_model
+from pilot_utils.train.train_utils import replace_bn_with_gn
+from pilot_models.policy.diffusion_policy import ConditionalUnet1D
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
 
 
-class ViNT(BaseModel):
+class CNNMLPPolicy(BaseModel):
     def __init__(
             self,
             policy_model_cfg: DictConfig,
@@ -20,16 +27,7 @@ class ViNT(BaseModel):
             data_cfg: DictConfig 
     ) -> None:
         """
-        ViNT class: uses a Transformer-based architecture to encode (current and past) visual observations
-        and goals using an EfficientNet CNN, and predicts temporal distance and normalized actions
-        in an embodiment-agnostic manner
-        Args:
-            context_size (int): how many previous observations to used for context
-            len_traj_pred (int): how many waypoints to predict in the future
-            learn_angle (bool): whether to predict the yaw of the robot
-            obs_encoder (str): name of the EfficientNet architecture to use for encoding observations (ex. "efficientnet-b0")
-            obs_encoding_size (int): size of the encoding of the observation images
-            goal_encoding_size (int): size of the encoding of the goal images
+
         """
         
         ## Init BaseModel
@@ -37,7 +35,7 @@ class ViNT(BaseModel):
         pred_horizon=data_cfg.pred_horizon
         learn_angle=data_cfg.learn_angle
         channels=vision_encoder_model_cfg.in_channels
-        super(ViNT, self).__init__(policy_model_cfg.name,
+        super(CNNMLPPolicy, self).__init__(policy_model_cfg.name,
                                 context_size,
                                 pred_horizon,
                                 learn_angle,
@@ -64,59 +62,28 @@ class ViNT(BaseModel):
         # Vision encoder for context images
         self.vision_encoder = get_vision_encoder_model(vision_encoder_model_cfg, data_cfg)
 
-        target_dim = data_cfg.target_dim 
         lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
-        self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
-                                        nn.ReLU(),
-                                        nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
-                                        nn.ReLU(),
-                                        nn.Linear(lin_encoding_size // 2, lin_encoding_size))
 
         ## TODO: add variables assignment for obe_target_enable = false -> only one target context! 
 
         vision_encoding_size=vision_encoder_model_cfg.vision_encoding_size
-        vision_features_dim = self.vision_encoder.get_in_feateures()
-        if vision_features_dim != vision_encoding_size:
-            self.compress_obs_enc = nn.Linear(vision_features_dim, vision_encoding_size)
+        self.vision_features_dim = self.vision_encoder.get_in_feateures()*(self.context_size+1)
+        if self.vision_features_dim != vision_encoding_size:
+            self.compress_obs_enc = nn.Linear(self.vision_features_dim, vision_encoding_size)
         else:
             self.compress_obs_enc = nn.Identity()
 
         # Observations encoding size
         assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
         self.obs_encoding_size = vision_encoding_size
-
-        ### Goal masking
-        mha_num_attention_heads=policy_model_cfg.mha_num_attention_heads
-        mha_num_attention_layers=policy_model_cfg.mha_num_attention_layers
-        mha_ff_dim_factor=policy_model_cfg.mha_ff_dim_factor
         
-        # Initialize positional encoding and self-attention layers
-        self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
-        # self.sa_layer = nn.TransformerEncoderLayer(
-        #     d_model=self.obs_encoding_size, 
-        #     nhead=mha_num_attention_heads, 
-        #     dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
-        #     activation="gelu", 
-        #     batch_first=True, 
-        #     norm_first=True
-        # )
-        # self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+        
+        self.action_predictor = nn.Sequential(nn.Linear(vision_encoding_size, vision_encoding_size // 2),
+                                        nn.ReLU(),
+                                        nn.Linear(vision_encoding_size // 2, vision_encoding_size // 4),
+                                        nn.ReLU(),
+                                        nn.Linear(vision_encoding_size // 4, self.action_horizon * self.action_dim))
 
-        ## TODO:
-        self.decoder = MultiLayerDecoder(
-            embed_dim=self.obs_encoding_size,
-            seq_len=seq_len,
-            output_layers=[256, 128, 64],
-            nhead=mha_num_attention_heads,
-            num_layers=mha_num_attention_layers,
-            ff_dim_factor=mha_ff_dim_factor,
-        )
-
-        # self.action_predictor = nn.Sequential(
-        #     nn.Linear(32, self.action_horizon * self.action_dim),
-        # )
-
-        self.action_predictor = nn.Sequential(nn.Linear(64, self.action_horizon * self.action_dim))
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
@@ -129,17 +96,20 @@ class ViNT(BaseModel):
         # Currently obs_img size is [batch_size*(self.context_size+1), C, H, W] | for example: [96, 3, 64, 85]
         obs_encoding = self.vision_encoder(obs_img)
 
+        obs_encoding = obs_encoding.reshape((-1, self.vision_features_dim))
+        
         # (Encoded) Currently obs_encoding size is [batch_size*(self.context_size+1), source_encoder_out_features] | for example: [96, 1280]
         obs_encoding = self.compress_obs_enc(obs_encoding)
 
         # (Compressed) Currently obs_encoding size is [batch_size*(self.context_size + 1), self.obs_encoding_size (= a param from config)] | for example: [96, 512]
-        obs_encoding = obs_encoding.reshape((self.context_size + 1, -1, self.obs_encoding_size))
+        obs_encoding = obs_encoding.reshape((1, -1, self.obs_encoding_size))
+        
         # (reshaped) Currently obs_encoding is [self.context_size + 1, batch_size, self.obs_encoding_size], note that the order is flipped | for example: [6, 16, 512]
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
         return obs_encoding
-    
+
     def infer_linear_encoder(self, curr_rel_pos_to_target):
         lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
         if len(lin_encoding.shape) == 2:
@@ -147,21 +117,6 @@ class ViNT(BaseModel):
 
         # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         return lin_encoding
-
-    
-    
-    def infer_goal(self,goal_rel_pos_to_target):
-        goal_encoding = self.goal_encoder(goal_rel_pos_to_target)
-        if len(goal_encoding.shape) == 2:
-                goal_encoding = goal_encoding.unsqueeze(1)
-            # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-        return goal_encoding
-    
-    def infer_decoder(self,tokens):
-        
-        final_encoded_condition = self.decoder(tokens)
-        
-        return final_encoded_condition
 
     def fuse_modalities(self, modalities: List[torch.Tensor], mask: torch.Tensor = None):
         # Ensure the list of tensors is not empty
@@ -186,20 +141,21 @@ class ViNT(BaseModel):
             for i, modality in enumerate(modalities):
                 masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
                 masked_modalities.append(masked_modality)
-        
-            fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
 
+            fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
+            fused_tensor = fused_tensor.sum(dim=1, keepdim=True)
         else:
-            fused_tensor = modalities
+            fused_tensor = torch.cat(modalities, dim=1)
+            fused_tensor = fused_tensor.sum(dim=1, keepdim=True)
 
         return fused_tensor
 
-    def infer_action(self,tokens: torch.Tensor):
+    def infer_action(self,final_encoded_condition: torch.Tensor):
         
         # final_repr = self.decoder(tokens)
 
         # currently, the size is [batch_size, 32]
-        action_pred_deltas = self.action_predictor(tokens)
+        action_pred_deltas = self.action_predictor(final_encoded_condition)
 
         # augment outputs to match labels size-wise
         action_pred_deltas = action_pred_deltas.reshape(
@@ -207,8 +163,7 @@ class ViNT(BaseModel):
         )
 
         return action_pred_deltas
-
-
+    
     def forward(self, func_name, **kwargs):
         
         if func_name == "vision_encoder" :
@@ -217,17 +172,11 @@ class ViNT(BaseModel):
         elif func_name == "linear_encoder":
             output = self.infer_linear_encoder(kwargs["curr_rel_pos_to_target"])
         
-        elif func_name == "goal_encoder":
-            output = self.infer_goal(kwargs["goal_rel_pos_to_target"])
-        
         elif func_name == "fuse_modalities":
             if "mask" in kwargs:
                 output = self.fuse_modalities(kwargs["modalities"],kwargs["mask"])
             else:
                 output = self.fuse_modalities(kwargs["modalities"])
-
-        elif func_name == "decoder":
-            output = self.infer_decoder(kwargs["tokens"])
 
         elif func_name == "action_pred":
             output = self.infer_action(kwargs["final_encoded_condition"])
@@ -237,12 +186,12 @@ class ViNT(BaseModel):
         return output
 
     def train(self, mode: bool = True):
-        super(ViNT, self).train(mode)
+        super(CNNMLPPolicy, self).train(mode)
         torch.cuda.empty_cache()
         return self
 
     def eval(self):
-        super(ViNT, self).eval()
+        super(CNNMLPPolicy, self).eval()
         torch.cuda.empty_cache()
         return self
     
@@ -250,6 +199,6 @@ class ViNT(BaseModel):
         """
         Override the default `to` method to move mask tensors to the specified device.
         """
-        super(ViNT, self).to(device)
-
+        super(CNNMLPPolicy, self).to(device)
         return self
+

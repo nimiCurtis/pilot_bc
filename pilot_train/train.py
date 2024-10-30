@@ -173,7 +173,7 @@ def train(cfg:DictConfig):
 #     print("******** Training Config: *********")
 #     print(OmegaConf.to_yaml(cfg, resolve=True))
 #     print("********************\n")
-    
+
 #     # Train
 #     train(cfg)
 

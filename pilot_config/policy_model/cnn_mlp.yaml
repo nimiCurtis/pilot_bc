@@ -1,0 +1,4 @@
+# model params
+name: cnn_mlp
+obs_encoding_size: 512
+num_lin_features: 2

@@ -28,8 +28,6 @@ training:
   optimizer: adamw
   clipping: True # Clip gradients
   clipping_max_norm: 1.
-  scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 500
   gradient_accumulate_every: 1
 
   warmup: True 
