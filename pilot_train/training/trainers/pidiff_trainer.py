@@ -207,7 +207,7 @@ class PiDiffTrainer(BasicTrainer):
                         modalities = [obs_encoding_condition, lin_encoding]
                         
                         # Not in use!
-                        modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+                        modal_dropout_mask = get_modal_dropout_mask(self.train_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
 
                         fused_modalities_encoding = self.model("fuse_modalities",
                                                             modalities=modalities,
