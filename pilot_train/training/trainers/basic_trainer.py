@@ -101,7 +101,7 @@ class BasicTrainer:
 
         # Data config
         self.goal_condition = data_cfg.goal_condition
-        self.target_obs_enable = data_cfg.target_observation_enable # TODO: refactoring
+        self.target_context_enable = data_cfg.target_context_enable
         self.normalized=data_cfg.normalize
         self.learn_angle=data_cfg.learn_angle
         self.action_horizon = data_cfg.action_horizon

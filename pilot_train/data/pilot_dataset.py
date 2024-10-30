@@ -73,7 +73,6 @@ class PilotDataset(Dataset):
         self.obs_type = data_cfg.obs_type
         self.img_type = data_cfg.img_type 
         self.pred_horizon=data_cfg.pred_horizon
-        self.target_context=data_cfg.target_context
         self.learn_angle=data_cfg.learn_angle
         
         if self.learn_angle:
@@ -426,14 +425,10 @@ class PilotDataset(Dataset):
                 goal_rel_pos_to_target = np.zeros((self.target_dim,))
                 goal_pos_to_target_mask = False
 
-            if self.target_context:
-                # Get the context of target positions relative to the current trajectory
-                rel_pos_to_target_context_tmp = np.array([
-                    target_traj_data_context[t]["position"][:2] for f, t in context
-                ])
-            else:
-                # For now, this is not in use
-                rel_pos_to_target_context_tmp = np.array(target_traj_data_context[curr_time]["position"][:2])
+            # Get the context of target positions relative to the current trajectory
+            rel_pos_to_target_context_tmp = np.array([
+                target_traj_data_context[t]["position"][:2] for f, t in context
+            ])
 
             #TODO: add implementation for not goal condition
             target_context_mask = np.sum(rel_pos_to_target_context_tmp == np.zeros((2,)), axis=1) == 2
@@ -555,6 +550,7 @@ class PilotDataset(Dataset):
             # Not in use
             rel_pos_to_target_context = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
             goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
+            goal_pos_to_target_mask = False
 
         # Compute the timestep distances
         if goal_is_negative:

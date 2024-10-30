@@ -197,21 +197,24 @@ class PiDiffTrainer(BasicTrainer):
                 # goal_mask = (torch.rand((action_label.shape[0],)) < self.goal_mask_prob).long().to(self.device)
                 goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
-                linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
-                                            normalized_actions_context.flatten(1)], axis=1)
+                if self.target_context_enable:
+                        linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
+                                                    normalized_actions_context.flatten(1)], axis=1)
 
-                lin_encoding = self.model("linear_encoder",
-                                        curr_rel_pos_to_target=linear_input)
-                                
-                modalities = [obs_encoding_condition, lin_encoding]
-                
-                
-                # Not in use!
-                modal_dropout_mask = get_modal_dropout_mask(self.train_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-                
-                fused_modalities_encoding = self.model("fuse_modalities",
-                                                    modalities=modalities,
-                                                    mask=modal_dropout_mask)
+                        lin_encoding = self.model("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input)
+
+                        modalities = [obs_encoding_condition, lin_encoding]
+                        
+                        # Not in use!
+                        modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+
+                        fused_modalities_encoding = self.model("fuse_modalities",
+                                                            modalities=modalities,
+                                                            mask=modal_dropout_mask)
+                else:
+                    # modalities are vision only
+                    fused_modalities_encoding = obs_encoding_condition
 
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
@@ -224,6 +227,9 @@ class PiDiffTrainer(BasicTrainer):
             else:      # TODO: next refactoring # No Goal condition >> take the obs_encoding as the tokens
                 goal_mask = None
                 final_encoded_condition = obs_encoding_condition
+                final_encoded_condition = self.model("goal_masking",
+                                                    final_encoded_condition=final_encoded_condition,
+                                                    goal_mask = goal_mask)
 
             noise_pred = self.model("noise_pred",
                                     noisy_action=noisy_action,
@@ -441,32 +447,33 @@ class PiDiffTrainer(BasicTrainer):
 
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
-
+                    
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
-                    linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
-                                                normalized_actions_context.flatten(1)], axis=1)
+                    if self.target_context_enable:
+                        linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
+                                                    normalized_actions_context.flatten(1)], axis=1)
 
-                    lin_encoding = self.model("linear_encoder",
-                                            curr_rel_pos_to_target=linear_input)
+                        lin_encoding = self.model("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input)
 
-                    modalities = [obs_encoding_condition, lin_encoding]
+                        modalities = [obs_encoding_condition, lin_encoding]
+                        
+                        # Not in use!
+                        modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+
+                        fused_modalities_encoding = eval_model("fuse_modalities",
+                                                            modalities=modalities,
+                                                            mask=modal_dropout_mask)
+                    else:
+                        # modalities are vision only
+                        fused_modalities_encoding = obs_encoding_condition
                     
-                    # Not in use!
-                    modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-
-                    fused_modalities_encoding = eval_model("fuse_modalities",
-                                                        modalities=modalities,
-                                                        mask=modal_dropout_mask)
-
                     goal_encoding = eval_model("goal_encoder",
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
                     final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-                    # final_encoded_condition = self.model("goal_masking",
-                    #                                     final_encoded_condition=final_encoded_condition,
-                    #                                     goal_mask = goal_mask)
-                    
+
                     final_encoded_condition = eval_model("goal_masking",
                                                         final_encoded_condition=final_encoded_condition,
                                                         goal_mask = goal_mask)
@@ -474,7 +481,11 @@ class PiDiffTrainer(BasicTrainer):
 
                 ## TODO: next refactoring
                 else:       # No Goal condition >> take the obs_encoding as the tokens
+                    goal_mask = None
                     final_encoded_condition = obs_encoding_condition
+                    final_encoded_condition = self.model("goal_masking",
+                                                        final_encoded_condition=final_encoded_condition,
+                                                        goal_mask = goal_mask)
 
                 noise_pred = eval_model("noise_pred",
                                     noisy_action=noisy_action,
