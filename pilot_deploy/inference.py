@@ -93,10 +93,10 @@ class InferenceDataset(PilotDataset):
         """
 
         # Retrieve the current trajectory name, properties, current time, and max goal distance from the index
-        f_curr, curr_properties, curr_time, max_goal_dist = self.index_to_data[i]
+        f_curr, curr_data_properties, curr_time, max_goal_dist, min_goal_dist = self.index_to_data[i]
 
-        # Sample a goal from the current trajectory or a different trajectory
-        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist)
+                # Sample a goal from the current trajectory or a different trajectory
+        f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist,min_goal_dist)
 
         # Initialize the context list
         context = []
@@ -114,10 +114,10 @@ class InferenceDataset(PilotDataset):
             raise ValueError(f"Invalid context type {self.context_type}")
 
         # Load images for each context time step
-        obs_image = [self._load_image(f, t) for f, t in context]
+        vision_obs_context = [self._load_image(f, t) for f, t in context]
 
         # Apply transformations to the context images
-        obs_image_transformed = transform_images(obs_image, self.transform)
+        vision_obs_context = transform_images(vision_obs_context, self.transform)
 
         # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
@@ -126,56 +126,30 @@ class InferenceDataset(PilotDataset):
 
         # Compute the actions and normalized goal position
         # was self.waypoint_spacing
-        action_stats = get_action_stats(curr_properties, self.waypoint_spacing_action)
-        context_action_stats = get_action_stats(curr_properties, self.waypoint_spacing)
-        normalized_actions, unormalized_prev_actions,normalized_prev_action, normalized_goal_pos, goal_pos_in_local = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
+        action_stats = get_action_stats(curr_data_properties, self.waypoint_spacing_action)
+        context_action_stats = get_action_stats(curr_data_properties, self.waypoint_spacing)
+
+        # Stay with normalized actions (Deltas)
+        normalized_actions, unormalized_prev_actions,normalized_prev_action, normalized_goal_pos, unormalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
 
         if self.goal_condition:
             # Load the current and goal target trajectory data
-            curr_target_traj_data = self._get_trajectory(f_curr, target=True) #fcur
-            goal_target_traj_data = self._get_trajectory(f_goal, target=True) #fgoal
-            goal_target_traj_data_len = len(goal_target_traj_data)
-            assert goal_time < goal_target_traj_data_len, f"{goal_time} and {goal_target_traj_data_len}"
+            target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
+            target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
+            target_traj_data_goal_len = len(target_traj_data_goal)
+            assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
-            # Get the goal position relative to the target
-            goal_rel_pos_to_target = np.array(goal_target_traj_data[goal_time]["position"][:2])
-            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
-                
-                if self.target_dim == 3:
-                    goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-                elif self.target_dim == 2:
-                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            else:
-                goal_rel_pos_to_target = np.zeros((self.target_dim,))
-
-            if self.target_context:
-                # Get the context of target positions relative to the current trajectory
-                np_curr_rel_pos_to_target = np.array([
-                    curr_target_traj_data[t]["position"][:2] for f, t in context
-                ])
-            else:
-                # For now, this is not in use
-                np_curr_rel_pos_to_target = np.array(curr_target_traj_data[curr_time]["position"][:2])
-
-            #TODO: add implementation for not goal condition
-            target_context_mask = np.sum(np_curr_rel_pos_to_target == np.zeros((2,)), axis=1) == 2
-            np_curr_rel_pos = np.zeros((np_curr_rel_pos_to_target.shape[0], self.target_dim))
-            
-            if self.target_dim == 3:
-                np_curr_rel_pos[~target_context_mask] = xy_to_d_cos_sin(np_curr_rel_pos_to_target[~target_context_mask])
-                np_curr_rel_pos[~target_context_mask, 0] = normalize_data(data=np_curr_rel_pos[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            elif self.target_dim == 2:
-                np_curr_rel_pos[~target_context_mask] = normalize_data(data=np_curr_rel_pos_to_target[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            
-            # Convert the context of relative positions to target into a tensor
-            curr_rel_pos_to_target = torch.as_tensor(np_curr_rel_pos)
-            unormalized_prev_actions_tensor = torch.as_tensor(unormalized_prev_actions)
-            # curr_rel_pos_to_target = torch.concatenate([curr_rel_pos_to_target,normalized_prev_actions_tensor],axis=1)
+            # Compute the relative position to target 
+            rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+                                                                                                                        target_traj_data_goal,
+                                                                                                                        goal_time,
+                                                                                                                        curr_time,
+                                                                                                                        context)
         else:
             # Not in use
-            curr_rel_pos_to_target = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
+            rel_pos_to_target_context = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
             goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
+            goal_pos_to_target_mask = False
 
         # Compute the timestep distances
         if goal_is_negative:
@@ -193,14 +167,14 @@ class InferenceDataset(PilotDataset):
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            torch.as_tensor(obs_image_transformed, dtype=torch.float32),  # [C*(context+1),H,W]
-            torch.as_tensor(curr_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(vision_obs_context, dtype=torch.float32),  # [C*(context+1),H,W]
+            torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
-            torch.as_tensor(unormalized_prev_actions_tensor, dtype=torch.float32),
+            torch.as_tensor(unormalized_prev_actions, dtype=torch.float32),
             torch.as_tensor(normalized_prev_action, dtype=torch.float32),
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
-            torch.as_tensor(goal_pos_in_local, dtype=torch.float32),
+            torch.as_tensor(unormalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
         )
@@ -238,7 +212,7 @@ class InferenceDataset(PilotDataset):
             # prev_action_delta = np.concatenate([positions[0] - prev_position, np.array([yaw[0] - prev_yaw])])
             
             # Get the goal position, ensuring it does not exceed the length of the trajectory
-            goal_pos = np.array(traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)])
+            goal_pos = np.array(traj_data["position"][start_index:min(goal_time, len(traj_data["position"]) - 1):self.waypoint_spacing_action])
 
             # Handle the case where yaw has an extra dimension
             if len(yaw.shape) == 2:
@@ -257,7 +231,8 @@ class InferenceDataset(PilotDataset):
             # Convert positions and goal to local coordinates
             waypoints = to_local_coords(positions, positions[0], yaw[0])
             goal_in_local = to_local_coords(goal_pos, positions[0], yaw[0])
-
+            unormalized_goal_pos = goal_in_local[-1]
+            
             prev_waypoints = to_local_coords(prev_positions, prev_positions[0], prev_yaw[0])
             # Ensure waypoints have the correct shape
             assert waypoints.shape == (self.pred_horizon + 1, 2), f"{waypoints.shape} and {(self.pred_horizon + 1, 2)} should be equal"
@@ -273,17 +248,20 @@ class InferenceDataset(PilotDataset):
                 actions = waypoints[1:]
                 prev_actions = prev_waypoints[1:]
                 
+            # Always for now
             if self.normalize:
                 # Normalize the actions based on provided action statistics
-                normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle)
-                normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle)
+                normalized_actions = actions_forward_pass(actions, action_stats, self.learn_angle, norm_type=self.norm_type)
+                normalized_prev_action = actions_forward_pass(prev_actions,context_action_stats,self.learn_angle, norm_type=self.norm_type)
                 # Normalize the goal position in local coordinates
-                normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
-
+                # normalized_goal_pos = normalize_data(goal_in_local, action_stats['pos'])
+                normalized_goal_pos = actions_forward_pass(goal_in_local, action_stats, learn_angle=False, norm_type=self.norm_type)
+                normalized_goal_pos = normalized_goal_pos[-1]
             # Assertion to ensure the shape of normalized actions is correct
             assert normalized_actions.shape == (self.pred_horizon, self.num_action_params), f"{normalized_actions.shape} and {(self.pred_horizon, self.num_action_params)} should be equal"
 
-            return normalized_actions,prev_actions,normalized_prev_action, normalized_goal_pos, goal_in_local
+            return normalized_actions,prev_actions,normalized_prev_action, normalized_goal_pos, unormalized_goal_pos
+
 class PilotAgent(nn.Module):
     """
     PilotAgent class that handles policy-based predictions for pilot models.
@@ -325,10 +303,13 @@ class PilotAgent(nn.Module):
         self.pred_horizon = data_cfg.pred_horizon
         self.action_dim = 4 if self.learn_angle else 2
         self.action_horizon = data_cfg.action_horizon
-        # For now we use only pidiff model 
-        noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
-        self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
         
+        self.is_diffusion_model = True if self.model.name == "pidiff" else False
+        if self.is_diffusion_model:
+            # For now we use only pidiff model
+            noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
+            self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
+
         robot_properties = get_robot_config(robot)[robot]
         robot_properties.update({'frame_rate':self.frame_rate})
         self.action_stats = get_action_stats(properties=robot_properties, waypoint_spacing=waypoint_spacing)
@@ -347,7 +328,8 @@ class PilotAgent(nn.Module):
         state_dict = checkpoint["model_state_dict"]
         self.model.load_state_dict(state_dict, strict=False)
         self.model.eval()
-        self.noise_scheduler.eval()
+        if self.is_diffusion_model:
+            self.noise_scheduler.eval()
 
     def to(self, device):
         """
@@ -451,7 +433,7 @@ class PilotAgent(nn.Module):
 
         return normalized_actions[0]  # no batch dimension
     
-    @torch.inference_mode()
+    @torch.inference_mode() ############################# TODO: refactore here for inference 
     def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
         
         obs_encoding = self.model("vision_encoder",
@@ -468,7 +450,7 @@ class PilotAgent(nn.Module):
                                                         normalized_action_context.flatten(1)], axis=1)
         else:
             linear_input = curr_rel_pos_to_target.flatten(1)
-            
+
         lin_encoding = self.model("linear_encoder",
                                 curr_rel_pos_to_target=linear_input)
         
@@ -578,7 +560,7 @@ def main():
     """
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
-    model_name = "pilot_bsz20_c5_ac3_gcp0.5_mdp0.0_ph82024-09-30_14-12-00"
+    model_name = "cnn_mlp_bsz16_c0_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntmaxmin_2024-10-30_17-15-54"
     model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
@@ -635,7 +617,17 @@ def main():
     # Loop through the dataset, performing inference and timing each prediction
     for i in range(0, size):
         # Retrieve relevant data for inference, including context, ground truth actions, etc.
-        context_queue, target_context_queue, goal_to_target, gt_actions_normalized, unormalized_prev_actions,normalized_prev_action,goal_pos,goal_pos_in_local, dataset_index, action_mask  = dataset[i]
+        (
+            context_queue,
+            target_context_queue,
+            goal_to_target,
+            gt_actions_normalized,
+            unormalized_prev_actions,
+            normalized_prev_action,
+            normalized_goal_pos,
+            unormalized_goal_pos, 
+            dataset_index,
+            action_mask ) = dataset[i]
         
         viz_images = torch.split(context_queue, 1, dim=0)
         viz_obs_image = TF.resize(viz_images[-1], VIZ_IMAGE_SIZE)
@@ -659,7 +651,7 @@ def main():
         
         batch_viz_obs_image = viz_obs_image.unsqueeze(0)
         batch_viz_context_t0_image = viz_context_t0_image.unsqueeze(0)
-        batch_goal_pos = goal_pos_in_local.unsqueeze(0)
+        batch_goal_pos = unormalized_goal_pos.unsqueeze(0)
         batch_viz_difference = viz_difference.unsqueeze(0)
         
         batch_dataset_index = dataset_index.unsqueeze(0)

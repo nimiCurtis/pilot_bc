@@ -9,6 +9,7 @@ defaults:
   - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
   - datasets: pilot_target_tracking_static # all | go_to_the_picture
+  - log: local
   # - log: defaults
 
 
@@ -45,7 +46,7 @@ training:
     inv_gamma: 1.0
     power: 0.75
     min_decay: 0.0
-    decay: 0.9999
+    decay: 0.999
 
   goal_mask_prob: 0.1 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
@@ -62,7 +63,7 @@ training:
 # data config
 data:
   goal_condition: True
-  target_context_enable: False
+  target_context_enable: True
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py
   normalize: True
@@ -95,32 +96,3 @@ data:
   img_type: "depth" # if obs_type = image->  depth (1) | rgb (3) 
                     # do not forget to change the in_channels param in encoder_model as well
 
-# logging config
-log:
-  desc: "${policy_model.name}_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gc${data.goal_condition}_gcp${training.goal_mask_prob}_ph${data.pred_horizon}_tce${data.target_context_enable}_"
-  # desc: batch_experiment_b${training.batch_size}_
-  
-  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
-  # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
-  # project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
-
-  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
-  ## =0 turns off
-  
-  ## TODO: handle with log and iamges 
-  num_images_log: 16
-  print_log_freq: 300 # in iterations
-  eval_log_freq: 3  # in iterations
-  image_log_freq: 2 #  
-  eval_fraction: 0.25
-  eval_freq: 1 # in epochs
-  save_model_freq: 10
-  wandb: 
-    run: 
-      enable: true
-      name: ${log.run_name} ## modify
-      log_freq: 10 # in iterations
-    setup:
-      project: pilot-release
-      entity: nimrodcurtis
-      mode: online

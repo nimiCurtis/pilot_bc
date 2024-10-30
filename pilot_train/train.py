@@ -92,7 +92,6 @@ def train(cfg:DictConfig):
             )
 
     optimizer = bt.get_optimizer(optimizer_name=training_cfg.optimizer, model=model, lr=float(training_cfg.lr))
-    # scheduler = Trainer.get_scheduler(training_cfg = training_cfg, optimizer=optimizer, lr=float(training_cfg.lr)) if "scheduler" in training_cfg else None
 
     scheduler = bt.get_scheduler(
                 training_cfg.scheduler,
@@ -149,40 +148,10 @@ def train(cfg:DictConfig):
     print("FINISHED TRAINING")
     print(f"TRAINING TIME: {toc(start_time)/60} [minutes]")
     
-# @hydra.main( version_base=None ,
-#         config_path= get_main_config_dir(),
-#         config_name = "train_pilot_policy")
-# def main(cfg:DictConfig):
-#     torch.multiprocessing.set_start_method("spawn")
 
-#     wandb_cfg =  cfg.log.wandb
-
-#     if wandb_cfg.run.enable:
-#         wandb.login()
-#         wandb.init(
-#             project=wandb_cfg.setup.project,
-#             settings=wandb.Settings(start_method="fork"),
-#             entity=wandb_cfg.setup.entity 
-#         )
-#         wandb.run.name = wandb_cfg.run.name
-        
-#         # Update the wandb args with the training configurations
-#         if wandb.run:
-#             wandb.config.update(OmegaConf.to_container(cfg, resolve=True))
-
-#     print("******** Training Config: *********")
-#     print(OmegaConf.to_yaml(cfg, resolve=True))
-#     print("********************\n")
-
-#     # Train
-#     train(cfg)
 
 if __name__ == "__main__":
-    # Argument parser for config_name
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--config_name", type=str, default="train_pilot_policy", help="Name of the configuration file")
-    # args = parser.parse_args()
-    
+
     @hydra.main(version_base=None, config_path=get_main_config_dir(), config_name="train_pilot_policy")
     def main(cfg: DictConfig):
         torch.multiprocessing.set_start_method("spawn")

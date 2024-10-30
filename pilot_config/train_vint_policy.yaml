@@ -9,7 +9,7 @@ defaults:
   - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: vint       # pidiff | vint | .. 
   - datasets: pilot_target_tracking_static # all | go_to_the_picture
-  # - log: defaults
+  - log: local
 
 
 # device setup
@@ -94,33 +94,3 @@ data:
   obs_type: "image"
   img_type: "depth" # if obs_type = image->  depth (1) | rgb (3) 
                     # do not forget to change the in_channels param in encoder_model as well
-
-# logging config
-log:
-  desc: "pilot_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gcp${training.goal_mask_prob}_mdp${training.modal_dropout_prob}_ph${data.pred_horizon}_"
-  # desc: batch_experiment_b${training.batch_size}_
-  
-  project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
-  # project_folder: /home/nimrod/dev/pilot/pilot_bc/pilot_train/logs
-  # project_folder: /home/curtis/dev/pilot/pilot_bc/pilot_train/logs
-
-  run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${now:%H-%M-%S}
-  ## =0 turns off
-  
-  ## TODO: handle with log and iamges 
-  num_images_log: 16
-  print_log_freq: 300 # in iterations
-  eval_log_freq: 3  # in iterations
-  image_log_freq: 2 #  
-  eval_fraction: 0.25
-  eval_freq: 1 # in epochs
-  save_model_freq: 10
-  wandb: 
-    run: 
-      enable: true
-      name: ${log.run_name} ## modify
-      log_freq: 10 # in iterations
-    setup:
-      project: pilot-release
-      entity: nimrodcurtis
-      mode: online

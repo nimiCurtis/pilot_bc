@@ -227,6 +227,14 @@ def get_goal_mask_tensor(goal_rel_pos_to_target,goal_mask_prob=0.0):
     
     return goal_mask
 
+def copy_variable(var):
+    if isinstance(var, np.ndarray):
+        return np.copy(var)
+    elif isinstance(var, torch.Tensor):
+        return var.clone()
+    else:
+        raise TypeError("Variable must be a numpy.ndarray or torch.Tensor")
+
 def actions_forward_pass(actions,action_stats, learn_angle, norm_type = "standard"):
     """
     Forward pass for actions, normalizing and converting deltas to trajectory.
@@ -243,7 +251,7 @@ def actions_forward_pass(actions,action_stats, learn_angle, norm_type = "standar
     library = torch if isinstance(actions, torch.Tensor) else np
 
     # Initialize normalized_actions with the original actions
-    normalized_actions = actions
+    normalized_actions = copy_variable(actions)
 
     # Normalize and compute deltas if actions contain multiple dimensions
     if len(actions.shape) > 1:

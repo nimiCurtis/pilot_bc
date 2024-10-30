@@ -556,58 +556,7 @@ class CNNMLPTrainer(BasicTrainer):
             raise ValueError(f"Optimizer {optimizer_name} not supported")
 
         return optimizer
-    
-    # @staticmethod
-    # def get_scheduler(training_cfg:DictConfig, optimizer:torch.optim, lr:float):
-    #     """
-    #     Constructs and returns a learning rate scheduler based on the provided configuration.
 
-    #     Parameters:
-    #         training_cfg (DictConfig): Training configurations that may include scheduler type.
-    #         optimizer (torch.optim): Optimizer for which the scheduler will be used.
-    #         lr (float): Initial learning rate.
-
-    #     Returns:
-    #         Scheduler: The constructed scheduler.
-    #     """
-        
-    #     scheduler_name = training_cfg.scheduler.lower()
-    #     if scheduler_name == "cosine":
-    #         print("Using cosine annealing with T_max", training_cfg.epochs)
-    #         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #             optimizer, T_max=training_cfg.epochs
-    #         )
-    #     elif scheduler_name == "cyclic":
-    #         print("Using cyclic LR with cycle", training_cfg.cyclic_period)
-    #         scheduler = torch.optim.lr_scheduler.CyclicLR(
-    #             optimizer,
-    #             base_lr=lr / 10.,
-    #             max_lr=lr,
-    #             step_size_up=training_cfg.cyclic_period // 2,
-    #             cycle_momentum=False,
-    #         )
-    #     elif scheduler_name == "plateau":
-    #         print("Using ReduceLROnPlateau")
-    #         scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #             optimizer,
-    #             factor=training_cfg.plateau_factor,
-    #             patience=training_cfg.plateau_patience,
-    #             verbose=True,
-    #         )
-    #     else:
-    #         raise ValueError(f"Scheduler {scheduler_name} not supported")
-
-    #     if training_cfg.warmup:
-    #         print("Using warmup scheduler")
-    #         scheduler = GradualWarmupScheduler(
-    #             optimizer,
-    #             multiplier=1,
-    #             total_epoch=training_cfg.warmup_epochs,
-    #             after_scheduler=scheduler,
-    #         )
-        
-    #     return scheduler
-    
     @staticmethod
     def get_scheduler(
         name: Union[str, SchedulerType],
