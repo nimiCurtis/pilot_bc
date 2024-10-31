@@ -183,8 +183,7 @@ class CNNMLPTrainer(BasicTrainer):
                                         curr_rel_pos_to_target=linear_input)
                                 
                 modalities = [obs_encoding_condition, lin_encoding]
-                
-                
+
                 # Not in use!
                 modal_dropout_mask = get_modal_dropout_mask(self.train_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
                 
@@ -346,30 +345,27 @@ class CNNMLPTrainer(BasicTrainer):
                     action_label_pred_deltas = torch.cat([action_label_pred_deltas, action_label_pred[:,:,2:]], dim=2)
 
                 # Predict the noise residual
-                obs_encoding_condition = self.model("vision_encoder",obs_img=vision_obs_context)
+                obs_encoding_condition = eval_model("vision_encoder",obs_img=vision_obs_context)
 
                 if self.target_context_enable:
                     linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
                                                     normalized_actions_context.flatten(1)], axis=1)
 
-                    lin_encoding = self.model("linear_encoder",
+                    lin_encoding = eval_model("linear_encoder",
                                             curr_rel_pos_to_target=linear_input)
                                     
                     modalities = [obs_encoding_condition, lin_encoding]
-                    
-                    
+
                     # Not in use!
                     modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
-                    
-                    final_encoded_condition = self.model("fuse_modalities",
+
+                    final_encoded_condition = eval_model("fuse_modalities",
                                                         modalities=modalities,
                                                         mask=modal_dropout_mask)
                 else:
                     final_encoded_condition = obs_encoding_condition
 
-
-
-                cnn_mlp_output = self.model("action_pred",
+                cnn_mlp_output = eval_model("action_pred",
                                         final_encoded_condition=final_encoded_condition)
 
                 # action_pred = action_pred[:,:self.action_horizon,:]

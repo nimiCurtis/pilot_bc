@@ -12,6 +12,7 @@ from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
+from pilot_utils.utils import deltas_to_actions
 
 
 class PiDiff(BaseModel):
@@ -31,11 +32,15 @@ class PiDiff(BaseModel):
         pred_horizon=data_cfg.pred_horizon
         learn_angle=data_cfg.learn_angle
         channels=vision_encoder_model_cfg.in_channels
+        goal_condition = data_cfg.goal_condition
+        target_context_enable = data_cfg.target_context_enable
         super(PiDiff, self).__init__(policy_model_cfg.name,
                                 context_size,
                                 pred_horizon,
                                 learn_angle,
-                                channels)
+                                channels,
+                                goal_condition,
+                                target_context_enable)
 
         # Data config
         self.target_context_enable = data_cfg.target_context_enable
@@ -220,6 +225,83 @@ class PiDiff(BaseModel):
             fused_tensor = torch.cat(modalities, dim=1)
 
         return fused_tensor
+
+    @torch.inference_mode() ############################# TODO: refactore here for inference 
+    def infer_actions(self, obs_img,
+                    curr_rel_pos_to_target,
+                    goal_rel_pos_to_target, 
+                    input_goal_mask ,
+                    normalized_action_context,
+                    diffusion_noise_scheduler):
+        
+        # Predict the noise residual
+        obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
+
+        # Get the input goal mask 
+        if input_goal_mask is not None:
+            goal_mask = input_goal_mask.to(self.device)
+
+        # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
+        if self.goal_condition:
+
+            if self.target_context_enable:
+                linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                            normalized_action_context.flatten(1)], axis=1)
+
+                lin_encoding = self("linear_encoder",
+                                        curr_rel_pos_to_target=linear_input)
+
+                modalities = [obs_encoding_condition, lin_encoding]
+                fused_modalities_encoding = self("fuse_modalities",
+                                                    modalities=modalities)
+            else:
+                # modalities are vision only
+                fused_modalities_encoding = obs_encoding_condition
+            
+            goal_encoding = self("goal_encoder",
+                                    goal_rel_pos_to_target=goal_rel_pos_to_target)
+            
+            final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+
+            final_encoded_condition = self("goal_masking",
+                                                final_encoded_condition=final_encoded_condition,
+                                                goal_mask = goal_mask)
+
+
+        ## TODO: next refactoring
+        else:       # No Goal condition >> take the obs_encoding as the tokens
+            goal_mask = None
+            final_encoded_condition = obs_encoding_condition
+            final_encoded_condition = self("goal_masking",
+                                                final_encoded_condition=final_encoded_condition,
+                                                goal_mask = goal_mask)
+
+        # initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
+        diffusion_output = noisy_diffusion_output
+
+        for k in diffusion_noise_scheduler.timesteps():
+            # predict noise
+            noise_pred = self("noise_pred",
+                                        noisy_action= diffusion_output,
+                                        timesteps = k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                                        final_encoded_condition = final_encoded_condition)
+
+            # inverse diffusion step (remove noise)
+            diffusion_output = diffusion_noise_scheduler.remove_noise(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            )
+        
+        
+        action_pred = deltas_to_actions(deltas=diffusion_output,
+                                                    pred_horizon=self.pred_horizon,
+                                                    action_horizon=self.action_horizon,
+                                                    learn_angle=self.learn_angle)
+        
+        return action_pred
 
 
     def forward(self, func_name, **kwargs):

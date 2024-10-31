@@ -533,24 +533,24 @@ class PilotDataset(Dataset):
         # Stay with normalized actions (Deltas)
         normalized_actions, normalized_actions_context, normalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
         
-        if self.goal_condition:
-            # Load the current and goal target trajectory data
-            target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
-            target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
-            target_traj_data_goal_len = len(target_traj_data_goal)
-            assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
+        # if self.goal_condition:
+        # Load the current and goal target trajectory data
+        target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
+        target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
+        target_traj_data_goal_len = len(target_traj_data_goal)
+        assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
-            # Compute the relative position to target 
-            rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
-                                                                                                                        target_traj_data_goal,
-                                                                                                                        goal_time,
-                                                                                                                        curr_time,
-                                                                                                                        context)
-        else:
-            # Not in use
-            rel_pos_to_target_context = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
-            goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
-            goal_pos_to_target_mask = False
+        # Compute the relative position to target 
+        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+                                                                                                                    target_traj_data_goal,
+                                                                                                                    goal_time,
+                                                                                                                    curr_time,
+                                                                                                                    context)
+        # else:
+        #     # Not in use
+        #     rel_pos_to_target_context = np.zeros((self.context_size, self.target_dim, 0))
+        #     goal_rel_pos_to_target = np.zeros((self.target_dim,))
+        #     goal_pos_to_target_mask = False
 
         # Compute the timestep distances
         if goal_is_negative:

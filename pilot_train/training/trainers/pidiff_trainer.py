@@ -454,7 +454,7 @@ class PiDiffTrainer(BasicTrainer):
                         linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
                                                     normalized_actions_context.flatten(1)], axis=1)
 
-                        lin_encoding = self.model("linear_encoder",
+                        lin_encoding = eval_model("linear_encoder",
                                                 curr_rel_pos_to_target=linear_input)
 
                         modalities = [obs_encoding_condition, lin_encoding]
@@ -483,7 +483,7 @@ class PiDiffTrainer(BasicTrainer):
                 else:       # No Goal condition >> take the obs_encoding as the tokens
                     goal_mask = None
                     final_encoded_condition = obs_encoding_condition
-                    final_encoded_condition = self.model("goal_masking",
+                    final_encoded_condition = eval_model("goal_masking",
                                                         final_encoded_condition=final_encoded_condition,
                                                         goal_mask = goal_mask)
 

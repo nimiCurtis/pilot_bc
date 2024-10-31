@@ -11,6 +11,8 @@ class BaseModel(nn.Module):
         pred_horizon: Optional[int] = 5,
         learn_angle: Optional[bool] = True,
         in_channels: int = 1,
+        goal_condition: bool = False,
+        target_context_enable: bool = True
     ) -> None:
         """
         Base Model main class
@@ -24,6 +26,8 @@ class BaseModel(nn.Module):
         self.context_size = context_size
         self.learn_angle = learn_angle
         self.pred_horizon = pred_horizon
+        self.goal_condition = goal_condition
+        self.target_context_enable = target_context_enable
         if self.learn_angle:
             self.action_dim = 4  # last two dims are the cos and sin of the angle
         else:
@@ -51,6 +55,14 @@ class BaseModel(nn.Module):
             self.device = device  # Update the device attribute
             return super(BaseModel, self).to(device)
 
+    
+    @torch.inference_mode() ############################# TODO: refactore here for inference 
+    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
+        """
+
+        """
+        raise NotImplementedError
+    
     def forward(
         self, func_name, **kwargs
     ):
@@ -58,7 +70,7 @@ class BaseModel(nn.Module):
 
         """
         raise NotImplementedError
-    
+
 
     def get_config(self):
         return self.config

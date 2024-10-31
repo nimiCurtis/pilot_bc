@@ -10,6 +10,7 @@ from torchvision import transforms
 import torch.nn.functional as F
 import torchvision.transforms.functional as TF
 
+from pilot_models.policy.base_model import BaseModel
 from pilot_train.data.pilot_dataset import PilotDataset
 from pilot_utils.data.data_utils import (
     img_path_to_data,
@@ -132,24 +133,19 @@ class InferenceDataset(PilotDataset):
         # Stay with normalized actions (Deltas)
         normalized_actions, unormalized_prev_actions,normalized_prev_action, normalized_goal_pos, unormalized_goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time, action_stats, context_action_stats)
 
-        if self.goal_condition:
-            # Load the current and goal target trajectory data
-            target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
-            target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
-            target_traj_data_goal_len = len(target_traj_data_goal)
-            assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
+        # Load the current and goal target trajectory data
+        target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
+        target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
+        target_traj_data_goal_len = len(target_traj_data_goal)
+        assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
-            # Compute the relative position to target 
-            rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
-                                                                                                                        target_traj_data_goal,
-                                                                                                                        goal_time,
-                                                                                                                        curr_time,
-                                                                                                                        context)
-        else:
-            # Not in use
-            rel_pos_to_target_context = np.zeros_like((normalized_actions.shape[0], self.target_dim, 0))
-            goal_rel_pos_to_target = goal_rel_pos_to_target = np.zeros((self.target_dim,))
-            goal_pos_to_target_mask = False
+        # Compute the relative position to target 
+        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+                                                                                                                    target_traj_data_goal,
+                                                                                                                    goal_time,
+                                                                                                                    curr_time,
+                                                                                                                    context)
+
 
         # Compute the timestep distances
         if goal_is_negative:
@@ -294,7 +290,7 @@ class PilotAgent(nn.Module):
 
         self.wpt_i = wpt_i
         self.frame_rate = frame_rate
-        self.model = get_policy_model(policy_model_cfg=policy_model_cfg,
+        self.model: BaseModel  = get_policy_model(policy_model_cfg=policy_model_cfg,
                                     vision_encoder_model_cfg=vision_encoder_cfg,
                                     linear_encoder_model_cfg=linear_encoder_cfg,
                                     data_cfg=data_cfg)
@@ -303,7 +299,9 @@ class PilotAgent(nn.Module):
         self.pred_horizon = data_cfg.pred_horizon
         self.action_dim = 4 if self.learn_angle else 2
         self.action_horizon = data_cfg.action_horizon
-        
+        self.norm_type = data_cfg.norm_type
+
+
         self.is_diffusion_model = True if self.model.name == "pidiff" else False
         if self.is_diffusion_model:
             # For now we use only pidiff model
@@ -377,7 +375,7 @@ class PilotAgent(nn.Module):
 
         cos_sin_angles = normalized_waypoints[:, 2:] # cos_sin is normalized anyway
         ndeltas = get_delta(normalized_waypoints[:, :2])
-        deltas = unnormalize_data(ndeltas, self.action_stats["pos"])
+        deltas = unnormalize_data(ndeltas, self.action_stats["pos"],norm_type=self.norm_type)
         waypoints = np.cumsum(deltas, axis=0)
         waypoints = np.concatenate([waypoints, cos_sin_angles],axis=1)
 
@@ -436,80 +434,25 @@ class PilotAgent(nn.Module):
     @torch.inference_mode() ############################# TODO: refactore here for inference 
     def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
         
-        obs_encoding = self.model("vision_encoder",
-                                obs_img=obs_img)
-        
-        # Get the input goal mask 
-        if input_goal_mask is not None:
-            goal_mask = input_goal_mask.to(self.device)
-
-        # TODO: add if else condition on goal_condition
-        if normalized_action_context is not None:
-            
-            linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
-                                                        normalized_action_context.flatten(1)], axis=1)
-        else:
-            linear_input = curr_rel_pos_to_target.flatten(1)
-
-        lin_encoding = self.model("linear_encoder",
-                                curr_rel_pos_to_target=linear_input)
-        
-        modalities = [obs_encoding, lin_encoding]
-        fused_modalities_encoding = self.model("fuse_modalities", modalities=modalities)
-        
-        goal_encoding = self.model("goal_encoder",
-                                goal_rel_pos_to_target=goal_rel_pos_to_target)
-        
-        final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-
-        final_encoded_condition = self.model("goal_masking",final_encoded_condition=final_encoded_condition, goal_mask=goal_mask)
-
-        # else:       # No Goal condition >> take the obs_encoding as the tokens # not in use!!!
-        #     final_encoded_condition = obs_encoding
-
-        # initialize action from Gaussian noise
-        noisy_diffusion_output = torch.randn(
-            (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
-        diffusion_output = noisy_diffusion_output
-
-        for k in self.noise_scheduler.timesteps():
-            # predict noise
-            noise_pred = self.model("noise_pred",
-                                        noisy_action= diffusion_output,
-                                        timesteps = k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                        final_encoded_condition = final_encoded_condition)
-
-            # inverse diffusion step (remove noise)
-            diffusion_output = self.noise_scheduler.remove_noise(
-                model_output=noise_pred,
-                timestep=k,
-                sample=diffusion_output
+        if self.is_diffusion_model:
+            actions = self.model.infer_actions(
+                obs_img,
+                curr_rel_pos_to_target,
+                goal_rel_pos_to_target, 
+                input_goal_mask ,
+                normalized_action_context,
+                self.noise_scheduler
             )
-        
-        # diffusion output should be denoised action deltas
-        action_pred_deltas = diffusion_output
-        
-        # augment outputs to match labels size-wise
-        action_pred_deltas = action_pred_deltas.reshape(
-            (action_pred_deltas.shape[0], self.pred_horizon, self.action_dim)
-        )
+        else:
+            actions = self.model.infer_actions(
+                obs_img,
+                curr_rel_pos_to_target,
+                goal_rel_pos_to_target, 
+                input_goal_mask ,
+                normalized_action_context
+            ) 
 
-        # Init action traj
-        action_pred = torch.zeros_like(action_pred_deltas)
-        
-        ## Cumsum 
-        action_pred[:, :, :2] = torch.cumsum(
-            action_pred_deltas[:, :, :2], dim=1
-        )  # convert position and orientation deltas into waypoints in local coords
-
-        if self.model.learn_angle:
-            action_pred[:, :, 2:] = F.normalize(
-                action_pred_deltas[:, :, 2:].clone(), dim=-1
-            )  # normalize the angle prediction to be fit with orientation representation [cos(theta), sin(theta)] >> (-1,1) normalization
-            
-        action = action_pred[:,:self.action_horizon,:]
-        
-        return action
+        return actions
 
 def get_inference_config(model_name):
     """
@@ -560,7 +503,10 @@ def main():
     """
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
-    model_name = "cnn_mlp_bsz16_c0_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntmaxmin_2024-10-30_17-15-54"
+    # model_name = "cnn_mlp_bsz16_c0_ac1_gcFalse_gcp0.1_ah16_ph32_tceTrue_ntstandard_2024-10-31_15-04-40"
+    model_name = "pidiff_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-23-38"
+    # model_name = "vint_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-25-13"
+    
     model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)

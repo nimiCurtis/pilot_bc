@@ -56,14 +56,14 @@ training:
   regularized_loss: True # l2 regularization
   debug:
     # steps per epoch
-    max_train_steps: null
-    max_val_steps: null
+    max_train_steps: 2
+    max_val_steps: 2
 
 
 # data config
 data:
-  goal_condition: True # Always 
-  target_context_enable: False
+  goal_condition: False # Always 
+  target_context_enable: True
 
   # normalization for the action space
   # normalization in the dataset class at data/pilot_dataset.py

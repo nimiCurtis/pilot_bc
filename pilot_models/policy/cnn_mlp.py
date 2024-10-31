@@ -16,6 +16,7 @@ from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
+from pilot_utils.utils import deltas_to_actions
 
 
 class CNNMLPPolicy(BaseModel):
@@ -63,20 +64,14 @@ class CNNMLPPolicy(BaseModel):
         else:
             self.compress_obs_enc = nn.Identity()
         
-        if self.goal_condition:
-            # Linear encoder for time series target position
-            target_dim = data_cfg.target_dim 
-            lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
-            self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
-                                            nn.ReLU(),
-                                            nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
-                                            nn.ReLU(),
-                                            nn.Linear(lin_encoding_size // 2, lin_encoding_size))
-            if self.target_context_enable:
-                self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
-            
-            # Observations encoding size
-            assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
+
+        lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
+
+        if self.target_context_enable:
+            self.lin_encoder = get_linear_encoder_model(linear_encoder_model_cfg,data_cfg)
+        
+        # Observations encoding size
+        assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
 
         self.action_predictor = nn.Sequential(nn.Linear(vision_encoding_size, vision_encoding_size // 2),
                                         nn.ReLU(),
@@ -163,6 +158,36 @@ class CNNMLPPolicy(BaseModel):
         )
 
         return action_pred_deltas
+
+    @torch.inference_mode()
+    def infer_actions(self, obs_img, curr_rel_pos_to_target, goal_rel_pos_to_target, input_goal_mask, normalized_action_context):
+        # Predict the noise residual
+        obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
+
+        if self.target_context_enable:
+            linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                            normalized_action_context.flatten(1)], axis=1)
+
+            lin_encoding = self("linear_encoder",
+                                    curr_rel_pos_to_target=linear_input)
+                            
+            modalities = [obs_encoding_condition, lin_encoding]
+
+            final_encoded_condition = self("fuse_modalities",
+                                                modalities=modalities)
+        else:
+            final_encoded_condition = obs_encoding_condition
+
+        cnn_mlp_output = self("action_pred",
+                                final_encoded_condition=final_encoded_condition)
+
+        # action_pred = action_pred[:,:self.action_horizon,:]
+        action_pred = deltas_to_actions(deltas=cnn_mlp_output,
+                                        pred_horizon=self.pred_horizon,
+                                        action_horizon=self.action_horizon,
+                                        learn_angle=self.learn_angle)
+        
+        return action_pred
     
     def forward(self, func_name, **kwargs):
         

@@ -9,6 +9,7 @@ import torch.nn.functional as F
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.model_registry import get_linear_encoder_model, get_vision_encoder_model
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
+from pilot_utils.utils import deltas_to_actions
 
 
 class ViNT(BaseModel):
@@ -37,11 +38,15 @@ class ViNT(BaseModel):
         pred_horizon=data_cfg.pred_horizon
         learn_angle=data_cfg.learn_angle
         channels=vision_encoder_model_cfg.in_channels
+        goal_condition = data_cfg.goal_condition
+        target_context_enable = data_cfg.target_context_enable
         super(ViNT, self).__init__(policy_model_cfg.name,
                                 context_size,
                                 pred_horizon,
                                 learn_angle,
-                                channels)
+                                channels,
+                                goal_condition,
+                                target_context_enable)
 
         # Data config
         self.target_context_enable = data_cfg.target_context_enable
@@ -129,8 +134,7 @@ class ViNT(BaseModel):
         # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         return lin_encoding
 
-    
-    
+
     def infer_goal(self,goal_rel_pos_to_target):
         goal_encoding = self.goal_encoder(goal_rel_pos_to_target)
         if len(goal_encoding.shape) == 2:
@@ -171,7 +175,7 @@ class ViNT(BaseModel):
             fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
 
         else:
-            fused_tensor = modalities
+            fused_tensor = torch.cat(modalities, dim=1)
 
         return fused_tensor
 
@@ -189,6 +193,43 @@ class ViNT(BaseModel):
 
         return action_pred_deltas
 
+    @torch.inference_mode()
+    def infer_actions(self, obs_img, curr_rel_pos_to_target, goal_rel_pos_to_target, input_goal_mask, normalized_action_context):
+        # Predict the noise residual
+        obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
+
+        if self.target_context_enable:
+            linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
+                                            normalized_action_context.flatten(1)], axis=1)
+
+            lin_encoding = self("linear_encoder",
+                                    curr_rel_pos_to_target=linear_input)
+                            
+            modalities = [obs_encoding_condition, lin_encoding]
+
+
+            fused_modalities_encoding = self("fuse_modalities",
+                                                modalities=modalities)
+        else:
+            fused_modalities_encoding = obs_encoding_condition
+
+        goal_encoding = self("goal_encoder",
+                                goal_rel_pos_to_target=goal_rel_pos_to_target)
+        
+        tokens = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+        final_encoded_condition = self("decoder",
+                            tokens=tokens)
+
+        vint_output = self("action_pred",
+                                final_encoded_condition=final_encoded_condition)
+
+        # action_pred = action_pred[:,:self.action_horizon,:]
+        action_pred = deltas_to_actions(deltas=vint_output,
+                                        pred_horizon=self.pred_horizon,
+                                        action_horizon=self.action_horizon,
+                                        learn_angle=self.learn_angle)
+        
+        return action_pred
 
     def forward(self, func_name, **kwargs):
         
