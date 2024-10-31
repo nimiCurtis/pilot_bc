@@ -45,8 +45,6 @@ class CNNMLPTrainer(BasicTrainer):
     """
 
     def __init__(self, model: nn.Module,
-                optimizer: torch.optim,
-                scheduler,
                 dataloader: DataLoader,
                 test_dataloaders: List[DataLoader],
                 device,
@@ -71,8 +69,6 @@ class CNNMLPTrainer(BasicTrainer):
         """
 
         super().__init__(model=model,
-                        optimizer=optimizer,
-                        scheduler=scheduler,
                         dataloader=dataloader,
                         test_dataloaders=test_dataloaders,
                         device=device,
@@ -80,6 +76,18 @@ class CNNMLPTrainer(BasicTrainer):
                         data_cfg=data_cfg, 
                         log_cfg=log_cfg,
                         datasets_cfg=datasets_cfg)
+        
+        self.scheduler = self.build_scheduler(
+                    training_cfg.scheduler,
+                    optimizer=self.optimizer,
+                    num_warmup_steps=training_cfg.warmup_steps,
+                    num_training_steps=(
+                        training_cfg.epochs) \
+                            // training_cfg.gradient_accumulate_every,
+                    # pytorch assumes stepping LRScheduler every epoch
+                    # however huggingface diffusers steps it every batch
+                    last_epoch=-1
+                )
 
     def train_one_epoch(self, epoch: int)->None:
         """

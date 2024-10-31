@@ -19,9 +19,7 @@ TRAINERS = {
     'cnn_mlp': CNNMLPTrainer
 }
 
-def register_trainer(model: nn.Module,
-                optimizer: torch.optim,
-                scheduler,
+def build_trainer(model: nn.Module,
                 dataloader: DataLoader,
                 test_dataloaders: List[DataLoader],
                 device,
@@ -33,10 +31,8 @@ def register_trainer(model: nn.Module,
     model_name = model.module.name if hasattr(model, "module") else model.name
     
     trainer_class = TRAINERS[model_name]
-    
+
     trainer = trainer_class(model,
-                optimizer,
-                scheduler,
                 dataloader,
                 test_dataloaders,
                 device,

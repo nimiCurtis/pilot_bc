@@ -30,8 +30,6 @@ class PiDiffTrainer(BasicTrainer):
     """
 
     def __init__(self, model: nn.Module,
-                optimizer: torch.optim,
-                scheduler,
                 dataloader: DataLoader,
                 test_dataloaders: List[DataLoader],
                 device,
@@ -56,8 +54,6 @@ class PiDiffTrainer(BasicTrainer):
         """
 
         super().__init__(model=model,
-                optimizer=optimizer,
-                scheduler=scheduler,
                 dataloader=dataloader,
                 test_dataloaders=test_dataloaders,
                 device=device,
@@ -66,6 +62,18 @@ class PiDiffTrainer(BasicTrainer):
                 log_cfg=log_cfg,
                 datasets_cfg=datasets_cfg)
         
+        self.scheduler = self.build_scheduler(
+                    name=training_cfg.scheduler,
+                    optimizer=self.optimizer,
+                    num_warmup_steps=training_cfg.warmup_steps,
+                    num_training_steps=(
+                        (len(self.dataloader)-2) * training_cfg.epochs) \
+                            // training_cfg.gradient_accumulate_every,
+                    # pytorch assumes stepping LRScheduler every epoch
+                    # however huggingface diffusers steps it every batch
+                    last_epoch=-1
+                )
+
         noise_scheduler_config = self.model.module.get_scheduler_config() if hasattr(self.model, "module") else self.model.get_scheduler_config()
         self.noise_scheduler = DiffuserScheduler(noise_scheduler_config)
 

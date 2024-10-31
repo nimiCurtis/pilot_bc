@@ -44,8 +44,6 @@ class BasicTrainer:
     """
 
     def __init__(self, model: nn.Module,
-                optimizer: torch.optim,
-                scheduler,
                 dataloader: DataLoader,
                 test_dataloaders: List[DataLoader],
                 device,
@@ -71,8 +69,7 @@ class BasicTrainer:
 
         self.model = model
         self.model_name = self.model.module.name if hasattr(self.model, "module") else self.model.name
-        self.optimizer = optimizer
-        self.scheduler = scheduler
+
         self.dataloader = dataloader
         self.test_dataloaders = test_dataloaders
         self.device = device
@@ -125,7 +122,23 @@ class BasicTrainer:
                 training_cfg.ema,
                 parameters=self.ema_model.parameters())
             # self.ema = EMAModel(self.ema_model.parameters(), power=0.75)
-                
+        
+        ### GRADIENT CLIPPING
+        if training_cfg.clipping:
+            clip_max_norm = training_cfg.clipping_max_norm
+            print("Clipping gradients to", clip_max_norm)
+            for p in model.parameters():
+                if not p.requires_grad:
+                    continue
+                p.register_hook(
+                    lambda grad: torch.clamp(
+                        grad, -1 * clip_max_norm, clip_max_norm
+                    )
+                )
+
+        self.optimizer = self.build_optimizer(optimizer_name=training_cfg.optimizer,
+                                        model=model,
+                                        lr=float(training_cfg.lr))
 
         self.goal_mask_prob = training_cfg.goal_mask_prob
         self.goal_mask_prob = torch.clip(torch.tensor(self.goal_mask_prob), 0, 1)
@@ -272,8 +285,10 @@ class BasicTrainer:
                 data_cfg = data_cfg
                 )
 
-    @staticmethod
-    def get_optimizer(optimizer_name:str, model:nn.Module, lr:float)->torch.optim:
+    def build_optimizer(self,
+                        optimizer_name:str,
+                        model:nn.Module,
+                        lr:float)->torch.optim:
         """
         Retrieves the optimizer based on the provided name and configuration.
 
@@ -297,9 +312,9 @@ class BasicTrainer:
             raise ValueError(f"Optimizer {optimizer_name} not supported")
 
         return optimizer
-    
-    @staticmethod
-    def get_scheduler(
+
+    def build_scheduler(
+        self,
         name: Union[str, SchedulerType],
         optimizer: Optimizer,
         num_warmup_steps: Optional[int] = None,
