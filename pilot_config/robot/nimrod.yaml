@@ -14,20 +14,39 @@ nimrod:
       p1: 0.0
       p2: 0.0
 
-  max_ang_vel: 43.9604
+  max_ang_vel: 43.94
   max_lin_vel:
-  - 2.1859
-  - 1.77
-  mean_ang_vel: -0.009
+  - 1.8613
+  - 1.1998
+  mean_ang_vel: -0.0235
   mean_lin_vel:
-  - 0.2925
-  - 0.0166
+  - 0.2886
+  - 0.0025
   min_ang_vel: -43.9511
   min_lin_vel:
   - -1.6696
-  - -1.3512
-  std_ang_vel: 2.0274
+  - -1.1322
+  std_ang_vel: 1.5015
   std_lin_vel:
-  - 0.4014
-  - 0.1533
+  - 0.3905
+  - 0.1254
+  
+  # max_ang_vel: 43.9604
+  # max_lin_vel:
+  # - 2.1859
+  # - 1.77
+  # mean_ang_vel: -0.009
+  # mean_lin_vel:
+  # - 0.2925
+  # - 0.0166
+  # min_ang_vel: -43.9511
+  # min_lin_vel:
+  # - -1.6696
+  # - -1.3512
+  # std_ang_vel: 2.0274
+  # std_lin_vel:
+  # - 0.4014
+  # - 0.1533
+
+
   metric_waypoint_spacing: 1

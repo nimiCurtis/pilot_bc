@@ -402,7 +402,8 @@ class PilotAgent(nn.Module):
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
         
         if prev_actions is not None:
-            normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle)
+            # TODO: add norm_type
+            normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle,norm_type=self.norm_type)
             normalized_action_context_queue = normalized_action_context_queue.unsqueeze(0).to(self.device)
         
         
@@ -503,7 +504,7 @@ def main():
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
     # model_name = "cnn_mlp_bsz16_c0_ac1_gcFalse_gcp0.1_ah16_ph32_tceTrue_ntstandard_2024-10-31_15-04-40"
-    model_name = "pidiff_bsz16_c5_ac1_gcTrue_gcp0.1_ah16_ph32_tceTrue_ntmaxmin_2024-10-31_17-38-15"
+    model_name = "pidiff_bsz80_c0_ac1_gcTrue_gcp0.1_ph32_tceTrue_ntmaxmin_2024-10-31_17-41-51"
     # model_name = "vint_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-25-13"
     
     model_version = "latest" 
@@ -686,7 +687,7 @@ def main():
         json.dump(results, json_file, indent=4)
 
     print(f"Results saved to {results_path}")
-    
+
 
 # Entry point for the script to execute the main function
 if __name__ == "__main__":
