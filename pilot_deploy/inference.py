@@ -397,8 +397,7 @@ class PilotAgent(nn.Module):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: Raw normalized actions predicted by the model.
         """
-        
-        
+
         context_queue = obs_img.unsqueeze(0).to(self.device)
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
         
@@ -504,10 +503,10 @@ def main():
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
     # model_name = "cnn_mlp_bsz16_c0_ac1_gcFalse_gcp0.1_ah16_ph32_tceTrue_ntstandard_2024-10-31_15-04-40"
-    model_name = "pidiff_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-23-38"
+    model_name = "pidiff_bsz16_c5_ac1_gcTrue_gcp0.1_ah16_ph32_tceTrue_ntmaxmin_2024-10-31_17-38-15"
     # model_name = "vint_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-25-13"
     
-    model_version = "best_model" 
+    model_version = "latest" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
@@ -577,7 +576,7 @@ def main():
         
         viz_images = torch.split(context_queue, 1, dim=0)
         viz_obs_image = TF.resize(viz_images[-1], VIZ_IMAGE_SIZE)
-        viz_context_t0_image = TF.resize(viz_images[-data_cfg.action_context_size], VIZ_IMAGE_SIZE)
+        viz_context_t0_image = TF.resize(viz_images[0], VIZ_IMAGE_SIZE)
         viz_difference = viz_obs_image - viz_context_t0_image
         
         # Convert the ground truth actions into waypoints

@@ -76,14 +76,12 @@ class CNNMLPTrainer(BasicTrainer):
                         data_cfg=data_cfg, 
                         log_cfg=log_cfg,
                         datasets_cfg=datasets_cfg)
-        
+
         self.scheduler = self.build_scheduler(
                     training_cfg.scheduler,
                     optimizer=self.optimizer,
                     num_warmup_steps=training_cfg.warmup_steps,
-                    num_training_steps=(
-                        training_cfg.epochs) \
-                            // training_cfg.gradient_accumulate_every,
+                    num_training_steps=(training_cfg.epochs) // training_cfg.gradient_accumulate_every,
                     # pytorch assumes stepping LRScheduler every epoch
                     # however huggingface diffusers steps it every batch
                     last_epoch=-1

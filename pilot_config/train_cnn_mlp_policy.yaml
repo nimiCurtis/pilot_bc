@@ -30,7 +30,7 @@ training:
   clipping: True # Clip gradients
   clipping_max_norm: 1.
   scheduler: cosine  # cyclic | cosine | plateau
-  warmup_steps: 500
+  warmup_steps: 3
   gradient_accumulate_every: 1
 
   warmup: True 
@@ -56,8 +56,8 @@ training:
   regularized_loss: True # l2 regularization
   debug:
     # steps per epoch
-    max_train_steps: 2
-    max_val_steps: 2
+    max_train_steps: null
+    max_val_steps: null
 
 
 # data config

@@ -55,8 +55,8 @@ training:
   regularized_loss: True # l2 regularization
   debug:
     # steps per epoch
-    max_train_steps: 2
-    max_val_steps: 2
+    max_train_steps: null
+    max_val_steps: null
 
 
 # data config
