@@ -18,11 +18,11 @@ import yaml
 import torch
 import torch.nn as nn
 from pilot_utils.utils import to_numpy, calculate_sin_cos, clip_angles
-from pilot_utils.data.data_utils import yaw_rotmat, get_robot_data_properties
+from pilot_utils.data.data_utils import yaw_rotmat, get_robot_data_properties, to_local_coords
 
 
 
-VIZ_IMAGE_SIZE = (640, 480)
+VIZ_IMAGE_SIZE = (512, 288)
 RED = np.array([1, 0, 0])
 GREEN = np.array([0, 1, 0])
 BLUE = np.array([0, 0, 1])
@@ -222,6 +222,7 @@ class Visualizer:
             save_path: Optional[str] = None,
             display: Optional[bool] = False,
             diff_img = None,
+            offline = False
     ):
         """
         Compare predicted path with the gt path of waypoints using egocentric visualization.
@@ -286,20 +287,24 @@ class Visualizer:
                 gt_yaws = np.arctan2(label_waypoints[:,-1],label_waypoints[:,-2])
                 gt_yaws = gt_yaws + last_yaw
                 gt_yaws = clip_angles(gt_yaws)
-            
-            
+
+
                 rotmat = yaw_rotmat(last_yaw)
+                
+
             else:
                 rotmat = yaw_rotmat(0)
+                
 
             if positions.shape[-1] == 2:
                 rotmat = rotmat[:2, :2]
             
             goal_pos = (goal_pos).dot(rotmat) + last_pos
             points[1] = goal_pos
+            
+            
             pred_waypoints[:,:2] = (positions).dot(rotmat) + last_pos
             label_waypoints[:,:2] = (gt_positions).dot(rotmat) + last_pos
-            
             
 
             #shape
@@ -309,6 +314,10 @@ class Visualizer:
 
             pred_waypoints = np.vstack([context_waypoints[-1],pred_waypoints])
             label_waypoints = np.vstack([context_waypoints[-1],label_waypoints])
+
+            robot_in_local = to_local_coords(positions=pred_waypoints[:,:2], curr_pos=last_pos, curr_yaw=last_yaw)
+            gt_positions_in_local = to_local_coords(positions=label_waypoints[:,:2], curr_pos=last_pos, curr_yaw=last_yaw)
+            goal_pos_in_local = to_local_coords(positions=goal_pos, curr_pos=last_pos, curr_yaw=last_yaw)
 
         if len(pred_waypoints.shape) > 2:
             trajs = [*pred_waypoints, label_waypoints]
@@ -331,22 +340,25 @@ class Visualizer:
         
         ## Context image
         ax[1].imshow(goal_img)
-        ax[2].imshow(obs_img)
+        
+        if offline:        
+            self.plot_trajs_and_points_on_image(
+                ax[2],
+                obs_img,
+                dataset_name,
+                [robot_in_local, gt_positions_in_local],
+                [np.array([0,0]), goal_pos_in_local],
+                traj_colors=[CYAN, MAGENTA],
+                point_colors=[GREEN, RED],
+            )
+        else:
+            ax[2].imshow(obs_img)
         
         if diff_img is not None:
             ax[3].imshow(diff_img)
             ax[3].set_title(f"Observations Difference",color=points_colors[0])
 
-        ## TODO        
-        # self.plot_trajs_and_points_on_image(
-        #     ax[2],
-        #     obs_img,
-        #     dataset_name,
-        #     trajs[:2],
-        #     [robot_pos, goal_pos],
-        #     traj_colors=[CYAN, MAGENTA],
-        #     point_colors=[GREEN, RED],
-        # )
+        
         
 
         fig.set_size_inches(15, 10)
@@ -362,6 +374,12 @@ class Visualizer:
 
         if not display:
             plt.close(fig)
+
+
+
+
+
+
 
 
     def plot_trajs_and_points_on_image(
@@ -538,6 +556,7 @@ class Visualizer:
                 save_path,
                 display,
                 diff_img = diff_img,
+                offline=True
             )
 
 
@@ -578,6 +597,7 @@ def plot_trajs_and_points(
             traj_labels is None or len(list_trajs) == len(traj_labels) or default_coloring
     ), "Not enough labels for trajectories"
     assert point_labels is None or len(list_points) == len(point_labels), "Not enough labels for points"
+    
     
     for i, traj in enumerate(list_trajs):
         if traj_labels is None:
@@ -677,7 +697,7 @@ def project_points(
         camera_x_offset: float,
         camera_matrix: np.ndarray,
         dist_coeffs: np.ndarray,
-):
+):  
     """
     Projects 3D coordinates onto a 2D image plane using the provided camera parameters.
 
@@ -699,7 +719,9 @@ def project_points(
         [xy, -camera_height * np.ones(list(xy.shape[:-1]) + [1])], axis=-1
     )
 
-    # create dummy rotation and-data_cfg.action_context_size
+    # create dummy rotation and translation vectors
+    rvec = tvec = (0, 0, 0)
+
     xyz[..., 0] += camera_x_offset
     xyz_cv = np.stack([xyz[..., 1], -xyz[..., 2], xyz[..., 0]], axis=-1)
     uv, _ = cv2.projectPoints(

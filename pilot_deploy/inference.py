@@ -402,7 +402,6 @@ class PilotAgent(nn.Module):
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
         
         if prev_actions is not None:
-            # TODO: add norm_type
             normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle,norm_type=self.norm_type)
             normalized_action_context_queue = normalized_action_context_queue.unsqueeze(0).to(self.device)
         
@@ -414,13 +413,12 @@ class PilotAgent(nn.Module):
             
             goal_mask = (torch.sum(target_context_mask) == curr_rel_pos_to_target.shape[0]).long()
             
-            target_context_mask = target_context_mask.unsqueeze(0).to(self.device).long()
+            goal_mask = goal_mask.unsqueeze(0).to(self.device).long()
             
         if goal_rel_pos_to_target is not None:
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
 
-        # with torch.no_grad():
         normalized_actions = self.infer_actions(
                 obs_img=context_queue,
                 curr_rel_pos_to_target=target_context_queue,
@@ -503,9 +501,9 @@ def main():
     """
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
-    # model_name = "cnn_mlp_bsz16_c0_ac1_gcFalse_gcp0.1_ah16_ph32_tceTrue_ntstandard_2024-10-31_15-04-40"
-    model_name = "pidiff_bsz80_c0_ac1_gcTrue_gcp0.1_ph32_tceTrue_ntmaxmin_2024-10-31_17-41-51"
-    # model_name = "vint_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceFalse_ntstandard_2024-10-30_17-25-13"
+    # model_name = "cnn_mlp_bsz80_c0_ac1_gcFalse_gcp0.1_ph16_tceTrue_ntmaxmin_2024-11-03_15-20-01"
+    # model_name = "pidiff_bsz80_c1_ac1_gcTrue_gcp0.1_ph32_tceTrue_ntmaxmin_2024-11-01_02-02-26"
+    model_name = "vint_bsz80_c0_ac1_gcTrue_gcp0.1_ph16_tceTrue_ntmaxmin_2024-11-03_16-01-31"
     
     model_version = "latest" 
     # Retrieve the model's inference configuration
@@ -551,7 +549,7 @@ def main():
     
     # Initialize variables for calculating average inference time
     dt_sum = 0
-    size = 200
+    size = 3000
     
     size = min(size,len(dataset))
     action_horizon = data_cfg.action_horizon
@@ -559,7 +557,7 @@ def main():
     yaw_tot_err = 0
     
     
-    viz_indices = np.random.randint(0,size,size=(50))
+    viz_indices = np.random.randint(0,size,size=(1000))
     # Loop through the dataset, performing inference and timing each prediction
     for i in range(0, size):
         # Retrieve relevant data for inference, including context, ground truth actions, etc.
@@ -670,7 +668,7 @@ def main():
         results_dir,
         "0_results.json"
     )
-            
+
     results = {
         "size": size,
         "pos_avg_mse": pos_avg_err,

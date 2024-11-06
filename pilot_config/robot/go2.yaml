@@ -1,13 +1,13 @@
 go2:
   # update camera params when updating the evaluation tools
   camera_metrics:
-    camera_height: 0.18
+    camera_height: 0.28
     camera_matrix:
-      cx: 207.72
-      cy: 119.839
-      fx: 224.345
-      fy: 224.17
-    camera_x_offset: 0.035
+      cx: 293.429
+      cy: 142.23
+      fx: 259.91
+      fy: 293.429
+    camera_x_offset: 0.3
     dist_coeffs:
       k1: 0.0
       k2: 0.0

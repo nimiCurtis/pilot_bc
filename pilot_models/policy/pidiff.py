@@ -242,9 +242,7 @@ class PiDiff(BaseModel):
             goal_mask = input_goal_mask.to(self.device)
 
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
-        if self.goal_condition:
-
-            if self.target_context_enable:
+        if self.target_context_enable:
                 linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
                                             normalized_action_context.flatten(1)], axis=1)
 
@@ -254,10 +252,11 @@ class PiDiff(BaseModel):
                 modalities = [obs_encoding_condition, lin_encoding]
                 fused_modalities_encoding = self("fuse_modalities",
                                                     modalities=modalities)
-            else:
-                # modalities are vision only
-                fused_modalities_encoding = obs_encoding_condition
-            
+        else:
+            # modalities are vision only
+            fused_modalities_encoding = obs_encoding_condition
+        
+        if self.goal_condition:
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
             
@@ -266,7 +265,6 @@ class PiDiff(BaseModel):
             final_encoded_condition = self("goal_masking",
                                                 final_encoded_condition=final_encoded_condition,
                                                 goal_mask = goal_mask)
-
 
         ## TODO: next refactoring
         else:       # No Goal condition >> take the obs_encoding as the tokens
