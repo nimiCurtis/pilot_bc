@@ -236,13 +236,15 @@ class ViNTTrainer(BasicTrainer):
             
             loss = losses["total_loss"]
 
+            self.optimizer.zero_grad()
             loss.backward()
-
+            self.optimizer.step()
+            
             # step optimizer
-            if self.global_step % self.gradient_accumulate_every == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                            
+            # if self.global_step % self.gradient_accumulate_every == 0:
+                
+                
+
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
@@ -499,7 +501,8 @@ class ViNTTrainer(BasicTrainer):
                                     current_avg_loss=current_avg_loss,
                                     path=best_model_path)
 
-            wandb.log({}, commit=False)
+            if self.use_wandb:
+                wandb.log({}, commit=False)
 
             ## TODO:check
             # if self.scheduler is not None:
@@ -509,10 +512,10 @@ class ViNTTrainer(BasicTrainer):
             #     else:
             #         self.scheduler.step()
             
-            wandb.log({
-                "avg_total_test_loss": current_avg_loss,
-                "lr": self.optimizer.param_groups[0]["lr"],
-            }, commit=False)
+                wandb.log({
+                    "avg_total_test_loss": current_avg_loss,
+                    "lr": self.optimizer.param_groups[0]["lr"],
+                }, commit=False)
 
             numbered_path = os.path.join(self.project_log_folder, f"{epoch}.pth")
             
@@ -526,8 +529,9 @@ class ViNTTrainer(BasicTrainer):
                                     current_avg_loss=current_avg_loss,
                                     path=self.latest_path)
         # Flush the last set of eval logs
-        wandb.log({})
-        print()
+        if self.use_wandb:
+            wandb.log({})
+            print()
     
     def save_checkpoint(self,epoch, current_avg_loss, path):
         # DataParallel wrappers keep raw model object in .module attribute

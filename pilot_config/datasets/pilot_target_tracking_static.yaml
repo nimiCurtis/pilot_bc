@@ -111,4 +111,4 @@ robots:
 - go2
 - nimrod
 - go2_wpt2
-- nimrod_wpt2
+# - nimrod_wpt2

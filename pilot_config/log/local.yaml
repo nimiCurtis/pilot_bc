@@ -18,7 +18,7 @@ eval_freq: 1 # in epochs
 save_model_freq: 10
 wandb: 
   run: 
-    enable: true
+    enable: False
     name: ${log.run_name} ## modify
     log_freq: 10 # in iterations
   setup:
