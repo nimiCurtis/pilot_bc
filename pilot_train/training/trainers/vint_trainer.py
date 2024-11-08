@@ -228,6 +228,8 @@ class ViNTTrainer(BasicTrainer):
                                             action_horizon=self.action_horizon,
                                             learn_angle=self.learn_angle)
             
+            self.optimizer.zero_grad()
+            
             losses = compute_losses(
                 action_label=action_label,
                 action_pred=action_pred,
@@ -236,8 +238,8 @@ class ViNTTrainer(BasicTrainer):
             
             loss = losses["total_loss"]
 
-            self.optimizer.zero_grad()
             loss.backward()
+            
             self.optimizer.step()
             
             # step optimizer

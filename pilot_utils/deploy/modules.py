@@ -428,13 +428,14 @@ class SubgoalsGen(object):
         
         # If the distance is less than the threshold, return the goal position
         if distance_to_goal <= self.threshold:
-            return goal_rel_pos
+            return goal_rel_pos, np.linalg.norm(goal_rel_pos)
         
         # Otherwise, calculate a subgoal along the line towards the goal, at the threshold distance
         direction_vector = (goal_rel_pos - curr_rel_pos) / distance_to_goal
         subgoal_pos = curr_rel_pos + direction_vector * self.threshold
         
-        return subgoal_pos
+        
+        return subgoal_pos, np.linalg.norm(subgoal_pos)
 
 
 
