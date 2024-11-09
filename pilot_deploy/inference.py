@@ -501,10 +501,11 @@ def main():
     """
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
-    # model_name = "cnn_mlp_bsz80_c0_ac1_gcFalse_gcp0.1_ph16_tceTrue_ntmaxmin_2024-11-03_15-20-01"
-    # model_name = "pidiff_bsz80_c1_ac1_gcTrue_gcp0.1_ph32_tceTrue_ntmaxmin_2024-11-01_02-02-26"
-    model_name = "pidiff_bsz80_c1_ac1_gcTrue_gcp0.5_ph32_tceTrue_ntmaxmin_dnsddpm_2024-11-05_18-02-57"
-    
+    # model_name = "cnn_mlp_bsz128_c5_ac5_gcFalse_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_12-52-45"
+    # model_name = "pidiff_bsz128_c1_ac1_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_11-13-00"
+    model_name = "pidiff_bsz128_c4_ac4_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_15-01-23"
+    # model_name = "vint_bsz128_c5_ac5_gcTrue_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_13-54-07"
+
     model_version = "latest" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
@@ -559,7 +560,7 @@ def main():
     
     viz_indices = np.random.randint(0,size,size=(1000))
     # Loop through the dataset, performing inference and timing each prediction
-    for i in range(3000, size):
+    for i in range(0, size):
         # Retrieve relevant data for inference, including context, ground truth actions, etc.
         (
             context_queue,

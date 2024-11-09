@@ -96,13 +96,13 @@ class ViNT(BaseModel):
         self.decoder = MultiLayerDecoder(
             embed_dim=self.obs_encoding_size,
             seq_len=seq_len,
-            output_layers=[256, 128, 64, 32],
+            output_layers=[256, 128, 64],
             nhead=mha_num_attention_heads,
             num_layers=mha_num_attention_layers,
             ff_dim_factor=mha_ff_dim_factor,
         )
         
-        self.action_predictor = nn.Sequential(nn.Linear(32, self.action_horizon * self.action_dim))
+        self.action_predictor = nn.Sequential(nn.Linear(64, self.action_horizon * self.action_dim))
 
     def infer_vision_encoder(self,obs_img: torch.tensor):
         # split the observation into context based on the context size
