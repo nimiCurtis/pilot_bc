@@ -9,7 +9,7 @@ nimrod:                               # dataset name
   # sync_rate: 4                    # alignment rate, if null we will 
                                       # use the min frequency, from the aligned topics frequency
   save_vid: true                      # saving video
-  pre_truncated: 1                    # number in seconds -> when to start storing data = 0 + pre_truncated.
+  pre_truncated: 0                    # number in seconds -> when to start storing data = 0 + pre_truncated.
                                     # usefull when standing few seconds at the begining. 
   post_truncated: 0                   # number in seconds -> when to finish storing data = end_time - post_truncated.
   max_depth: 9000
