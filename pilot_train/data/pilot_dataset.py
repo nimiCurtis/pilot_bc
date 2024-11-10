@@ -561,8 +561,8 @@ class PilotDataset(Dataset):
 
         # Determine if the action should be masked
         action_mask = (
-            (distance < self.max_action_distance) and
-            (distance > self.min_action_distance) and
+            (distance <= self.max_action_distance) and
+            (distance >= self.min_action_distance) and
             (not goal_is_negative)
         )
 
