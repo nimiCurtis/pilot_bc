@@ -146,7 +146,9 @@ class PiDiffTrainer(BasicTrainer):
                 normalized_goal_pos,
                 dataset_index,
                 action_mask,
-                goal_pos_to_target_mask
+                goal_pos_to_target_mask,
+                vision_obs_memory,
+                last_det
             ) = data
 
             action_dim = normalized_actions.shape[-1]
@@ -154,13 +156,18 @@ class PiDiffTrainer(BasicTrainer):
             # visual context ###TODO: refactore
             viz_images = torch.split(vision_obs_context, 1, dim=1)
             viz_obs_image = TF.resize(viz_images[-1], VISUALIZATION_IMAGE_SIZE)
-            viz_context_t0_image = TF.resize(viz_images[max(-self.action_context_size,-self.context_size)], VISUALIZATION_IMAGE_SIZE)
-
+            viz_context_t0_image = TF.resize(viz_images[0], VISUALIZATION_IMAGE_SIZE)
+            viz_mem_image = TF.resize(vision_obs_memory, VISUALIZATION_IMAGE_SIZE)
+            
+            
+            
             vision_obs_context = vision_obs_context.to(self.device)
+            vision_obs_memory = vision_obs_memory.to(self.device)
             
             # TARGET
             rel_pos_to_target_context = rel_pos_to_target_context.to(self.device)
-
+            last_det_memory = last_det.to(self.device)
+            
             # GOAL
             goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -198,7 +205,8 @@ class PiDiffTrainer(BasicTrainer):
                 timesteps=timesteps)
 
             # Predict the noise residual
-            obs_encoding_condition = self.model("vision_encoder",obs_img=vision_obs_context)
+            obs_encoding_condition, mem_encoding = self.model("vision_encoder",obs_img=vision_obs_context,
+                                                                mem_img=vision_obs_memory)
             
             # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
             if self.goal_condition:
@@ -209,8 +217,9 @@ class PiDiffTrainer(BasicTrainer):
                         linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
                                                     normalized_actions_context.flatten(1)], axis=1)
 
-                        lin_encoding = self.model("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input)
+                        lin_encoding, lin_mem_encoding = self.model("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input,
+                                                lin_mem=last_det_memory)
 
                         modalities = [obs_encoding_condition, lin_encoding]
                         
@@ -227,7 +236,7 @@ class PiDiffTrainer(BasicTrainer):
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 
-                final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                final_encoded_condition = torch.cat((fused_modalities_encoding, mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                 final_encoded_condition = self.model("goal_masking",
                                                     final_encoded_condition=final_encoded_condition,
                                                     goal_mask = goal_mask)
@@ -266,39 +275,50 @@ class PiDiffTrainer(BasicTrainer):
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
+            
+            
             if i % self.print_log_freq == 0 :
+                # Set model to evaluation mode and disable gradient calculations
+                self.model.eval()
+                with torch.no_grad():
+                    # Initialize action from Gaussian noise
+                    noisy_diffusion_output = torch.randn(
+                        (len(final_encoded_condition), self.pred_horizon, action_dim), device=self.device)
+                    diffusion_output = noisy_diffusion_output
 
-                # initialize action from Gaussian noise
-                noisy_diffusion_output = torch.randn(
-                    (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
-                diffusion_output = noisy_diffusion_output
-                
-                for k in self.noise_scheduler.timesteps():
-                    # predict noise
-                    noise_pred = self.model("noise_pred",
-                                    noisy_action=diffusion_output,
-                                    timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                    final_encoded_condition=final_encoded_condition)
+                    for k in self.noise_scheduler.timesteps():
+                        # Predict noise
+                        noise_pred = self.model(
+                            "noise_pred",
+                            noisy_action=diffusion_output,
+                            timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                            final_encoded_condition=final_encoded_condition
+                        )
 
-                    # inverse diffusion step (remove noise)
-                    diffusion_output = self.noise_scheduler.remove_noise(
-                        model_output=noise_pred,
-                        timestep=k,
-                        sample=diffusion_output
+                        # Inverse diffusion step (remove noise)
+                        diffusion_output = self.noise_scheduler.remove_noise(
+                            model_output=noise_pred,
+                            timestep=k,
+                            sample=diffusion_output
+                        )
+
+                    # Process action predictions
+                    action_pred = deltas_to_actions(
+                        deltas=diffusion_output,
+                        pred_horizon=self.pred_horizon,
+                        action_horizon=self.action_horizon,
+                        learn_angle=self.learn_angle
                     )
 
-                # action_pred = action_pred[:,:self.action_horizon,:]
-                action_pred = deltas_to_actions(deltas=diffusion_output,
-                                                pred_horizon=self.pred_horizon,
-                                                action_horizon=self.action_horizon,
-                                                learn_angle=self.learn_angle)
-
-                action_losses  = compute_losses(action_label=action_label,
-                                                                    action_pred=action_pred,
-                                                                    action_mask=action_mask,
-                                                                    )
-                losses.update(action_losses)
-                    
+                    # Compute losses
+                    action_losses = compute_losses(
+                        action_label=action_label,
+                        action_pred=action_pred,
+                        action_mask=action_mask,
+                    )
+                    losses.update(action_losses)
+            
+            # self.model.train() 
 
 
             # Append to Logger
@@ -315,6 +335,7 @@ class PiDiffTrainer(BasicTrainer):
                 loggers=loggers,
                 obs_image=viz_obs_image,
                 goal_image=viz_context_t0_image,
+                viz_mem_image = viz_mem_image,
                 action_pred=action_pred,
                 action_label=action_label,
                 action_context=normalized_actions_context,
@@ -375,8 +396,6 @@ class PiDiffTrainer(BasicTrainer):
         )
         loggers["diffusion_noise_loss"] = diffusion_noise_loss
 
-        
-        
         num_batches = len(dataloader)
         num_batches = max(int(num_batches * self.eval_fraction), 1)
 
@@ -398,7 +417,9 @@ class PiDiffTrainer(BasicTrainer):
                     normalized_goal_pos,
                     dataset_index,
                     action_mask,
-                    goal_pos_to_target_mask
+                    goal_pos_to_target_mask,
+                    vision_obs_memory,
+                    last_det
                 ) = data
                 
                 action_dim = normalized_actions.shape[-1]
@@ -407,12 +428,15 @@ class PiDiffTrainer(BasicTrainer):
                 # visual context ###TODO: refactore
                 viz_images = torch.split(vision_obs_context, 1, dim=1)
                 viz_obs_image = TF.resize(viz_images[-1], VISUALIZATION_IMAGE_SIZE)
-                viz_context_t0_image = TF.resize(viz_images[max(-self.action_context_size,-self.context_size)], VISUALIZATION_IMAGE_SIZE)
+                viz_context_t0_image = TF.resize(viz_images[0], VISUALIZATION_IMAGE_SIZE)
+                viz_mem_image = TF.resize(vision_obs_memory, VISUALIZATION_IMAGE_SIZE)
 
                 vision_obs_context = vision_obs_context.to(self.device)
+                vision_obs_memory = vision_obs_memory.to(self.device)
                 
                 # TARGET
                 rel_pos_to_target_context = rel_pos_to_target_context.to(self.device)
+                last_det_memory = last_det.to(self.device)
 
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
@@ -429,7 +453,6 @@ class PiDiffTrainer(BasicTrainer):
                 # Take the action mask. TODO: check
                 action_mask = action_mask.to(self.device)
 
-                
                 # Take action label deltas
                 action_label_pred_deltas = get_delta(actions=action_label_pred[:,:,:2]) # deltas of x,y
                 
@@ -451,7 +474,7 @@ class PiDiffTrainer(BasicTrainer):
                     action_label_pred_deltas, noise, timesteps)
 
                 # Predict the noise residual
-                obs_encoding_condition = eval_model("vision_encoder",obs_img=vision_obs_context)
+                obs_encoding_condition, mem_encoding = eval_model("vision_encoder",obs_img=vision_obs_context, mem_img=vision_obs_memory)
 
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
@@ -462,8 +485,9 @@ class PiDiffTrainer(BasicTrainer):
                         linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
                                                     normalized_actions_context.flatten(1)], axis=1)
 
-                        lin_encoding = eval_model("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input)
+                        lin_encoding, lin_mem_encoding = eval_model("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input,
+                                                lin_mem = last_det_memory)
 
                         modalities = [obs_encoding_condition, lin_encoding]
                         
@@ -480,7 +504,7 @@ class PiDiffTrainer(BasicTrainer):
                     goal_encoding = eval_model("goal_encoder",
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
-                    final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                    final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
                     final_encoded_condition = eval_model("goal_masking",
                                                         final_encoded_condition=final_encoded_condition,
@@ -551,6 +575,7 @@ class PiDiffTrainer(BasicTrainer):
                     loggers=loggers,
                     obs_image=viz_obs_image,
                     goal_image=viz_context_t0_image,
+                    viz_mem_image=viz_mem_image,
                     action_pred=action_pred,
                     action_label=action_label,
                     action_context=normalized_actions_context,

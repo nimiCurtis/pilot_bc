@@ -126,6 +126,7 @@ class Visualizer:
             self,
             batch_obs_images: np.ndarray,
             batch_goal_images: np.ndarray,
+            batch_mem_images: np.ndarray,
             dataset_indices: np.ndarray,
             batch_goals: np.ndarray,
             batch_pred_waypoints: np.ndarray,
@@ -179,6 +180,7 @@ class Visualizer:
         for i in range(min(batch_size, num_images_preds)):
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
+            mem_img = numpy_to_img(batch_mem_images[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
             goal_pos = batch_goals[i]
             pred_waypoints = batch_pred_waypoints[i]
@@ -194,6 +196,7 @@ class Visualizer:
             self.compare_waypoints_pred_to_label(
                 obs_img,
                 goal_img,
+                mem_img,
                 dataset_name,
                 goal_pos,
                 pred_waypoints,
@@ -213,6 +216,7 @@ class Visualizer:
             self,
             obs_img,
             goal_img,
+            mem_img,
             dataset_name: str,
             goal_pos: np.ndarray,
             pred_waypoints: np.ndarray,
@@ -239,9 +243,9 @@ class Visualizer:
         """
         
         if diff_img is not None:
-            fig, ax = plt.subplots(1, 4)
+            fig, ax = plt.subplots(1, 5)
         else:
-            fig, ax = plt.subplots(1, 3)
+            fig, ax = plt.subplots(1, 4)
         
         start_pos = np.array([0, 0])
         robot_pos = start_pos
@@ -340,6 +344,7 @@ class Visualizer:
         
         ## Context image
         ax[1].imshow(goal_img)
+        ax[3].imshow(mem_img)
         
         if offline:        
             self.plot_trajs_and_points_on_image(
@@ -354,18 +359,18 @@ class Visualizer:
         else:
             ax[2].imshow(obs_img)
         
+        
+        
         if diff_img is not None:
-            ax[3].imshow(diff_img)
-            ax[3].set_title(f"Observations Difference",color=points_colors[0])
-
-        
-        
+            ax[4].imshow(diff_img)
+            ax[4].set_title(f"Observations Difference",color=points_colors[0])
 
         fig.set_size_inches(15, 10)
         ax[0].set_title(f"Action Prediction")
-        ax[1].set_title(f"Observation @ first action / context",color=points_colors[0])
+        ax[1].set_title(f"Observation @ first context step",color=points_colors[0])
         ax[2].set_title(f"Observation @ Now",color=points_colors[-1])
-
+        ax[3].set_title(f"Observation @ Memory",color="black")
+        
         if save_path is not None:
             fig.savefig(
                 save_path,
@@ -475,6 +480,7 @@ class Visualizer:
             batch_obs_images: np.ndarray,
             batch_goal_images: np.ndarray,
             batch_viz_difference: np.ndarray,
+            batch_viz_mem: np.ndarray,
             dataset_indices: np.ndarray,
             batch_goals: np.ndarray,
             batch_pred_waypoints: np.ndarray,
@@ -531,6 +537,7 @@ class Visualizer:
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
             diff_img = numpy_to_img(batch_viz_difference[i])
+            mem_img = numpy_to_img(batch_viz_mem[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
             robot_config = get_robot_config(robot_name=dataset_name)
             goal_pos = batch_goals[i]
@@ -547,6 +554,7 @@ class Visualizer:
             self.compare_waypoints_pred_to_label(
                 obs_img,
                 goal_img,
+                mem_img,
                 dataset_name,
                 goal_pos,
                 pred_waypoints,

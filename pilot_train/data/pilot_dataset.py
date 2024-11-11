@@ -10,6 +10,7 @@ from omegaconf import DictConfig
 import torch
 from torch.utils.data import Dataset
 from torchvision import transforms
+import matplotlib.pyplot as plt
 
 from pilot_utils.data.data_utils import (
     img_path_to_data,
@@ -28,7 +29,7 @@ from pilot_utils.utils import (
     clip_angles
 )
 
-from pilot_utils.transforms import transform_images
+from pilot_utils.transforms import transform_images, ObservationTransform
 
 
 from pilot_config.config import get_robot_config, get_recording_config
@@ -130,6 +131,8 @@ class PilotDataset(Dataset):
         
         # Tranform
         self.transform = transform
+        
+        self.memory_transform = ObservationTransform(data_cfg=data_cfg).get_transform("test")
         
         # Use this index to retrieve the dataset name from the dataset config
         self.dataset_index = dataset_names.index(self.dataset_name)
@@ -409,18 +412,18 @@ class PilotDataset(Dataset):
         return normalized_actions,normalized_prev_action, normalized_goal_pos
     
     
-    def _compute_rel_pos_to_target(self,target_traj_data_context,target_traj_data_goal,goal_time, curr_time, context):
+    def _compute_rel_pos_to_target(self,target_traj_data_context,target_traj_data_goal,goal_time, curr_time,last_det_time, context):
             # Get the goal position relative to the target
             goal_rel_pos_to_target = np.array(target_traj_data_goal[goal_time]["position"][:2])
-            
-            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
+            last_det = np.array(target_traj_data_goal[last_det_time]["position"][:2])
+            if np.any(goal_rel_pos_to_target):
                 goal_pos_to_target_mask = True
                 if self.target_dim == 3:
                     goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
                     goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
                 elif self.target_dim == 2:
                     goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-                    pass
+                    last_det = normalize_data(data=last_det, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
             else:
                 goal_rel_pos_to_target = np.zeros((self.target_dim,))
                 goal_pos_to_target_mask = False
@@ -430,7 +433,7 @@ class PilotDataset(Dataset):
                 target_traj_data_context[t]["position"][:2] for f, t in context
             ])
 
-            #TODO: add implementation for not goal condition
+            #TODO: 
             target_context_mask = np.sum(rel_pos_to_target_context_tmp == np.zeros((2,)), axis=1) == 2
             rel_pos_to_target_context = np.zeros((rel_pos_to_target_context_tmp.shape[0], self.target_dim))
             
@@ -440,7 +443,7 @@ class PilotDataset(Dataset):
             elif self.target_dim == 2:
                 rel_pos_to_target_context[~target_context_mask] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
 
-            return rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask
+            return rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask, last_det
     
     def _get_trajectory(self, trajectory_name, target:bool = False):
         """
@@ -498,7 +501,6 @@ class PilotDataset(Dataset):
 
         # Sample a goal from the current trajectory or a different trajectory
         f_goal, goal_time, goal_is_negative = self._sample_goal(f_curr, curr_time, max_goal_dist,min_goal_dist)
-
         # Initialize the context list
         context = []
         if self.context_type == "temporal":
@@ -518,7 +520,7 @@ class PilotDataset(Dataset):
         vision_obs_context = [self._load_image(f, t) for f, t in context]
 
         # Apply transformations to the context images
-        vision_obs_context = transform_images(vision_obs_context, self.transform)
+        vision_obs_context_tensor = transform_images(vision_obs_context, self.transform)
 
         # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
@@ -537,14 +539,20 @@ class PilotDataset(Dataset):
         # Load the current and goal target trajectory data
         target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
         target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
+        
+        last_det_time = self._find_last_det_time(target_traj_data_context, curr_time, self.waypoint_spacing,curr_data_properties["frame_rate"], context_times=context_times)
+        vision_obs_memory = self._load_image(f_curr, last_det_time)
+        vision_obs_memory_tensor = transform_images(vision_obs_memory, self.memory_transform)
+
         target_traj_data_goal_len = len(target_traj_data_goal)
         assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
         # Compute the relative position to target 
-        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask, last_det = self._compute_rel_pos_to_target(target_traj_data_context,
                                                                                                                     target_traj_data_goal,
                                                                                                                     goal_time,
                                                                                                                     curr_time,
+                                                                                                                    last_det_time,
                                                                                                                     context)
         # else:
         #     # Not in use
@@ -568,7 +576,7 @@ class PilotDataset(Dataset):
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            torch.as_tensor(vision_obs_context, dtype=torch.float32),  # [C*(context+1),H,W]
+            vision_obs_context_tensor,  # [C*(context+1),H,W]
             torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
@@ -577,7 +585,83 @@ class PilotDataset(Dataset):
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
             torch.as_tensor(goal_pos_to_target_mask, dtype=torch.float32),
+            vision_obs_memory_tensor,
+            torch.as_tensor(last_det, dtype=torch.float32),
         )
 
 
+    def _find_last_det_time(self, target_traj, curr_time, waypoint_spacing, frame_rate,  context_times):
+        """
+        Find the last time step in `target_traj` where a detected position is available before `curr_time`.
 
+        Parameters:
+        - target_traj: List or array containing position data for each time step.
+                    Each entry is expected to have a 'position' key or attribute 
+                    that holds the detection status at that time step.
+        - curr_time: The current time index in the trajectory, up to which we are looking for
+                    the last detection.
+
+        Returns:
+        - last_det_time: The most recent time index up to `curr_time` where there was a detected position.
+        """
+        
+        # Slice the trajectory up to the current time to consider only relevant past data
+        upto_curr_time_trajes = target_traj[:curr_time+1]
+        # Loop through the trajectory slice in reverse order to find the most recent detection
+        for i in range(len(upto_curr_time_trajes)-1, -1, -waypoint_spacing):  # Start from the last index and go backward
+            # Check if there is any position detected at time step i
+            if np.any(upto_curr_time_trajes[i]['position']):
+                if i not in context_times:
+                    return max(i-np.random.randint(int(frame_rate/2),frame_rate),0) # Update the last detection time to the current index
+                else:
+                    return i
+        return curr_time
+
+
+
+def show_all_images(batch_images: torch.Tensor, single_image: torch.Tensor, layout: str = 'grid'):
+    """
+    Combines a batch of images with a single image and displays them in a specified layout.
+
+    Parameters:
+    - batch_images: torch.Tensor of shape (n, w, h), where n is the number of images.
+    - single_image: torch.Tensor of shape (1, w, h), representing one additional image.
+    - layout: str, layout of the combined images ('horizontal', 'vertical', or 'grid').
+
+    Returns:
+    - None
+    """
+    # Ensure the single image is expanded to match batch shape
+    all_images = torch.cat((batch_images, single_image), dim=0)  # Shape will be (n+1, w, h)
+
+    num_images, width, height = all_images.size()
+    
+    if layout == 'horizontal':
+        # Concatenate images horizontally along the width
+        combined_image = torch.cat([img.unsqueeze(0) for img in all_images], dim=2)
+        
+    elif layout == 'vertical':
+        # Concatenate images vertically along the height
+        combined_image = torch.cat([img.unsqueeze(0) for img in all_images], dim=1)
+    
+    elif layout == 'grid':
+        # Calculate grid dimensions (rows, columns) as close to a square layout as possible
+        grid_cols = int(num_images ** 0.5)
+        grid_rows = (num_images + grid_cols - 1) // grid_cols  # Rows for a roughly square grid
+
+        # Initialize an empty tensor to hold the grid
+        combined_image = torch.zeros((width * grid_rows, height * grid_cols))
+        
+        for idx, img in enumerate(all_images):
+            row = idx // grid_cols
+            col = idx % grid_cols
+            combined_image[row * width : (row + 1) * width, col * height : (col + 1) * height] = img
+            
+    else:
+        raise ValueError("Invalid layout type. Choose from 'horizontal', 'vertical', or 'grid'.")
+
+    # Display the combined image using matplotlib
+    plt.figure(figsize=(10, 10))
+    plt.imshow(combined_image.numpy(), cmap='gray')  # Convert to numpy and specify grayscale if needed
+    plt.axis('off')  # Turn off the axis
+    plt.show()

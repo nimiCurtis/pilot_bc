@@ -7,7 +7,7 @@ class BaseModel(nn.Module):
         super().__init__()
         self.in_channels = in_channels
         self.pretrained = pretrained
-
+        
     def get_model(self):
         """
         Retrieve the underlying model instance.

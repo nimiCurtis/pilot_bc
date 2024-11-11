@@ -13,7 +13,7 @@ from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
 from pilot_utils.utils import deltas_to_actions
-
+from pilot_models.vision_encoder.depth_feature_extractor import DepthFeatureExtractor
 
 class PiDiff(BaseModel):
     def __init__(
@@ -34,6 +34,9 @@ class PiDiff(BaseModel):
         channels=vision_encoder_model_cfg.in_channels
         goal_condition = data_cfg.goal_condition
         target_context_enable = data_cfg.target_context_enable
+        target_dim = data_cfg.target_dim
+        lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
+
         super(PiDiff, self).__init__(policy_model_cfg.name,
                                 context_size,
                                 pred_horizon,
@@ -46,11 +49,11 @@ class PiDiff(BaseModel):
         self.target_context_enable = data_cfg.target_context_enable
         self.goal_condition = data_cfg.goal_condition
 
-        seq_len = self.context_size + 1
+        seq_len = self.context_size + 2
         if self.goal_condition:
             seq_len+=1
             if self.target_context_enable:
-                seq_len+=1
+                seq_len+=2
 
         self.action_horizon = data_cfg.action_horizon
         
@@ -64,11 +67,25 @@ class PiDiff(BaseModel):
             self.compress_obs_enc = nn.Linear(vision_features_dim, vision_encoding_size)
         else:
             self.compress_obs_enc = nn.Identity()
+
+        self.vision_memory_encoder = DepthFeatureExtractor(vision_encoder_config=vision_encoder_model_cfg,data_config=data_cfg)
         
+        vision_memory_features_dim = self.vision_memory_encoder.get_in_feateures()
+        if vision_features_dim != vision_encoding_size:
+            self.compress_obs_mem_enc = nn.Linear(vision_memory_features_dim, vision_encoding_size)
+        else:
+            self.compress_obs_mem_enc = nn.Identity()
+            
+            
+        self.det_memory_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+
+
         if self.goal_condition:
             # Linear encoder for time series target position
-            target_dim = data_cfg.target_dim 
-            lin_encoding_size = linear_encoder_model_cfg.lin_encoding_size    
             self.goal_encoder = nn.Sequential(nn.Linear(target_dim, lin_encoding_size // 4),
                                             nn.ReLU(),
                                             nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
@@ -122,7 +139,7 @@ class PiDiff(BaseModel):
     def get_scheduler_config(self):
         return self.noise_scheduler_config
 
-    def infer_vision_encoder(self,obs_img: torch.tensor):
+    def infer_vision_encoder(self,obs_img, mem_img: torch.tensor):
         # split the observation into context based on the context size
         # Currently obs_img size is [batch_size, C*(self.context_size+1), H, W] | for example: [16, 3*(5+1), 64, 85]
         obs_img = torch.split(obs_img, self.in_channels, dim=1)
@@ -142,15 +159,23 @@ class PiDiff(BaseModel):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # (transposed) Currently obs_encoding size is [batch_size, self.context_size+1, self.obs_encoding_size]
 
-        return obs_encoding
+        mem_img = self.vision_memory_encoder(mem_img)
+        
+        mem_img_encoding = self.compress_obs_mem_enc(mem_img).unsqueeze(1)
+        
+        return obs_encoding, mem_img_encoding
 
-    def infer_linear_encoder(self, curr_rel_pos_to_target):
+    def infer_linear_encoder(self, curr_rel_pos_to_target, lin_mem):
         lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
+        lin_mem_encoding = self.det_memory_encoder(lin_mem)
         if len(lin_encoding.shape) == 2:
             lin_encoding = lin_encoding.unsqueeze(1)
+        
+        if len(lin_mem_encoding.shape) == 2:
+            lin_mem_encoding = lin_mem_encoding.unsqueeze(1)
 
         # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
-        return lin_encoding
+        return lin_encoding, lin_mem_encoding
 
     def infer_noise_predictor(self, sample, timestep, condition):
         
@@ -230,24 +255,29 @@ class PiDiff(BaseModel):
     def infer_actions(self, obs_img,
                     curr_rel_pos_to_target,
                     goal_rel_pos_to_target, 
-                    input_goal_mask ,
+                    goal_mask ,
                     normalized_action_context,
-                    diffusion_noise_scheduler):
+                    diffusion_noise_scheduler,
+                    vision_mem,
+                    lin_mem):
         
         # Predict the noise residual
-        obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
-
-        # Get the input goal mask 
-        if input_goal_mask is not None:
-            goal_mask = input_goal_mask.to(self.device)
+        # obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
+        # Predict the noise residual
+        obs_encoding_condition, mem_encoding = self("vision_encoder",obs_img=obs_img, mem_img=vision_mem)
+        # Get the input goal mask
 
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
         if self.target_context_enable:
                 linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
                                             normalized_action_context.flatten(1)], axis=1)
 
-                lin_encoding = self("linear_encoder",
-                                        curr_rel_pos_to_target=linear_input)
+                # lin_encoding = self("linear_encoder",
+                #                         curr_rel_pos_to_target=linear_input)
+                
+                lin_encoding, lin_mem_encoding = self("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input,
+                                                lin_mem = lin_mem)
 
                 modalities = [obs_encoding_condition, lin_encoding]
                 fused_modalities_encoding = self("fuse_modalities",
@@ -260,8 +290,8 @@ class PiDiff(BaseModel):
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
             
-            final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-
+            # final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding, ), dim=1)  # >> Concat the lin_encoding as a token too
+            final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)
             final_encoded_condition = self("goal_masking",
                                                 final_encoded_condition=final_encoded_condition,
                                                 goal_mask = goal_mask)
@@ -305,10 +335,10 @@ class PiDiff(BaseModel):
     def forward(self, func_name, **kwargs):
         
         if func_name == "vision_encoder" :
-            output = self.infer_vision_encoder(kwargs["obs_img"])
+            output = self.infer_vision_encoder(kwargs["obs_img"], kwargs["mem_img"])
         
         elif func_name == "linear_encoder":
-            output = self.infer_linear_encoder(kwargs["curr_rel_pos_to_target"])
+            output = self.infer_linear_encoder(kwargs["curr_rel_pos_to_target"], kwargs["lin_mem"])
         
         elif func_name == "goal_encoder":
             output = self.infer_goal(kwargs["goal_rel_pos_to_target"])

@@ -81,6 +81,7 @@ class LoggingManager:
             loggers,
             obs_image,
             goal_image,
+            viz_mem_image,
             action_pred,
             action_label,
             action_context,
@@ -120,6 +121,7 @@ class LoggingManager:
             self.visualizer.visualize_traj_pred(
                 to_numpy(obs_image),
                 to_numpy(goal_image),
+                to_numpy(viz_mem_image),
                 to_numpy(dataset_index),
                 to_numpy(goal_pos),
                 to_numpy(action_pred),

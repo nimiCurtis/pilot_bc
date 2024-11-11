@@ -13,25 +13,25 @@ class DepthFeatureExtractor(BaseModel):
         super().__init__(in_channels=in_channels, pretrained=pretrained)
         
         self.input_dim = self.in_channels
-        self.output_dim = 1024
+        self.output_dim = vision_encoder_config.get("vision_out_size")
         # Convolutional layers
         self.features = nn.Sequential(
-            nn.Conv2d(self.input_dim, 32, 3, stride=2, padding=1),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(self.input_dim, int(self.output_dim // 16), 3, stride=2, padding=1),
+            nn.BatchNorm2d(int(self.output_dim // 16)),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),  # Output: 80x80
 
-            nn.Conv2d(32, 64, 3, stride=2, padding=1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(int(self.output_dim // 16), int(self.output_dim // 8), 3, stride=2, padding=1),
+            nn.BatchNorm2d(int(self.output_dim // 8)),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),  # Output: 20x20
 
-            nn.Conv2d(64, 128, 3, stride=1, padding=1),
-            nn.BatchNorm2d(128),
+            nn.Conv2d(int(self.output_dim // 8), int(self.output_dim // 4), 3, stride=1, padding=1),
+            nn.BatchNorm2d(int(self.output_dim // 4)),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),  # Output: 10x10
 
-            nn.Conv2d(128, 512, 3, stride=1, padding=1),
+            nn.Conv2d(int(self.output_dim // 4), self.output_dim, 3, stride=1, padding=1),
             nn.BatchNorm2d(512),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),  # Output: 5x5
@@ -62,7 +62,7 @@ class DepthFeatureExtractor(BaseModel):
         return obs_encoding
     
     def get_in_feateures(self):
-        return 512
+        return self.output_dim
     
     def _initialize_weights(self):
         for m in self.modules():
