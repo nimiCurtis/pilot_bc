@@ -212,3 +212,17 @@ def compute_losses(
 
 
 
+def load_model(model,model_name, checkpoint_path:str, model_version:str = "best_model"):
+        """
+        Load a pre-trained model.
+
+        Args:
+            model_name (str): The name of the pre-trained model.
+        """
+        model_path = os.path.join(checkpoint_path, model_name, f"{model_version}.pth")
+        checkpoint = torch.load(model_path,map_location='cpu')
+
+        state_dict = checkpoint["model_state_dict"]
+        model.load_state_dict(state_dict, strict=False)
+
+

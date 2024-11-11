@@ -8,7 +8,7 @@ defaults:
   - linear_encoder: mlp       # mlp | tcn | ..
   - vision_encoder: depth_feature_extractor # depth_feature_extractor | efficientnet
   - policy_model: pidiff       # pidiff | vint | .. 
-  - datasets: pilot_target_tracking_static # all | go_to_the_picture
+  - datasets: indoor_broadcom # all | go_to_the_picture
   - log: local
   # - log: defaults
 
@@ -60,8 +60,8 @@ training:
     max_val_steps: null
   
   fine_tune:
-    enable: False
-    model: "pidiff_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceTrue_ntmaxmin_2024-11-11_12-12-54"
+    enable: True
+    model: "pidiff_bsz128_c1_ac1_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_11-13-00"
 
 
 
@@ -78,8 +78,8 @@ data:
   # context
   context_type: temporal
 
-  context_size: 5
-  action_context_size: 6 # modify to 0 for not using actions history
+  context_size: 1
+  action_context_size: 1 # modify to 0 for not using actions history
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
 # Take the distances with relate to the horizon

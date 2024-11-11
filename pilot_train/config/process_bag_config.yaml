@@ -1,7 +1,7 @@
 # bags_folder: "/media/roblab20/Expansion/pilot/go2_broadcom_bags"
 # bags_folder: "/media/nimrod/Expansion/pilot/raanana_bags"
-destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/pilot_target_tracking_static"
-bags_folder: /media/roblab20/Expansion/pilot/university_bags
+destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/indoor_broadcom_target_tracking"
+bags_folder: /media/roblab20/Expansion/pilot/university_bags_indoor_with_target
 save_raw: False                        # I dont see a reason why to set it to false
 force: True
 
@@ -10,7 +10,7 @@ nimrod:                               # dataset name
   sync_rate: 7                    # alignment rate, if null we will 
                                       # use the min frequency, from the aligned topics frequency
   save_vid: true                      # saving video
-  pre_truncated: 0.5                    # number in seconds -> when to start storing data = 0 + pre_truncated.
+  pre_truncated: 0.0                    # number in seconds -> when to start storing data = 0 + pre_truncated.
                                     # usefull when standing few seconds at the begining. 
   post_truncated: 0.5                   # number in seconds -> when to finish storing data = end_time - post_truncated.
   max_depth: 9000

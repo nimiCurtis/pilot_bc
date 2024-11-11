@@ -446,6 +446,7 @@ class BasicTrainer:
 #             model.load_state_dict(state_dict, strict=False)
 
 
+
 # def load_ema_model(ema_model, state_dict: dict) -> None:
 #     """Load model from checkpoint."""
 #     ema_model.load_state_dict(state_dict)

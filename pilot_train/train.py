@@ -14,11 +14,15 @@ from pilot_train.training.trainers.pidiff_trainer import PiDiffTrainer
 from pilot_config.config import get_main_config_dir, split_main_config
 from pilot_utils.utils import tic, toc
 from pilot_utils.transforms import ObservationTransform
-from pilot_utils.train.train_utils import get_gpu_memory_usage
+from pilot_utils.train.train_utils import get_gpu_memory_usage, load_model
+from pilot_deploy.inference import CKPTH_PATH
+
+
 
 def train(cfg:DictConfig):
     
-    # Get configs    
+    # Get configs
+    
     training_cfg, device_cfg,  data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_model_cfg, linear_encoder_model_cfg, log_cfg =  split_main_config(cfg)
 
     # Device management
@@ -78,6 +82,9 @@ def train(cfg:DictConfig):
     print(f"Model Type: {model_name}")
     model.count_parameters()
 
+    if training_cfg.fine_tune.enable:
+        load_model(model, model_name=training_cfg.fine_tune.model, checkpoint_path=CKPTH_PATH)
+
 
     ### TODO: add the load run in the Trainer class
     # if "load_run" in config:
@@ -119,12 +126,12 @@ def train(cfg:DictConfig):
     
     print("FINISHED TRAINING")
     print(f"TRAINING TIME: {toc(start_time)/60} [minutes]")
-    
+
 
 
 if __name__ == "__main__":
 
-    @hydra.main(version_base=None, config_path=get_main_config_dir(), config_name="train_pilot_policy")
+    @hydra.main(version_base=None, config_path=get_main_config_dir(), config_name="train_pilot_finetune")
     def main(cfg: DictConfig):
         torch.multiprocessing.set_start_method("spawn")
 

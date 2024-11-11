@@ -10,15 +10,15 @@ run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${n
 
 ## TODO: handle with log and iamges 
 num_images_log: 16
-print_log_freq: 300 # in iterations
-eval_log_freq: 3  # in iterations
+print_log_freq: 25 # in iterations
+eval_log_freq: 1  # in iterations
 image_log_freq: 2 #  
 eval_fraction: 0.25
 eval_freq: 1 # in epochs
 save_model_freq: 10
 wandb: 
   run: 
-    enable: False
+    enable: True
     name: ${log.run_name} ## modify
     log_freq: 10 # in iterations
   setup:
