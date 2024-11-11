@@ -540,14 +540,14 @@ def main():
     # model_name = "pidiff_bsz128_c1_ac1_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_11-13-00"
     # model_name = "pidiff_bsz128_c4_ac4_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_15-01-23"
     # model_name = "vint_bsz128_c5_ac5_gcTrue_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_13-54-07"
-    model_name = "pidiff_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceTrue_ntmaxmin_2024-11-11_12-12-54"
+    model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-11_12-52-08"
     # model_name = "pidiff_bsz256_c4_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-10_22-59-16"
     
     model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
-    robot = "go2"
+    robot = "nimrod"
     robot_dataset_cfg = datasets_cfg[robot]
     policy_model = policy_model_cfg.name
     
