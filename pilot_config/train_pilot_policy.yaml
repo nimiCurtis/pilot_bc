@@ -78,10 +78,10 @@ data:
 
 # Take the distances with relate to the horizon
   distance:
-    min_dist_cat: 14
+    min_dist_cat: 10
     max_dist_cat: 20
   action:
-    min_dist_cat: 14
+    min_dist_cat: 10
     max_dist_cat: 20
 
   # action output params

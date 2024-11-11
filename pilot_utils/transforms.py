@@ -63,7 +63,7 @@ class ObservationTransform:
         # center_crop = AspectCenterCrop(aspect_ratio=self.image_aspect_ratio)
         
         random_mask = MaskImage(img_patch_size=8, img_masking_prob=0.12)
-        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.2)
+        random_mask = transforms.RandomApply(transforms=[random_mask], p=0.1)
         
         random_rotation = transforms.RandomRotation(degrees=20)
         random_rotation = transforms.RandomApply(transforms=[random_rotation], p=0.5)
@@ -75,14 +75,14 @@ class ObservationTransform:
                                 interpolation=transforms.InterpolationMode.BILINEAR,
                                 # ratio=self.image_aspect_ratio,
                                 antialias=True)
-        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.2)
+        random_crop = transforms.RandomApply(transforms=[random_crop], p=0.1)
         
         # Brightness adjustment transform with a probability of 0.1
         brightness_adjustment = transforms.ColorJitter(brightness=0.1)  # Adjust brightness factor
         brightness_adjustment = transforms.RandomApply(transforms=[brightness_adjustment], p=0.2)
         
         gaussian_blur = transforms.GaussianBlur(kernel_size=3)  # Adjust brightness factor
-        gaussian_blur = transforms.RandomApply(transforms=[gaussian_blur], p=0.2)
+        gaussian_blur = transforms.RandomApply(transforms=[gaussian_blur], p=0.1)
         
         ### TRAIN TRANSFORMS ###
         train_transform =  transforms.Compose([

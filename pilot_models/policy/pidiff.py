@@ -255,24 +255,29 @@ class PiDiff(BaseModel):
     def infer_actions(self, obs_img,
                     curr_rel_pos_to_target,
                     goal_rel_pos_to_target, 
-                    input_goal_mask ,
+                    goal_mask ,
                     normalized_action_context,
-                    diffusion_noise_scheduler):
+                    diffusion_noise_scheduler,
+                    vision_mem,
+                    lin_mem):
         
         # Predict the noise residual
-        obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
-
-        # Get the input goal mask 
-        if input_goal_mask is not None:
-            goal_mask = input_goal_mask.to(self.device)
+        # obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
+        # Predict the noise residual
+        obs_encoding_condition, mem_encoding = self("vision_encoder",obs_img=obs_img, mem_img=vision_mem)
+        # Get the input goal mask
 
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
         if self.target_context_enable:
                 linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
                                             normalized_action_context.flatten(1)], axis=1)
 
-                lin_encoding = self("linear_encoder",
-                                        curr_rel_pos_to_target=linear_input)
+                # lin_encoding = self("linear_encoder",
+                #                         curr_rel_pos_to_target=linear_input)
+                
+                lin_encoding, lin_mem_encoding = self("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input,
+                                                lin_mem = lin_mem)
 
                 modalities = [obs_encoding_condition, lin_encoding]
                 fused_modalities_encoding = self("fuse_modalities",
@@ -285,8 +290,8 @@ class PiDiff(BaseModel):
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
             
-            final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
-
+            # final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding, ), dim=1)  # >> Concat the lin_encoding as a token too
+            final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)
             final_encoded_condition = self("goal_masking",
                                                 final_encoded_condition=final_encoded_condition,
                                                 goal_mask = goal_mask)

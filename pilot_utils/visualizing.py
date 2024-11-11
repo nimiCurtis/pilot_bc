@@ -369,7 +369,7 @@ class Visualizer:
         ax[0].set_title(f"Action Prediction")
         ax[1].set_title(f"Observation @ first context step",color=points_colors[0])
         ax[2].set_title(f"Observation @ Now",color=points_colors[-1])
-        ax[3].set_title(f"Observation @ Memory",color=points_colors[-1])
+        ax[3].set_title(f"Observation @ Memory",color="black")
         
         if save_path is not None:
             fig.savefig(
@@ -480,6 +480,7 @@ class Visualizer:
             batch_obs_images: np.ndarray,
             batch_goal_images: np.ndarray,
             batch_viz_difference: np.ndarray,
+            batch_viz_mem: np.ndarray,
             dataset_indices: np.ndarray,
             batch_goals: np.ndarray,
             batch_pred_waypoints: np.ndarray,
@@ -536,6 +537,7 @@ class Visualizer:
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
             diff_img = numpy_to_img(batch_viz_difference[i])
+            mem_img = numpy_to_img(batch_viz_mem[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
             robot_config = get_robot_config(robot_name=dataset_name)
             goal_pos = batch_goals[i]
@@ -552,6 +554,7 @@ class Visualizer:
             self.compare_waypoints_pred_to_label(
                 obs_img,
                 goal_img,
+                mem_img,
                 dataset_name,
                 goal_pos,
                 pred_waypoints,

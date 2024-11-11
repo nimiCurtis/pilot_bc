@@ -118,8 +118,8 @@ class InferenceDataset(PilotDataset):
         vision_obs_context = [self._load_image(f, t) for f, t in context]
 
         # Apply transformations to the context images
-        vision_obs_context = transform_images(vision_obs_context, self.transform)
-
+        vision_obs_context_tensor = transform_images(vision_obs_context, self.transform)
+        
         # Load the current trajectory data
         curr_traj_data = self._get_trajectory(f_curr)
         curr_traj_len = len(curr_traj_data["position"])
@@ -139,11 +139,16 @@ class InferenceDataset(PilotDataset):
         target_traj_data_goal_len = len(target_traj_data_goal)
         assert goal_time < target_traj_data_goal_len, f"{goal_time} and {target_traj_data_goal_len}"
 
+        last_det_time = self._find_last_det_time(target_traj_data_context, curr_time, self.waypoint_spacing,curr_data_properties["frame_rate"], context_times=context_times)
+        vision_obs_memory = self._load_image(f_curr, last_det_time)
+        vision_obs_memory_tensor = transform_images(vision_obs_memory, self.memory_transform)
+        
         # Compute the relative position to target 
-        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask = self._compute_rel_pos_to_target(target_traj_data_context,
+        rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask, last_det = self._compute_rel_pos_to_target(target_traj_data_context,
                                                                                                                     target_traj_data_goal,
                                                                                                                     goal_time,
                                                                                                                     curr_time,
+                                                                                                                    last_det_time,
                                                                                                                     context)
 
 
@@ -156,14 +161,14 @@ class InferenceDataset(PilotDataset):
 
         # Determine if the action should be masked
         action_mask = (
-            (distance < self.max_action_distance) and
-            (distance > self.min_action_distance) and
+            (distance <= self.max_action_distance) and
+            (distance >= self.min_action_distance) and
             (not goal_is_negative)
         )
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            torch.as_tensor(vision_obs_context, dtype=torch.float32),  # [C*(context+1),H,W]
+            vision_obs_context_tensor,  
             torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
@@ -173,6 +178,8 @@ class InferenceDataset(PilotDataset):
             torch.as_tensor(unormalized_goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),
+            vision_obs_memory_tensor,
+            torch.as_tensor(last_det, dtype=torch.float32),
         )
 
     def _compute_actions(self, traj_data, curr_time, goal_time, action_stats, context_action_stats):
@@ -342,7 +349,9 @@ class PilotAgent(nn.Module):
     def forward(self, obs_img: torch.Tensor,
                 curr_rel_pos_to_target: torch.Tensor = None,
                 goal_rel_pos_to_target: torch.Tensor = None,
-                prev_actions: torch.Tensor = None) -> Tuple[torch.Tensor, torch.Tensor]:
+                prev_actions: torch.Tensor = None,
+                vision_mem = None,
+                lin_mem = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through the model to predict the next waypoint.
 
@@ -355,7 +364,12 @@ class PilotAgent(nn.Module):
             Tuple[torch.Tensor, torch.Tensor]: Predicted waypoint and corresponding action.
         """
         
-        predicted_waypoints_normalized = self.predict_raw(obs_img, curr_rel_pos_to_target, goal_rel_pos_to_target, prev_actions)
+        predicted_waypoints_normalized = self.predict_raw(obs_img,
+                                                    curr_rel_pos_to_target,
+                                                    goal_rel_pos_to_target,
+                                                    prev_actions,
+                                                    vision_mem,
+                                                    lin_mem)
         predicted_waypoints_normalized = to_numpy(predicted_waypoints_normalized)
         predicted_waypoint = self.get_waypoint(predicted_waypoints_normalized)
 
@@ -385,7 +399,9 @@ class PilotAgent(nn.Module):
     def predict_raw(self, obs_img: torch.Tensor,
                     curr_rel_pos_to_target: torch.Tensor,
                     goal_rel_pos_to_target: torch.Tensor,
-                    prev_actions: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                    prev_actions: torch.Tensor,
+                    vision_mem: torch.Tensor,
+                    lin_mem: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate raw predictions using the policy model.
 
@@ -399,6 +415,8 @@ class PilotAgent(nn.Module):
         """
 
         context_queue = obs_img.unsqueeze(0).to(self.device)
+        vision_mem_img = vision_mem.unsqueeze(0).to(self.device)
+        
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
         
         if prev_actions is not None:
@@ -408,13 +426,20 @@ class PilotAgent(nn.Module):
         
         if curr_rel_pos_to_target is not None:
             target_context_queue = curr_rel_pos_to_target.unsqueeze(0).to(self.device)
+            lin_mem_vec = lin_mem.unsqueeze(0).to(self.device)
             
-            target_context_mask = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
+            # target_context_mask = (torch.sum(curr_rel_pos_to_target==torch.zeros_like(curr_rel_pos_to_target),axis=1) == curr_rel_pos_to_target.shape[1])
             
-            goal_mask = (torch.sum(target_context_mask) == curr_rel_pos_to_target.shape[0]).long()
+            # goal_mask = (torch.sum(target_context_mask) == curr_rel_pos_to_target.shape[0]).long()
             
-            goal_mask = goal_mask.unsqueeze(0).to(self.device).long()
+            # not(torch.any(curr_rel_pos_to_target)) -> if there is no target detection in the context -> mask the goal!  
+            target_in_context = torch.any(curr_rel_pos_to_target)
             
+            # if target in context -> dont mask! , if not -> mask the goal!
+
+            goal_mask = (~target_in_context).long()
+            goal_mask = goal_mask.unsqueeze(0).to(self.device)
+
         if goal_rel_pos_to_target is not None:
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)
@@ -423,30 +448,40 @@ class PilotAgent(nn.Module):
                 obs_img=context_queue,
                 curr_rel_pos_to_target=target_context_queue,
                 goal_rel_pos_to_target=goal_to_target,
-                input_goal_mask=goal_mask,
-                normalized_action_context = normalized_action_context_queue
+                goal_mask=goal_mask,
+                normalized_action_context = normalized_action_context_queue,
+                vision_mem = vision_mem_img,
+                lin_mem = lin_mem_vec
             )
 
         return normalized_actions[0]  # no batch dimension
-    
+
     @torch.inference_mode() ############################# TODO: refactore here for inference 
-    def infer_actions(self, obs_img, curr_rel_pos_to_target,goal_rel_pos_to_target, input_goal_mask ,normalized_action_context):
+    def infer_actions(self, obs_img,
+                    curr_rel_pos_to_target,
+                    goal_rel_pos_to_target,
+                    goal_mask ,
+                    normalized_action_context,
+                    vision_mem,
+                    lin_mem):
         
         if self.is_diffusion_model:
             actions = self.model.infer_actions(
                 obs_img,
                 curr_rel_pos_to_target,
                 goal_rel_pos_to_target, 
-                input_goal_mask ,
+                goal_mask ,
                 normalized_action_context,
-                self.noise_scheduler
+                self.noise_scheduler,
+                vision_mem,
+                lin_mem
             )
         else:
             actions = self.model.infer_actions(
                 obs_img,
                 curr_rel_pos_to_target,
                 goal_rel_pos_to_target, 
-                input_goal_mask ,
+                goal_mask ,
                 normalized_action_context
             ) 
 
@@ -503,10 +538,12 @@ def main():
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
     # model_name = "cnn_mlp_bsz128_c5_ac5_gcFalse_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_12-52-45"
     # model_name = "pidiff_bsz128_c1_ac1_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_11-13-00"
-    model_name = "pidiff_bsz128_c4_ac4_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_15-01-23"
+    # model_name = "pidiff_bsz128_c4_ac4_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_15-01-23"
     # model_name = "vint_bsz128_c5_ac5_gcTrue_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_13-54-07"
-
-    model_version = "latest" 
+    model_name = "pidiff_bsz16_c1_ac1_gcTrue_gcp0.1_ah16_ph32_tceTrue_ntmaxmin_2024-11-11_12-12-54"
+    # model_name = "pidiff_bsz256_c4_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-10_22-59-16"
+    
+    model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
@@ -572,12 +609,15 @@ def main():
             normalized_goal_pos,
             unormalized_goal_pos, 
             dataset_index,
-            action_mask ) = dataset[i]
+            action_mask,
+            vision_memory,
+            lin_memory) = dataset[i]
         
         viz_images = torch.split(context_queue, 1, dim=0)
         viz_obs_image = TF.resize(viz_images[-1], VIZ_IMAGE_SIZE)
         viz_context_t0_image = TF.resize(viz_images[0], VIZ_IMAGE_SIZE)
         viz_difference = viz_obs_image - viz_context_t0_image
+        viz_mem_image = TF.resize(vision_memory, VIZ_IMAGE_SIZE)
         
         # Convert the ground truth actions into waypoints
         gt_waypoints = to_numpy(gt_actions_normalized)
@@ -588,7 +628,12 @@ def main():
         t = tic()
         
         # Perform inference to predict the next waypoint
-        predicted_waypoint = model(context_queue, target_context_queue, goal_to_target,unormalized_prev_actions )
+        predicted_waypoint = model(context_queue,
+                                target_context_queue,
+                                goal_to_target,
+                                unormalized_prev_actions,
+                                vision_memory,
+                                lin_memory)
 
         # Measure the elapsed time for inference
         dt = toc(t)
@@ -599,6 +644,7 @@ def main():
         batch_goal_pos = unormalized_goal_pos.unsqueeze(0)
         batch_viz_difference = viz_difference.unsqueeze(0)
         
+        batch_viz_mem = viz_mem_image.unsqueeze(0)
         batch_dataset_index = dataset_index.unsqueeze(0)
         batch_action_mask = action_mask.unsqueeze(0)
         unormalized_prev_actions = model.get_waypoint(normalized_waypoints=normalized_prev_action)
@@ -613,6 +659,7 @@ def main():
                     batch_obs_images=to_numpy(batch_viz_obs_image),
                     batch_goal_images = to_numpy(batch_viz_context_t0_image),
                     batch_viz_difference = to_numpy(batch_viz_difference),
+                    batch_viz_mem = to_numpy(batch_viz_mem),
                     dataset_indices=to_numpy(batch_dataset_index),
                     batch_goals = to_numpy(batch_goal_pos),
                     batch_pred_waypoints = batch_predicted_waypoint,

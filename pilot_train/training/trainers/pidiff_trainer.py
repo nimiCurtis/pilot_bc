@@ -275,39 +275,50 @@ class PiDiffTrainer(BasicTrainer):
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
+            
+            
             if i % self.print_log_freq == 0 :
+                # Set model to evaluation mode and disable gradient calculations
+                self.model.eval()
+                with torch.no_grad():
+                    # Initialize action from Gaussian noise
+                    noisy_diffusion_output = torch.randn(
+                        (len(final_encoded_condition), self.pred_horizon, action_dim), device=self.device)
+                    diffusion_output = noisy_diffusion_output
 
-                # initialize action from Gaussian noise
-                noisy_diffusion_output = torch.randn(
-                    (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)
-                diffusion_output = noisy_diffusion_output
-                
-                for k in self.noise_scheduler.timesteps():
-                    # predict noise
-                    noise_pred = self.model("noise_pred",
-                                    noisy_action=diffusion_output,
-                                    timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
-                                    final_encoded_condition=final_encoded_condition)
+                    for k in self.noise_scheduler.timesteps():
+                        # Predict noise
+                        noise_pred = self.model(
+                            "noise_pred",
+                            noisy_action=diffusion_output,
+                            timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                            final_encoded_condition=final_encoded_condition
+                        )
 
-                    # inverse diffusion step (remove noise)
-                    diffusion_output = self.noise_scheduler.remove_noise(
-                        model_output=noise_pred,
-                        timestep=k,
-                        sample=diffusion_output
+                        # Inverse diffusion step (remove noise)
+                        diffusion_output = self.noise_scheduler.remove_noise(
+                            model_output=noise_pred,
+                            timestep=k,
+                            sample=diffusion_output
+                        )
+
+                    # Process action predictions
+                    action_pred = deltas_to_actions(
+                        deltas=diffusion_output,
+                        pred_horizon=self.pred_horizon,
+                        action_horizon=self.action_horizon,
+                        learn_angle=self.learn_angle
                     )
 
-                # action_pred = action_pred[:,:self.action_horizon,:]
-                action_pred = deltas_to_actions(deltas=diffusion_output,
-                                                pred_horizon=self.pred_horizon,
-                                                action_horizon=self.action_horizon,
-                                                learn_angle=self.learn_angle)
-
-                action_losses  = compute_losses(action_label=action_label,
-                                                                    action_pred=action_pred,
-                                                                    action_mask=action_mask,
-                                                                    )
-                losses.update(action_losses)
-                    
+                    # Compute losses
+                    action_losses = compute_losses(
+                        action_label=action_label,
+                        action_pred=action_pred,
+                        action_mask=action_mask,
+                    )
+                    losses.update(action_losses)
+            
+            # self.model.train() 
 
 
             # Append to Logger

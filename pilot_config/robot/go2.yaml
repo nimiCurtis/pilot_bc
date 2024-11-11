@@ -48,4 +48,22 @@ go2:
   std_lin_vel:
   - 0.3448
   - 0.0978
+
+  # max_ang_vel: 75.2899
+  # max_lin_vel:
+  # - 1.7949
+  # - 0.6481
+  # mean_ang_vel: -0.0037
+  # mean_lin_vel:
+  # - 0.2368
+  # - -0.0087
+  # min_ang_vel: -75.1415
+  # min_lin_vel:
+  # - -1.5218
+  # - -0.8652
+  # std_ang_vel: 1.6187
+  # std_lin_vel:
+  # - 0.3209
+  # - 0.082
+
   metric_waypoint_spacing: 1 # in use in visualizer

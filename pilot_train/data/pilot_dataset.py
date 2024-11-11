@@ -416,7 +416,7 @@ class PilotDataset(Dataset):
             # Get the goal position relative to the target
             goal_rel_pos_to_target = np.array(target_traj_data_goal[goal_time]["position"][:2])
             last_det = np.array(target_traj_data_goal[last_det_time]["position"][:2])
-            if np.any(goal_rel_pos_to_target != np.zeros_like(goal_rel_pos_to_target)):
+            if np.any(goal_rel_pos_to_target):
                 goal_pos_to_target_mask = True
                 if self.target_dim == 3:
                     goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
@@ -433,7 +433,7 @@ class PilotDataset(Dataset):
                 target_traj_data_context[t]["position"][:2] for f, t in context
             ])
 
-            #TODO: add implementation for not goal condition
+            #TODO: 
             target_context_mask = np.sum(rel_pos_to_target_context_tmp == np.zeros((2,)), axis=1) == 2
             rel_pos_to_target_context = np.zeros((rel_pos_to_target_context_tmp.shape[0], self.target_dim))
             
