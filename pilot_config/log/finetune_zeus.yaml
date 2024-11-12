@@ -1,4 +1,4 @@
-desc: "${policy_model.name}_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gc${data.goal_condition}_gcp${training.goal_mask_prob}_ph${data.pred_horizon}_tce${data.target_context_enable}_nt${data.norm_type}_"
+desc: "${training.fine_tune.model}_fintuned_"
 # desc: batch_experiment_b${training.batch_size}_
 
 # project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
@@ -10,8 +10,8 @@ run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${n
 
 ## TODO: handle with log and iamges 
 num_images_log: 16
-print_log_freq: 40 # in iterations
-eval_log_freq: 2  # in iterations
+print_log_freq: 3 # in iterations
+eval_log_freq: 1  # in iterations
 image_log_freq: 2 #  
 eval_fraction: 0.25
 eval_freq: 1 # in epochs

@@ -1,4 +1,4 @@
-desc: "${policy_model.name}_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gc${data.goal_condition}_gcp${training.goal_mask_prob}_ph${data.pred_horizon}_tce${data.target_context_enable}_nt${data.norm_type}_"
+desc: "${policy_model.name}_bsz${training.batch_size}_c${data.context_size}_ac${data.action_context_size}_gc${data.goal_condition}_gcp${training.goal_mask_prob}_ph${data.pred_horizon}_tce${data.target_context_enable}_nt${data.norm_type}_dns${policy_model.noise_scheduler.type}_"
 # desc: batch_experiment_b${training.batch_size}_
 
 # project_folder: /home/roblab20/dev/pilot/pilot_bc/pilot_train/logs
