@@ -83,8 +83,8 @@ def set_robot_config(robot_name: str, config: dict, file_format: str = 'yaml'):
         raise ValueError("Unsupported file format: Please use 'json' or 'yaml'")
 
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                               "robot",
-                               f"{robot_name}.{file_format}")
+                            "robot",
+                            f"{robot_name}.{file_format}")
 
     if file_format.lower() == 'json':
         with open(config_path, 'w') as file:
@@ -156,8 +156,8 @@ def get_dataset_config(dataset_name: str):
     ValueError: If the configuration file is not in a supported format.
     """
     config_path = os.path.join(os.path.dirname(os.path.realpath(__file__)),
-                               "datasets",
-                               f"{dataset_name}.yaml")
+                            "datasets",
+                            f"{dataset_name}.yaml")
     return _get_default_config(file_path=config_path)
 
 def get_recording_config(data_folder: str, trajectory_name: str):
@@ -196,6 +196,7 @@ def split_main_config(cfg:DictConfig, rt:bool=False)->Tuple[DictConfig]:
         return cfg.training, cfg.device, cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.linear_encoder, cfg.log
     else:
         return cfg.data, cfg.datasets, cfg.policy_model, cfg.vision_encoder, cfg.linear_encoder, cfg.device
+
 
 def get_inference_model_config(model_name: str, rt:bool=False):    
     """

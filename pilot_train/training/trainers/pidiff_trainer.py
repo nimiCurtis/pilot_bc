@@ -264,14 +264,14 @@ class PiDiffTrainer(BasicTrainer):
             losses["diffusion_noise_loss_reg"] = loss_reg + loss_dif
 
             loss = losses["diffusion_noise_loss"] if not(self.regularized_loss) else losses["diffusion_noise_loss_reg"]
-            loss.backward()
+
 
             # step optimizer
-            if self.global_step % self.gradient_accumulate_every == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                self.scheduler.step()
-                            
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            self.scheduler.step()
+
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())

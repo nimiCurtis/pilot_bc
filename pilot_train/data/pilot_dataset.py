@@ -223,6 +223,9 @@ class PilotDataset(Dataset):
             traj_data = self._get_trajectory(traj_name)
             properties = get_robot_data_properties(data_folder=self.data_folder,
                                                 trajectory_name=traj_name)
+            
+            
+            
             traj_len = len(traj_data["position"])
             
             # Check that the lengths of robot and target data are equal if goal_condition is true
@@ -264,26 +267,11 @@ class PilotDataset(Dataset):
         Returns:
             tuple: The trajectory name, goal time, and a boolean indicating if the goal is negative.
         """
-        
-        
+
         ## TODO: check
         goal_offset = np.random.randint((min_goal_dist/self.waypoint_spacing_action) + 1, (max_goal_dist/self.waypoint_spacing_action) + 1)
-        # if goal_offset == 0:waypoint_spacing_action
-        #     trajectory_name, goal_time = self._sample_negative()
-        #     return trajectory_name, goal_time, True
-        # else:
         goal_time = curr_time + goal_offset*self.waypoint_spacing_action
         return trajectory_name, goal_time, False
-
-    def _sample_negative(self):
-        """
-        Samples a goal from a (likely) different trajectory.
-
-        Returns:
-            tuple: The trajectory name and goal time.
-        """
-        
-        return self.goals_index[np.random.randint(0, len(self.goals_index))]
 
     def _load_index(self) -> None:
         """
@@ -418,12 +406,8 @@ class PilotDataset(Dataset):
             last_det = np.array(target_traj_data_goal[last_det_time]["position"][:2])
             if np.any(goal_rel_pos_to_target):
                 goal_pos_to_target_mask = True
-                if self.target_dim == 3:
-                    goal_rel_pos_to_target = xy_to_d_cos_sin(goal_rel_pos_to_target)
-                    goal_rel_pos_to_target[0] = normalize_data(data=goal_rel_pos_to_target[0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-                elif self.target_dim == 2:
-                    goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-                    last_det = normalize_data(data=last_det, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+                goal_rel_pos_to_target = normalize_data(data=goal_rel_pos_to_target, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+                last_det = normalize_data(data=last_det, stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
             else:
                 goal_rel_pos_to_target = np.zeros((self.target_dim,))
                 goal_pos_to_target_mask = False
@@ -436,12 +420,7 @@ class PilotDataset(Dataset):
             #TODO: 
             target_context_mask = np.sum(rel_pos_to_target_context_tmp == np.zeros((2,)), axis=1) == 2
             rel_pos_to_target_context = np.zeros((rel_pos_to_target_context_tmp.shape[0], self.target_dim))
-            
-            if self.target_dim == 3:
-                rel_pos_to_target_context[~target_context_mask] = xy_to_d_cos_sin(rel_pos_to_target_context_tmp[~target_context_mask])
-                rel_pos_to_target_context[~target_context_mask, 0] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask, 0], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
-            elif self.target_dim == 2:
-                rel_pos_to_target_context[~target_context_mask] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
+            rel_pos_to_target_context[~target_context_mask] = normalize_data(data=rel_pos_to_target_context_tmp[~target_context_mask], stats={'min': -self.max_depth / 1000, 'max': self.max_depth / 1000},norm_type="maxmin")
 
             return rel_pos_to_target_context, goal_rel_pos_to_target, goal_pos_to_target_mask, last_det
     
@@ -554,11 +533,6 @@ class PilotDataset(Dataset):
                                                                                                                     curr_time,
                                                                                                                     last_det_time,
                                                                                                                     context)
-        # else:
-        #     # Not in use
-        #     rel_pos_to_target_context = np.zeros((self.context_size, self.target_dim, 0))
-        #     goal_rel_pos_to_target = np.zeros((self.target_dim,))
-        #     goal_pos_to_target_mask = False
 
         # Compute the timestep distances
         if goal_is_negative:

@@ -5,25 +5,24 @@ import hydra
 from omegaconf import DictConfig, OmegaConf
 import torch
 import torch.nn as nn
-import argparse
 import torch.backends.cudnn as cudnn
 
 from pilot_train.training.trainers.basic_trainer import BasicTrainer as bt
 from pilot_train.training.trainer import build_trainer
-from pilot_train.training.trainers.pidiff_trainer import PiDiffTrainer
 from pilot_config.config import get_main_config_dir, split_main_config
 from pilot_utils.utils import tic, toc
 from pilot_utils.transforms import ObservationTransform
 from pilot_utils.train.train_utils import get_gpu_memory_usage, load_model
-from pilot_deploy.inference import CKPTH_PATH
-
+from pilot_deploy.inference import CKPTH_PATH, get_inference_config
 
 
 def train(cfg:DictConfig):
     
     # Get configs
-    
     training_cfg, device_cfg,  data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_model_cfg, linear_encoder_model_cfg, log_cfg =  split_main_config(cfg)
+
+    if training_cfg.fine_tune.enable:
+        data_cfg, _, policy_model_cfg, vision_encoder_model_cfg, linear_encoder_model_cfg, _ = get_inference_config(model_name=training_cfg.fine_tune.model)
 
     # Device management
     if torch.cuda.is_available() and device_cfg == 'cuda':
@@ -58,7 +57,7 @@ def train(cfg:DictConfig):
         print("Using cpu")
         device = torch.device("cpu")
 
-    if "seed" in training_cfg:
+    if "seed" in training_cfg: # Reproducing performance
         np.random.seed(training_cfg.seed)
         torch.manual_seed(training_cfg.seed)
         cudnn.deterministic = True
@@ -83,24 +82,9 @@ def train(cfg:DictConfig):
     model.count_parameters()
 
     if training_cfg.fine_tune.enable:
-        load_model(model, model_name=training_cfg.fine_tune.model, checkpoint_path=CKPTH_PATH)
-
-
-    ### TODO: add the load run in the Trainer class
-    # if "load_run" in config:
-    #     load_project_folder = os.path.join("logs", config["load_run"])
-    #     print("Loading model from ", load_project_folder)
-    #     latest_path = os.path.join(load_project_folder, "latest.pth")
-    #     latest_checkpoint = torch.load(latest_path) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
-    #     load_model(model, config["model_type"], latest_checkpoint)
-    #     if "epoch" in latest_checkpoint:
-    #         current_epoch = latest_checkpoint["epoch"] + 1
-
-    # if "load_run" in config:  # load optimizer and scheduler after data parallel
-    #     if "optimizer" in latest_checkpoint:
-    #         optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
-    #     if scheduler is not None and "scheduler" in latest_checkpoint:
-    #         scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
+        load_model(model,
+                model_name=training_cfg.fine_tune.model,
+                checkpoint_path=CKPTH_PATH)
 
     # Multi-GPU
     model = model.to(device)
@@ -127,11 +111,9 @@ def train(cfg:DictConfig):
     print("FINISHED TRAINING")
     print(f"TRAINING TIME: {toc(start_time)/60} [minutes]")
 
-
-
 if __name__ == "__main__":
 
-    @hydra.main(version_base=None, config_path=get_main_config_dir(), config_name="train_pilot_finetune")
+    @hydra.main(version_base=None, config_path=get_main_config_dir(), config_name="train_pilot_policy")
     def main(cfg: DictConfig):
         torch.multiprocessing.set_start_method("spawn")
 

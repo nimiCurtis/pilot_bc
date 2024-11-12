@@ -145,7 +145,8 @@ class CNNMLPTrainer(BasicTrainer):
                 normalized_goal_pos,
                 dataset_index,
                 action_mask,
-                goal_pos_to_target_mask
+                goal_pos_to_target_mask,
+                _, _
             ) = data
 
             action_dim = normalized_actions.shape[-1]
@@ -215,14 +216,11 @@ class CNNMLPTrainer(BasicTrainer):
             )
             
             loss = losses["total_loss"]
-
+            
+            self.optimizer.zero_grad()
             loss.backward()
+            self.optimizer.step()
 
-            # step optimizer
-            if self.global_step % self.gradient_accumulate_every == 0:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                            
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
                 self.ema.step(self.model.parameters())
@@ -241,6 +239,7 @@ class CNNMLPTrainer(BasicTrainer):
                 loggers=loggers,
                 obs_image=viz_obs_image,
                 goal_image=viz_context_t0_image,
+                viz_mem_image=viz_context_t0_image,
                 action_pred=action_pred,
                 action_label=action_label,
                 action_context=normalized_actions_context,
@@ -317,7 +316,8 @@ class CNNMLPTrainer(BasicTrainer):
                     normalized_goal_pos,
                     dataset_index,
                     action_mask,
-                    goal_pos_to_target_mask
+                    goal_pos_to_target_mask,
+                    _, _
                 ) = data
 
                 action_dim = normalized_actions.shape[-1]
@@ -359,7 +359,7 @@ class CNNMLPTrainer(BasicTrainer):
 
                     lin_encoding = eval_model("linear_encoder",
                                             curr_rel_pos_to_target=linear_input)
-                                    
+                    
                     modalities = [obs_encoding_condition, lin_encoding]
 
                     # Not in use!
@@ -379,7 +379,7 @@ class CNNMLPTrainer(BasicTrainer):
                                                 pred_horizon=self.pred_horizon,
                                                 action_horizon=self.action_horizon,
                                                 learn_angle=self.learn_angle)
-                
+
                 losses = compute_losses(
                     action_label=action_label,
                     action_pred=action_pred,
@@ -400,6 +400,7 @@ class CNNMLPTrainer(BasicTrainer):
                     loggers=loggers,
                     obs_image=viz_obs_image,
                     goal_image=viz_context_t0_image,
+                    viz_mem_image=viz_context_t0_image,
                     action_pred=action_pred,
                     action_label=action_label,
                     action_context=normalized_actions_context,
@@ -464,14 +465,6 @@ class CNNMLPTrainer(BasicTrainer):
                                     path=best_model_path)
 
             wandb.log({}, commit=False)
-
-            ## TODO:check
-            # if self.scheduler is not None:
-            #     # scheduler calls based on the type of scheduler
-            #     if isinstance(self.scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
-            #         self.scheduler.step(current_avg_loss)
-            #     else:
-            #         self.scheduler.step()
             
             wandb.log({
                 "avg_total_test_loss": current_avg_loss,

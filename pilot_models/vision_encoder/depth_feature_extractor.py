@@ -32,7 +32,7 @@ class DepthFeatureExtractor(BaseModel):
             nn.MaxPool2d(2, 2),  # Output: 10x10
 
             nn.Conv2d(int(self.output_dim // 4), self.output_dim, 3, stride=1, padding=1),
-            nn.BatchNorm2d(512),
+            nn.BatchNorm2d(self.output_dim),
             nn.ReLU(),
             nn.MaxPool2d(2, 2),  # Output: 5x5
         )

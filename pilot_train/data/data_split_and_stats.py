@@ -5,7 +5,7 @@ import random
 import json
 import numpy as np
 
-from pilot_config.config import get_dataset_config, set_dataset_config, recursive_update
+from pilot_config.config import get_dataset_config, set_dataset_config, recursive_update, set_robot_config 
 
 PATH = os.path.dirname(__file__)
 
@@ -64,7 +64,7 @@ def main(args: argparse.Namespace):
 
         robot_demo_time = 0
         robot_number_of_bags = len(robot_folder_names)
-    
+
         if robot_number_of_bags>0:
             # Randomly shuffle the names of the folders
             random.shuffle(robot_folder_names)

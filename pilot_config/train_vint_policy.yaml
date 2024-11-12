@@ -57,6 +57,11 @@ training:
     # steps per epoch
     max_train_steps: null
     max_val_steps: null
+  
+  fine_tune:
+    enable: False
+    model: ""
+
 
 
 # data config

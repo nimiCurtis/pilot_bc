@@ -344,8 +344,9 @@ class Visualizer:
         
         ## Context image
         ax[1].imshow(goal_img)
-        ax[3].imshow(mem_img)
         
+        
+        ## TODO: add camera settings and projection
         if offline:        
             self.plot_trajs_and_points_on_image(
                 ax[2],
@@ -359,7 +360,7 @@ class Visualizer:
         else:
             ax[2].imshow(obs_img)
         
-        
+        ax[3].imshow(mem_img)
         
         if diff_img is not None:
             ax[4].imshow(diff_img)
@@ -367,7 +368,7 @@ class Visualizer:
 
         fig.set_size_inches(15, 10)
         ax[0].set_title(f"Action Prediction")
-        ax[1].set_title(f"Observation @ first context step",color=points_colors[0])
+        ax[1].set_title(f"Observation @ Context t0",color=points_colors[0])
         ax[2].set_title(f"Observation @ Now",color=points_colors[-1])
         ax[3].set_title(f"Observation @ Memory",color="black")
         
@@ -480,7 +481,6 @@ class Visualizer:
             batch_obs_images: np.ndarray,
             batch_goal_images: np.ndarray,
             batch_viz_difference: np.ndarray,
-            batch_viz_mem: np.ndarray,
             dataset_indices: np.ndarray,
             batch_goals: np.ndarray,
             batch_pred_waypoints: np.ndarray,
@@ -537,7 +537,6 @@ class Visualizer:
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
             diff_img = numpy_to_img(batch_viz_difference[i])
-            mem_img = numpy_to_img(batch_viz_mem[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
             robot_config = get_robot_config(robot_name=dataset_name)
             goal_pos = batch_goals[i]
@@ -554,7 +553,6 @@ class Visualizer:
             self.compare_waypoints_pred_to_label(
                 obs_img,
                 goal_img,
-                mem_img,
                 dataset_name,
                 goal_pos,
                 pred_waypoints,
