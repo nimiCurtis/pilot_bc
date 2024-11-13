@@ -4,7 +4,7 @@ from typing import List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import numpy as np
 from pilot_models.policy.base_model import BaseModel
 from pilot_models.model_registry import get_linear_encoder_model, get_vision_encoder_model
 from pilot_utils.train.train_utils import replace_bn_with_gn
@@ -12,7 +12,7 @@ from pilot_models.policy.diffusion_policy import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
 from pilot_models.policy.common.transformer import MultiLayerDecoder, PositionalEncoding
-from pilot_utils.utils import deltas_to_actions
+from pilot_utils.utils import deltas_to_actions, to_numpy
 from pilot_models.vision_encoder.depth_feature_extractor import DepthFeatureExtractor
 
 class PiDiff(BaseModel):
@@ -251,6 +251,87 @@ class PiDiff(BaseModel):
 
         return fused_tensor
 
+
+    @torch.inference_mode()  # Refactored for inference
+    def infer_trajectory(self, obs_img,
+                        curr_rel_pos_to_target,
+                        goal_rel_pos_to_target, 
+                        goal_mask,
+                        normalized_action_context,
+                        diffusion_noise_scheduler,
+                        vision_mem,
+                        lin_mem):
+        
+        # Obtain the encoding from the vision encoder
+        obs_encoding_condition, mem_encoding = self("vision_encoder", obs_img=obs_img, mem_img=vision_mem)
+        
+        # Encode based on context
+        if self.target_context_enable:
+            linear_input = torch.concatenate(
+                [curr_rel_pos_to_target.flatten(1), normalized_action_context.flatten(1)], axis=1
+            )
+            lin_encoding, lin_mem_encoding = self("linear_encoder",
+                                                curr_rel_pos_to_target=linear_input,
+                                                lin_mem=lin_mem)
+            modalities = [obs_encoding_condition, lin_encoding]
+            fused_modalities_encoding = self("fuse_modalities", modalities=modalities)
+        else:
+            fused_modalities_encoding = obs_encoding_condition
+        
+        # Encode the goal if applicable
+        if self.goal_condition:
+            goal_encoding = self("goal_encoder", goal_rel_pos_to_target=goal_rel_pos_to_target)
+            final_encoded_condition = torch.cat((fused_modalities_encoding, mem_encoding, lin_mem_encoding, goal_encoding), dim=1)
+            final_encoded_condition = self("goal_masking", final_encoded_condition=final_encoded_condition, goal_mask=goal_mask)
+        else:
+            goal_mask = None
+            final_encoded_condition = obs_encoding_condition
+            final_encoded_condition = self("goal_masking", final_encoded_condition=final_encoded_condition, goal_mask=goal_mask)
+        
+        # Initialize the action predictions with Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (len(final_encoded_condition), self.pred_horizon, self.action_dim), device=self.device
+        )
+        diffusion_output = noisy_diffusion_output
+
+        # Store each step's trajectory prediction
+        predicted_trajectory_steps = []  # List to store the trajectory at each step
+        
+        for k in diffusion_noise_scheduler.timesteps():
+            # Predict noise
+            noise_pred = self("noise_pred",
+                            noisy_action=diffusion_output,
+                            timesteps=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(self.device),
+                            final_encoded_condition=final_encoded_condition)
+            
+            # Inverse diffusion step (remove noise)
+            diffusion_output = diffusion_noise_scheduler.remove_noise(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            )
+            
+            # Store the current output as part of the trajectory
+            predicted_trajectory_steps.append(diffusion_output.clone().detach())
+
+        # Apply deltas_to_actions to each diffusion step in the predicted trajectory
+        action_trajectories = [
+            deltas_to_actions(deltas=step,
+                            pred_horizon=self.pred_horizon,
+                            action_horizon=self.action_horizon,
+                            learn_angle=self.learn_angle)
+            for step in predicted_trajectory_steps
+        ]
+        
+        # Convert the final diffusion output to action predictions
+        action_pred = deltas_to_actions(deltas=diffusion_output,
+                                        pred_horizon=self.pred_horizon,
+                                        action_horizon=self.action_horizon,
+                                        learn_angle=self.learn_angle)
+        
+        # Return the action trajectories for each diffusion step and the final action prediction
+        return action_trajectories, action_pred
+    
     @torch.inference_mode() ############################# TODO: refactore here for inference 
     def infer_actions(self, obs_img,
                     curr_rel_pos_to_target,

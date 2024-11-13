@@ -480,6 +480,7 @@ class Visualizer:
             self,
             batch_obs_images: np.ndarray,
             batch_goal_images: np.ndarray,
+            batch_viz_mem: np.ndarray,
             batch_viz_difference: np.ndarray,
             dataset_indices: np.ndarray,
             batch_goals: np.ndarray,
@@ -536,6 +537,7 @@ class Visualizer:
         for i in range(min(batch_size, num_images_preds)):
             obs_img = numpy_to_img(batch_obs_images[i])
             goal_img = numpy_to_img(batch_goal_images[i])
+            mem_img = numpy_to_img(batch_viz_mem[i])
             diff_img = numpy_to_img(batch_viz_difference[i])
             dataset_name = dataset_names[int(dataset_indices[i])]
             robot_config = get_robot_config(robot_name=dataset_name)
@@ -553,6 +555,7 @@ class Visualizer:
             self.compare_waypoints_pred_to_label(
                 obs_img,
                 goal_img,
+                mem_img,
                 dataset_name,
                 goal_pos,
                 pred_waypoints,

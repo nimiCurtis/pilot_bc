@@ -550,7 +550,7 @@ class PilotDataset(Dataset):
 
         # Return the context, observation, goal, normalized actions, and other necessary information as tensors
         return (
-            vision_obs_context_tensor,  # [C*(context+1),H,W]
+            vision_obs_context_tensor, 
             torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
             torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
             torch.as_tensor(normalized_actions, dtype=torch.float32),
@@ -586,7 +586,7 @@ class PilotDataset(Dataset):
             # Check if there is any position detected at time step i
             if np.any(upto_curr_time_trajes[i]['position']):
                 if i not in context_times:
-                    return max(i-np.random.randint(int(frame_rate/2),frame_rate),0) # Update the last detection time to the current index
+                    return max(i-frame_rate,0) # Update the last detection time to the current index
                 else:
                     return i
         return curr_time

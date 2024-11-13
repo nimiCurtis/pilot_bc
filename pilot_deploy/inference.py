@@ -466,6 +466,17 @@ class PilotAgent(nn.Module):
                     lin_mem):
         
         if self.is_diffusion_model:
+            # actions = self.model.infer_trajectory(
+            #     obs_img,
+            #     curr_rel_pos_to_target,
+            #     goal_rel_pos_to_target, 
+            #     goal_mask ,
+            #     normalized_action_context,
+            #     self.noise_scheduler,
+            #     vision_mem,
+            #     lin_mem
+            # )
+            
             actions = self.model.infer_actions(
                 obs_img,
                 curr_rel_pos_to_target,
@@ -511,7 +522,8 @@ def position_error(predicted: np.ndarray, target: np.ndarray) -> float:
     Returns:
         float: MSE loss.
     """
-    return np.mean(np.linalg.norm(predicted-target,axis=1))
+    d = np.linalg.norm(predicted-target,axis=1)
+    return np.mean(d)
 
 def angle_error(predicted: np.ndarray, target: np.ndarray) -> float:
     """
@@ -536,18 +548,18 @@ def main():
     """
     # Set the name of the model to load and evaluate
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
-    # model_name = "cnn_mlp_bsz128_c5_ac5_gcFalse_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_12-52-45"
-    # model_name = "pidiff_bsz128_c1_ac1_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_11-13-00"
-    # model_name = "pidiff_bsz128_c4_ac4_gcTrue_gcp0.5_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-08_15-01-23"
-    # model_name = "vint_bsz128_c5_ac5_gcTrue_gcp0.1_ph8_tceTrue_ntmaxmin_2024-11-08_13-54-07"
-    model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-11_12-52-08"
-    # model_name = "pidiff_bsz256_c4_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_dnsddpm_2024-11-10_22-59-16"
+    # model_name = "cnn_mlp_bsz128_c3_ac2_gcFalse_gcp0.3_ph5_tceTrue_ntmaxmin_2024-11-12_16-33-56"
+    # model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_13-45-54"
+    # model_name = "pidiff_bsz256_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_19-05-32"
+    model_name = "vint_bsz128_c3_ac2_gcTrue_gcp0.3_ph5_tceTrue_ntmaxmin_2024-11-12_17-48-53"
+    # model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_13-45-54_fintuned_2024-11-13_10-45-19"
     
     model_version = "best_model" 
     # Retrieve the model's inference configuration
     data_cfg, datasets_cfg, policy_model_cfg, vision_encoder_cfg, linear_encoder_cfg, device = get_inference_config(model_name=model_name)
     # Define the robot name and retrieve the corresponding dataset configuration
-    robot = "nimrod"
+    # robot = "nimrod"
+    robot = "go2"
     robot_dataset_cfg = datasets_cfg[robot]
     policy_model = policy_model_cfg.name
     
@@ -591,9 +603,9 @@ def main():
     
     size = min(size,len(dataset))
     action_horizon = data_cfg.action_horizon
-    pos_tot_err = 0
-    yaw_tot_err = 0
-    
+
+    pos_err_arr = []
+    yaw_err_arr = []
     
     viz_indices = np.random.randint(0,size,size=(1000))
     # Loop through the dataset, performing inference and timing each prediction
@@ -652,6 +664,8 @@ def main():
         batch_predicted_waypoint = np.expand_dims(predicted_waypoint,axis=0)
         batch_gt_waypoints = np.expand_dims(gt_waypoints,axis=0)
 
+        
+
         print(i)
         if i in viz_indices:
             print("visualize...")
@@ -677,7 +691,7 @@ def main():
 
 
         pos_error = position_error(predicted=predicted_waypoint[:,:2],target=gt_waypoints[:,:2])
-        pos_tot_err+=pos_error
+        pos_err_arr.append(pos_error)
         
         hx_gt, hy_gt = gt_waypoints[:,2], gt_waypoints[:,3]
         hx_predicted, hy_predicted = predicted_waypoint[:,2], predicted_waypoint[:,3]
@@ -686,7 +700,8 @@ def main():
         yaw_predicted = np.arctan2(hy_predicted, hx_predicted)
         
         yaw_error = angle_error(predicted=yaw_predicted,target=yaw_gt)
-        yaw_tot_err+=yaw_error
+        yaw_err_arr.append(yaw_error)
+        
         # Output the predictions and their corresponding ground truth values
         print(f"infer: dataset index: {dataset_index} | sample: {i}")
         print(f"wpt predicted: {np.round(predicted_waypoint[wpt_i], 5)}")
@@ -702,9 +717,10 @@ def main():
 
     # Compute the average inference time, excluding the first sample (warmup)
     dt_avg = dt_sum / (size - 1)
-    pos_avg_err = pos_tot_err/size
-    yaw_avg_err = yaw_tot_err/size
-    
+    pos_avg_err = np.mean(pos_err_arr)
+    yaw_avg_err = np.mean(yaw_err_arr)
+    pos_std_err = np.std(pos_err_arr)
+    yaw_std_err = np.std(yaw_err_arr)
     results_dir = os.path.join(
                 log_path,policy_model,model_name, "visualize", eval_type, "inference_test",model_version
             )
@@ -720,7 +736,9 @@ def main():
     results = {
         "size": size,
         "pos_avg_mse": pos_avg_err,
+        "pos_std_mse": pos_std_err,
         "yaw_avg_mse": yaw_avg_err,
+        "yaw_std_mse": yaw_std_err,
         "avg_inference_dt": dt_avg
     }
     
