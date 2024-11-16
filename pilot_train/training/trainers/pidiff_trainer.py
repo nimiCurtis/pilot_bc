@@ -236,6 +236,9 @@ class PiDiffTrainer(BasicTrainer):
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 
+                mem_encoding,lin_mem_encoding = self.model("multiply_mem", vision_mem=mem_encoding,
+                                                        lin_mem=lin_mem_encoding)
+                
                 final_encoded_condition = torch.cat((fused_modalities_encoding, mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                 final_encoded_condition = self.model("goal_masking",
                                                     final_encoded_condition=final_encoded_condition,
@@ -504,6 +507,9 @@ class PiDiffTrainer(BasicTrainer):
                     goal_encoding = eval_model("goal_encoder",
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
+                    mem_encoding,lin_mem_encoding = self.model("multiply_mem", vision_mem=mem_encoding,
+                                                        lin_mem=lin_mem_encoding)
+
                     final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
                     final_encoded_condition = eval_model("goal_masking",

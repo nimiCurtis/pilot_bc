@@ -82,7 +82,10 @@ class PiDiff(BaseModel):
                                             nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
                                             nn.ReLU(),
                                             nn.Linear(lin_encoding_size // 2, lin_encoding_size))
-
+        
+        # Learnable scalar weights for highlighting embeddings
+        self.mem_weight = nn.Parameter(torch.tensor(1.1))  # Initialize >1
+        self.lin_mem_weight = nn.Parameter(torch.tensor(1.1))  # Initialize >1
 
         if self.goal_condition:
             # Linear encoder for time series target position
@@ -190,6 +193,14 @@ class PiDiff(BaseModel):
                 goal_encoding = goal_encoding.unsqueeze(1)
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         return goal_encoding
+    
+    def multiply_mem(self,vision_mem, lin_mem):
+        vision_mem_multiplied = self.mem_weight * vision_mem
+        
+        lin_mem_multiplied = self.lin_mem_weight * lin_mem
+        
+        
+        return vision_mem_multiplied, lin_mem_multiplied 
     
     def infer_goal_masking(self,final_encoded_condition, goal_mask):
         
@@ -435,6 +446,9 @@ class PiDiff(BaseModel):
             else:
                 output = self.fuse_modalities(kwargs["modalities"])
 
+        elif func_name == "multiply_mem":
+            output = self.multiply_mem(kwargs["vision_mem"],kwargs["lin_mem"])
+        
         elif func_name == "goal_masking":
             output = self.infer_goal_masking(kwargs["final_encoded_condition"], kwargs["goal_mask"])
 
