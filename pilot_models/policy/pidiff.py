@@ -373,10 +373,15 @@ class PiDiff(BaseModel):
             
             # final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding, ), dim=1)  # >> Concat the lin_encoding as a token too
             final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)
+            ## was
+            # final_encoded_condition = self("goal_masking",
+            #                                     final_encoded_condition=final_encoded_condition,
+            #                                     goal_mask = goal_mask)
+            ## Now no goal masking
             final_encoded_condition = self("goal_masking",
                                                 final_encoded_condition=final_encoded_condition,
-                                                goal_mask = goal_mask)
-
+                                                goal_mask=None)
+            
         ## TODO: next refactoring
         else:       # No Goal condition >> take the obs_encoding as the tokens
             goal_mask = None

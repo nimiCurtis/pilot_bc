@@ -550,8 +550,8 @@ def main():
     log_path = "/home/roblab20/dev/pilot/pilot_bc/pilot_train/logs/train_pilot_policy"
     # model_name = "cnn_mlp_bsz128_c3_ac2_gcFalse_gcp0.3_ph5_tceTrue_ntmaxmin_2024-11-12_16-33-56"
     # model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_13-45-54"
-    # model_name = "pidiff_bsz256_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_19-05-32"
-    model_name = "vint_bsz128_c3_ac2_gcTrue_gcp0.3_ph5_tceTrue_ntmaxmin_2024-11-12_17-48-53"
+    model_name = "pidiff_bsz256_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_19-05-32"
+    # model_name = "vint_bsz128_c3_ac2_gcTrue_gcp0.3_ph5_tceTrue_ntmaxmin_2024-11-12_17-48-53"
     # model_name = "pidiff_bsz128_c3_ac2_gcTrue_gcp0.3_ph16_tceTrue_ntmaxmin_2024-11-12_13-45-54_fintuned_2024-11-13_10-45-19"
     
     model_version = "best_model" 
