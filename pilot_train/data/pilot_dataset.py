@@ -586,7 +586,7 @@ class PilotDataset(Dataset):
             # Check if there is any position detected at time step i
             if np.any(upto_curr_time_trajes[i]['position']):
                 if i not in context_times:
-                    return max(i-frame_rate,0) # Update the last detection time to the current index
+                    return max(i-int(frame_rate/2),0) # Update the last detection time to the current index
                 else:
                     return i
         return curr_time

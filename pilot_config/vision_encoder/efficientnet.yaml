@@ -3,3 +3,4 @@ version: efficientnet-b1 # by default, this is imagenet pretrained
 in_channels: 1
 pretrained: False
 vision_encoding_size: 256
+vision_out_size: 512

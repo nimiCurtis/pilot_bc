@@ -139,6 +139,11 @@ class PiDiff(BaseModel):
         self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
 
+    def get_memory_k(self):
+
+        return self.mem_weight, self.lin_mem_weight
+    
+    
     def get_scheduler_config(self):
         return self.noise_scheduler_config
 
@@ -358,7 +363,11 @@ class PiDiff(BaseModel):
         # Predict the noise residual
         obs_encoding_condition, mem_encoding = self("vision_encoder",obs_img=obs_img, mem_img=vision_mem)
         # Get the input goal mask
-
+        target_in_context = torch.any(torch.any(curr_rel_pos_to_target,axis=1),axis=1)
+        mem_mask = torch.logical_not(target_in_context).long()
+        mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
+        
+        mem_encoding = mem_mask*mem_encoding
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
         if self.target_context_enable:
                 linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
@@ -371,6 +380,9 @@ class PiDiff(BaseModel):
                                                 curr_rel_pos_to_target=linear_input,
                                                 lin_mem = lin_mem)
 
+                lin_mem_encoding = mem_mask*lin_mem_encoding
+
+                
                 modalities = [obs_encoding_condition, lin_encoding]
                 fused_modalities_encoding = self("fuse_modalities",
                                                     modalities=modalities)
@@ -381,6 +393,10 @@ class PiDiff(BaseModel):
         if self.goal_condition:
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
+            
+            
+            mem_encoding,lin_mem_encoding = self("multiply_mem", vision_mem=mem_encoding,
+                                                        lin_mem=lin_mem_encoding)
             
             # final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding, ), dim=1)  # >> Concat the lin_encoding as a token too
             final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)
@@ -401,6 +417,7 @@ class PiDiff(BaseModel):
                                                 final_encoded_condition=final_encoded_condition,
                                                 goal_mask = goal_mask)
 
+        
         # initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(
             (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)

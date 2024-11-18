@@ -19,24 +19,23 @@ class DepthFeatureExtractor(BaseModel):
             nn.Conv2d(self.input_dim, int(self.output_dim // 16), 3, stride=2, padding=1),
             nn.BatchNorm2d(int(self.output_dim // 16)),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 80x80
+            nn.MaxPool2d(2, 2),  
 
             nn.Conv2d(int(self.output_dim // 16), int(self.output_dim // 8), 3, stride=2, padding=1),
             nn.BatchNorm2d(int(self.output_dim // 8)),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 20x20
+            nn.MaxPool2d(2, 2),  
 
             nn.Conv2d(int(self.output_dim // 8), int(self.output_dim // 4), 3, stride=1, padding=1),
             nn.BatchNorm2d(int(self.output_dim // 4)),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 10x10
+            nn.MaxPool2d(2, 2),  
 
             nn.Conv2d(int(self.output_dim // 4), self.output_dim, 3, stride=1, padding=1),
             nn.BatchNorm2d(self.output_dim),
             nn.ReLU(),
-            nn.MaxPool2d(2, 2),  # Output: 5x5
+            nn.MaxPool2d(2, 2),  
         )
-
 
         # Initialize weights
         self._initialize_weights()
@@ -76,4 +75,36 @@ class DepthFeatureExtractor(BaseModel):
             elif isinstance(m, nn.Linear):
                 init.kaiming_normal_(m.weight, mode='fan_in', nonlinearity='relu')
                 init.constant_(m.bias, 0)
+
+
+
+
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+        super(ResidualBlock, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=1, stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.downsample = downsample
+
+    def forward(self, x):
+        identity = x
+        if self.downsample:
+            identity = self.downsample(x)
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        out += identity
+        out = self.relu(out)
+        return out
+
+
+
+
 
