@@ -18,12 +18,13 @@
 
 
 # python3 train.py data.pred_horizon=16
-# python3 train.py data.pred_horizon=32
+# python3 train.py data.pred_horizon=32 training.goal_mask_prob=0.0 training.modal_dropout_prob=0.0
+# python3 train.py data.pred_horizon=32 training.goal_mask_prob=0.7 training.modal_dropout_prob=0.5
+
 # python3 train.py data.pred_horizon=64
 
 
 
 #finetune
-python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.75_ah16_ph16_tceTrue_ntmaxmin_2024-11-18_20-30-21 data.pred_horizon=16
-python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.75_ah16_ph32_tceTrue_ntmaxmin_2024-11-18_20-54-00 data.pred_horizon=32
-python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.75_ah16_ph64_tceTrue_ntmaxmin_2024-11-18_21-17-50 data.pred_horizon=64
+python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.0_ah16_ph32_tceTrue_ntmaxmin_2024-11-19_13-42-18 data.pred_horizon=32 training.goal_mask_prob=0.0 training.modal_dropout_prob=0.0
+python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.7_ah16_ph32_tceTrue_ntmaxmin_2024-11-19_14-00-20 training.goal_mask_prob=0.7 training.modal_dropout_prob=0.5 data.pred_horizon=32 
