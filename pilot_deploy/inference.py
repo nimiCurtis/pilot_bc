@@ -436,8 +436,7 @@ class PilotAgent(nn.Module):
             target_in_context = torch.any(curr_rel_pos_to_target)
             
             # if target in context -> dont mask! , if not -> mask the goal!
-
-            goal_mask = (~target_in_context).long()
+            goal_mask = (torch.logical_not(target_in_context)).long()
             goal_mask = goal_mask.unsqueeze(0).to(self.device)
 
         if goal_rel_pos_to_target is not None:

@@ -143,11 +143,6 @@ class PiDiff(BaseModel):
         self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((seq_len)/(self.context_size + 1))], dim=0)
 
-    def get_memory_k(self):
-
-        return self.mem_weight, self.lin_mem_weight
-    
-    
     def get_scheduler_config(self):
         return self.noise_scheduler_config
 
@@ -212,14 +207,6 @@ class PiDiff(BaseModel):
             # currently, the size of goal_encoding is [batch_size, 1, self.goal_encoding_size]
         return goal_encoding
     
-    def multiply_mem(self,vision_mem, lin_mem):
-        vision_mem_multiplied = self.mem_weight * vision_mem
-        
-        lin_mem_multiplied = self.lin_mem_weight * lin_mem
-        
-        
-        return vision_mem_multiplied, lin_mem_multiplied 
-    
     def infer_goal_masking(self,final_encoded_condition, goal_mask):
         
         # If a goal mask is provided, mask some of the goal tokens
@@ -277,7 +264,7 @@ class PiDiff(BaseModel):
             fused_tensor = torch.cat(masked_modalities, dim=-1)  # >> Concat the lin_encoding as a token too
             
         else:
-            fused_tensor = torch.cat(modalities, dim=1)
+            fused_tensor = torch.cat(modalities, dim=-1)
         
         fused_tensor = self.fusion_net(fused_tensor)
 
@@ -374,32 +361,25 @@ class PiDiff(BaseModel):
                     vision_mem,
                     lin_mem):
         
-        # Predict the noise residual
-        # obs_encoding_condition = self("vision_encoder",obs_img=obs_img)
-        # Predict the noise residual
+        
         obs_encoding_condition, mem_encoding = self("vision_encoder",obs_img=obs_img, mem_img=vision_mem)
         # Get the input goal mask
         target_in_context = torch.any(torch.any(curr_rel_pos_to_target,axis=1),axis=1)
         mem_mask = torch.logical_not(target_in_context).long()
         mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
-        
-        mem_encoding = mem_mask*mem_encoding
+
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
         if self.target_context_enable:
-                linear_input = torch.concatenate([curr_rel_pos_to_target.flatten(1),
-                                            normalized_action_context.flatten(1)], axis=1)
 
-                # lin_encoding = self("linear_encoder",
-                #                         curr_rel_pos_to_target=linear_input)
+                action_encoding = self("action_encoder",
+                                        action=normalized_action_context)
                 
                 lin_encoding, lin_mem_encoding = self("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input,
+                                                curr_rel_pos_to_target=curr_rel_pos_to_target,
                                                 lin_mem = lin_mem)
 
-                lin_mem_encoding = mem_mask*lin_mem_encoding
-
-                
                 modalities = [obs_encoding_condition, lin_encoding]
+                
                 fused_modalities_encoding = self("fuse_modalities",
                                                     modalities=modalities)
         else:
@@ -410,21 +390,19 @@ class PiDiff(BaseModel):
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
             
-            
-            mem_encoding,lin_mem_encoding = self("multiply_mem", vision_mem=mem_encoding,
-                                                        lin_mem=lin_mem_encoding)
-            
-            # final_encoded_condition = torch.cat((fused_modalities_encoding, goal_encoding, ), dim=1)  # >> Concat the lin_encoding as a token too
-            final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)
-            ## was
-            # final_encoded_condition = self("goal_masking",
-            #                                     final_encoded_condition=final_encoded_condition,
-            #                                     goal_mask = goal_mask)
-            ## Now no goal masking
+            mem_encoding = mem_mask*mem_encoding
+            lin_mem_encoding = mem_mask*lin_mem_encoding
+
+            final_encoded_condition = torch.cat((fused_modalities_encoding,
+                                                action_encoding,
+                                                mem_encoding,
+                                                lin_mem_encoding,
+                                                goal_encoding), dim=1)
+
             final_encoded_condition = self("goal_masking",
                                                 final_encoded_condition=final_encoded_condition,
-                                                goal_mask=None)
-            
+                                                goal_mask=goal_mask)
+
         ## TODO: next refactoring
         else:       # No Goal condition >> take the obs_encoding as the tokens
             goal_mask = None
@@ -481,10 +459,7 @@ class PiDiff(BaseModel):
 
         elif func_name == "action_encoder":
             output = self.infer_action_encoder(kwargs["action"])
-        
-        elif func_name == "multiply_mem":
-            output = self.multiply_mem(kwargs["vision_mem"],kwargs["lin_mem"])
-        
+
         elif func_name == "goal_masking":
             output = self.infer_goal_masking(kwargs["final_encoded_condition"], kwargs["goal_mask"])
 

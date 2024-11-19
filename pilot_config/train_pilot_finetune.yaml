@@ -87,8 +87,8 @@ data:
     min_dist_cat: 20
     max_dist_cat: 60
   action:
-    min_dist_cat: 20
-    max_dist_cat: 20
+    min_dist_cat: 0
+    max_dist_cat: 60
 
   # action output params
   pred_horizon: 16 
