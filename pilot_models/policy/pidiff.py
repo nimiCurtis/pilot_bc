@@ -71,7 +71,7 @@ class PiDiff(BaseModel):
         self.vision_memory_encoder = DepthFeatureExtractor(vision_encoder_config=vision_encoder_model_cfg,data_config=data_cfg)
         
         vision_memory_features_dim = self.vision_memory_encoder.get_in_feateures()
-        if vision_features_dim != vision_encoding_size:
+        if vision_memory_features_dim != vision_encoding_size:
             self.compress_obs_mem_enc = nn.Linear(vision_memory_features_dim, vision_encoding_size)
         else:
             self.compress_obs_mem_enc = nn.Identity()
@@ -83,9 +83,12 @@ class PiDiff(BaseModel):
                                             nn.ReLU(),
                                             nn.Linear(lin_encoding_size // 2, lin_encoding_size))
         
-        # Learnable scalar weights for highlighting embeddings
-        self.mem_weight = nn.Parameter(torch.tensor(1.1))  # Initialize >1
-        self.lin_mem_weight = nn.Parameter(torch.tensor(1.1))  # Initialize >1
+        self.action_encoder = nn.Sequential(nn.Linear(self.action_dim, lin_encoding_size // 4),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
+                                            nn.ReLU(),
+                                            nn.Linear(lin_encoding_size // 2, lin_encoding_size))
+
 
         if self.goal_condition:
             # Linear encoder for time series target position
@@ -100,6 +103,7 @@ class PiDiff(BaseModel):
             # Observations encoding size
             assert vision_encoding_size == lin_encoding_size, "encoding vector of lin and vision encoders must be equal in their final dim representation"
 
+        self.fusion_net = nn.Linear(lin_encoding_size*2, lin_encoding_size)
 
         #### Policy model ###
         ## Noise predictor##
@@ -172,6 +176,15 @@ class PiDiff(BaseModel):
         mem_img_encoding = self.compress_obs_mem_enc(mem_img).unsqueeze(1)
         
         return obs_encoding, mem_img_encoding
+
+
+    def infer_action_encoder(self,action):
+        
+        action_encoding = self.action_encoder(action)
+        if len(action_encoding.shape) == 2:
+            action_encoding = action_encoding.unsqueeze(1)
+
+        return action_encoding
 
     def infer_linear_encoder(self, curr_rel_pos_to_target, lin_mem):
         lin_encoding = self.lin_encoder(curr_rel_pos_to_target)
@@ -259,11 +272,14 @@ class PiDiff(BaseModel):
             for i, modality in enumerate(modalities):
                 masked_modality = modality * mask[:, i].unsqueeze(1).unsqueeze(2).expand_as(modality)
                 masked_modalities.append(masked_modality)
-        
-            fused_tensor = torch.cat(masked_modalities, dim=1)  # >> Concat the lin_encoding as a token too
 
+            # self.fusion
+            fused_tensor = torch.cat(masked_modalities, dim=-1)  # >> Concat the lin_encoding as a token too
+            
         else:
             fused_tensor = torch.cat(modalities, dim=1)
+        
+        fused_tensor = self.fusion_net(fused_tensor)
 
         return fused_tensor
 
@@ -463,6 +479,9 @@ class PiDiff(BaseModel):
             else:
                 output = self.fuse_modalities(kwargs["modalities"])
 
+        elif func_name == "action_encoder":
+            output = self.infer_action_encoder(kwargs["action"])
+        
         elif func_name == "multiply_mem":
             output = self.multiply_mem(kwargs["vision_mem"],kwargs["lin_mem"])
         

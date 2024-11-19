@@ -269,7 +269,7 @@ class PilotDataset(Dataset):
         """
 
         ## TODO: check
-        goal_offset = np.random.randint((min_goal_dist/self.waypoint_spacing_action) + 1, (max_goal_dist/self.waypoint_spacing_action) + 1)
+        goal_offset = np.random.randint((min_goal_dist/self.waypoint_spacing_action), (max_goal_dist/self.waypoint_spacing_action) + 1)
         goal_time = curr_time + goal_offset*self.waypoint_spacing_action
         return trajectory_name, goal_time, False
 
@@ -639,3 +639,27 @@ def show_all_images(batch_images: torch.Tensor, single_image: torch.Tensor, layo
     plt.imshow(combined_image.numpy(), cmap='gray')  # Convert to numpy and specify grayscale if needed
     plt.axis('off')  # Turn off the axis
     plt.show()
+
+
+
+if __name__ == "__main__":
+    import torch
+    import torch.nn as nn
+
+    # Define the input tensor
+    batch_size = 32
+    context_size = 3
+    features_dim = 2
+    embed_dim_size = 256
+
+    # Example input tensor of shape [batch_size, context_size, features_dim]
+    input_tensor = torch.randn(batch_size, context_size, features_dim)
+
+    # Define a linear layer
+    linear_layer = nn.Linear(features_dim, embed_dim_size)
+
+    # Apply the linear transformation
+    output_tensor = linear_layer(input_tensor)
+
+    # Check the output shape
+    print(output_tensor.shape)  # [batch_size, context_size, embed_dim_size]

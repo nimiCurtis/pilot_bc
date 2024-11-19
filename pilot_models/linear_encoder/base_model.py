@@ -12,7 +12,7 @@ class BaseModel(nn.Module):
         action_dim = 4 if data_cfg.learn_angle else 2
         self.target_dim = data_cfg.target_dim
 
-        self.linear_input_dim = self.target_dim*(context_size+1) + action_dim*(action_context_size)
+        self.linear_input_dim = self.target_dim
 
 
     def get_model(self):

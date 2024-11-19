@@ -217,13 +217,15 @@ class PiDiffTrainer(BasicTrainer):
                 goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
                 if self.target_context_enable:
-                        linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
-                                                    normalized_actions_context.flatten(1)], axis=1)
+                                                
+                        action_encoding = self.model("action_encoder",
+                                                action=normalized_actions_context)
 
                         lin_encoding, lin_mem_encoding = self.model("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input,
+                                                curr_rel_pos_to_target=rel_pos_to_target_context,
                                                 lin_mem=last_det_memory)
-                        lin_mem_encoding = mem_mask*lin_mem_encoding
+                        
+                        
                         
                         modalities = [obs_encoding_condition, lin_encoding]
                         
@@ -240,11 +242,14 @@ class PiDiffTrainer(BasicTrainer):
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 
-                mem_encoding,lin_mem_encoding = self.model("multiply_mem", vision_mem=mem_encoding,
-                                                        lin_mem=lin_mem_encoding)
-                
+
                 mem_encoding = mem_mask*mem_encoding
-                final_encoded_condition = torch.cat((fused_modalities_encoding, mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                lin_mem_encoding = mem_mask*lin_mem_encoding
+                
+                final_encoded_condition = torch.cat((fused_modalities_encoding,
+                                                    action_encoding,
+                                                    mem_encoding,lin_mem_encoding,
+                                                    goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                 final_encoded_condition = self.model("goal_masking",
                                                     final_encoded_condition=final_encoded_condition,
                                                     goal_mask = goal_mask)
@@ -383,8 +388,6 @@ class PiDiffTrainer(BasicTrainer):
         eval_model.eval()
         self.noise_scheduler.eval()
         
-        vision_mem_k, lin_mem_k = eval_model.get_memory_k()
-        print(f"\nModel Memory coefficients, Vision: {vision_mem_k.item():.6f}, Linear: {lin_mem_k.item():.6f}\n")
         
         action_loss_logger = Logger("action_loss", eval_type)
         action_waypts_cos_sim_logger = Logger("action_waypts_cos_sim", eval_type)
@@ -491,20 +494,30 @@ class PiDiffTrainer(BasicTrainer):
                 target_in_context = torch.any(torch.any(rel_pos_to_target_context,axis=1),axis=1)
                 mem_mask = torch.logical_not(target_in_context).long()
                 mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
-                mem_encoding = mem_mask*mem_encoding
+                
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
                     
                     goal_mask = get_goal_mask_tensor(goal_rel_pos_to_target,self.goal_mask_prob).to(self.device)
 
                     if self.target_context_enable:
-                        linear_input = torch.concatenate([rel_pos_to_target_context.flatten(1),
-                                                    normalized_actions_context.flatten(1)], axis=1)
+                        
+                        
+                        action_encoding = eval_model("action_encoder",
+                                                action=normalized_actions_context)
 
                         lin_encoding, lin_mem_encoding = eval_model("linear_encoder",
-                                                curr_rel_pos_to_target=linear_input,
+                                                curr_rel_pos_to_target=rel_pos_to_target_context,
+                                                lin_mem=last_det_memory)
+                        
+                        
+
+                        lin_encoding, lin_mem_encoding = eval_model("linear_encoder",
+                                                curr_rel_pos_to_target=rel_pos_to_target_context,
                                                 lin_mem = last_det_memory)
-                        lin_mem_encoding = mem_mask*lin_mem_encoding
+                        
+                        
+                        
                         modalities = [obs_encoding_condition, lin_encoding]
                         
                         # Not in use!
@@ -520,10 +533,14 @@ class PiDiffTrainer(BasicTrainer):
                     goal_encoding = eval_model("goal_encoder",
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
-                    mem_encoding,lin_mem_encoding = self.model("multiply_mem", vision_mem=mem_encoding,
-                                                        lin_mem=lin_mem_encoding)
-
-                    final_encoded_condition = torch.cat((fused_modalities_encoding,mem_encoding,lin_mem_encoding, goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
+                    lin_mem_encoding = mem_mask*lin_mem_encoding
+                    mem_encoding = mem_mask*mem_encoding
+                    
+                    final_encoded_condition = torch.cat((fused_modalities_encoding,
+                                                        action_encoding,
+                                                        mem_encoding,
+                                                        lin_mem_encoding,
+                                                        goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
                     final_encoded_condition = eval_model("goal_masking",
                                                         final_encoded_condition=final_encoded_condition,
