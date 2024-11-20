@@ -10,9 +10,9 @@ run_name: train_pilot_policy/${policy_model.name}/${log.desc}${now:%Y-%m-%d}_${n
 
 ## TODO: handle with log and iamges 
 num_images_log: 16
-print_log_freq: 25 # in iterations
-eval_log_freq: 2  # in iterations
-image_log_freq: 2 #  
+print_log_freq: 50 # in iterations
+eval_log_freq: 3  # in iterations
+image_log_freq: 3 #  
 eval_fraction: 0.25
 eval_freq: 1 # in epochs
 save_model_freq: 10

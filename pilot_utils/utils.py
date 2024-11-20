@@ -344,6 +344,8 @@ def get_action_stats(properties, waypoint_spacing):
 
         ang_vel_lim = properties['max_ang_vel']
         
+        
+        
         return {'pos': {
                         'max': (max_lin_vel / frame_rate)*waypoint_spacing,
                         'min': (min_lin_vel /frame_rate)*waypoint_spacing,
