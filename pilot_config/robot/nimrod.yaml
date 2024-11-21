@@ -15,21 +15,21 @@ nimrod:
       p2: 0.0
 
 
-  max_ang_vel: 50.1131
+  max_ang_vel: 50.2
   max_lin_vel:
-  - 2.1532
+  - 3.1076
   - 1.1998
-  mean_ang_vel: -0.009
+  mean_ang_vel: -0.0069
   mean_lin_vel:
-  - 0.3562
-  - 0.0118
+  - 0.3746
+  - 0.0143
   min_ang_vel: -50.1955
   min_lin_vel:
   - -1.7147
   - -1.8429
-  std_ang_vel: 1.5454
+  std_ang_vel: 1.4776
   std_lin_vel:
-  - 0.4121
-  - 0.1384
+  - 0.4109
+  - 0.1379
 
   metric_waypoint_spacing: 1
