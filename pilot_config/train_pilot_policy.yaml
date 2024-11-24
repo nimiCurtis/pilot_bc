@@ -19,7 +19,7 @@ device: cuda
 # training setup
 training:
   # goal_condition: True
-  batch_size: 128
+  batch_size: 256
   eval_batch_size: 32
   epochs: 30
   current_epoch: 0
@@ -48,10 +48,10 @@ training:
     min_decay: 0.0
     decay: 0.999
 
-  goal_mask_prob: 0.0 # 0 for no mask att all -> task specific
+  goal_mask_prob: 0.75 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.0 # 0 for no no dropout , 1 for dropout one modal anytime
+  modal_dropout_prob: 0.75 # 0 for no no dropout , 1 for dropout one modal anytime
 
   regularized_loss: False # l2 regularization
   debug:
@@ -84,14 +84,14 @@ data:
 
 # Take the distances with relate to the horizon
   distance:
-    min_dist_cat: 30
-    max_dist_cat: 60
+    min_dist_cat: 20
+    max_dist_cat: 50
   action:
-    min_dist_cat: 30
-    max_dist_cat: 60
+    min_dist_cat: 0
+    max_dist_cat: 50
 
   # action output params
-  pred_horizon: 16 
+  pred_horizon: 32 
   action_horizon: 16
   learn_angle: True
   # dataset specific parameters
