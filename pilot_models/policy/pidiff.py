@@ -15,6 +15,24 @@ from pilot_models.policy.common.transformer import MultiLayerDecoder, Positional
 from pilot_utils.utils import deltas_to_actions, to_numpy
 from pilot_models.vision_encoder.depth_feature_extractor import DepthFeatureExtractor
 
+
+
+
+class TimeEmbedding(nn.Module):
+    def __init__(self, embedding_dim):
+        super().__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(1, embedding_dim),
+            nn.ReLU(),
+            nn.Linear(embedding_dim, embedding_dim)
+        )
+
+    def forward(self, time_delta):
+        return self.fc(time_delta.unsqueeze(-1))
+
+
+
+
 class PiDiff(BaseModel):
     def __init__(
             self,
@@ -29,6 +47,7 @@ class PiDiff(BaseModel):
         
         ## Init BaseModel
         context_size=data_cfg.context_size
+        action_context_size = data_cfg.action_context_size
         pred_horizon=data_cfg.pred_horizon
         learn_angle=data_cfg.learn_angle
         channels=vision_encoder_model_cfg.in_channels
@@ -49,11 +68,11 @@ class PiDiff(BaseModel):
         self.target_context_enable = data_cfg.target_context_enable
         self.goal_condition = data_cfg.goal_condition
 
-        seq_len = self.context_size + 2
+        seq_len = self.context_size + 3 # 1 current, 1 actions, 1 memory
         if self.goal_condition:
             seq_len+=1
-            if self.target_context_enable:
-                seq_len+=2
+            # if self.target_context_enable:
+            #     seq_len+=2
 
         self.action_horizon = data_cfg.action_horizon
         
@@ -83,7 +102,10 @@ class PiDiff(BaseModel):
                                             nn.ReLU(),
                                             nn.Linear(lin_encoding_size // 2, lin_encoding_size))
         
-        self.action_encoder = nn.Sequential(nn.Linear(self.action_dim, lin_encoding_size // 4),
+        self.time_embedding_net = TimeEmbedding(embedding_dim=self.obs_encoding_size)
+        
+        
+        self.action_encoder = nn.Sequential(nn.Linear(self.action_dim * action_context_size, lin_encoding_size // 4),
                                             nn.ReLU(),
                                             nn.Linear(lin_encoding_size // 4, lin_encoding_size // 2),
                                             nn.ReLU(),
@@ -174,7 +196,7 @@ class PiDiff(BaseModel):
 
 
     def infer_action_encoder(self,action):
-        
+        action = action.flatten(1)
         action_encoding = self.action_encoder(action)
         if len(action_encoding.shape) == 2:
             action_encoding = action_encoding.unsqueeze(1)
@@ -359,14 +381,12 @@ class PiDiff(BaseModel):
                     normalized_action_context,
                     diffusion_noise_scheduler,
                     vision_mem,
-                    lin_mem):
+                    lin_mem,
+                    use_mem,
+                    time_delta):
         
         
         obs_encoding_condition, mem_encoding = self("vision_encoder",obs_img=obs_img, mem_img=vision_mem)
-        # Get the input goal mask
-        target_in_context = torch.any(torch.any(curr_rel_pos_to_target,axis=1),axis=1)
-        mem_mask = torch.logical_not(target_in_context).long()
-        mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
 
         # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
         if self.target_context_enable:
@@ -382,6 +402,14 @@ class PiDiff(BaseModel):
                 
                 fused_modalities_encoding = self("fuse_modalities",
                                                     modalities=modalities)
+                
+                mem_modalities = [mem_encoding, lin_mem_encoding]
+                fused_mem_encoding = self("fuse_modalities",
+                                                modalities=mem_modalities)
+                time_embedding = self("time_embedding",
+                                                time_delta=time_delta)
+                fused_mem_encoding = fused_mem_encoding + time_embedding
+
         else:
             # modalities are vision only
             fused_modalities_encoding = obs_encoding_condition
@@ -390,13 +418,11 @@ class PiDiff(BaseModel):
             goal_encoding = self("goal_encoder",
                                     goal_rel_pos_to_target=goal_rel_pos_to_target)
             
-            mem_encoding = mem_mask*mem_encoding
-            lin_mem_encoding = mem_mask*lin_mem_encoding
+            fused_mem_encoding = use_mem*mem_encoding
 
             final_encoded_condition = torch.cat((fused_modalities_encoding,
                                                 action_encoding,
-                                                mem_encoding,
-                                                lin_mem_encoding,
+                                                fused_mem_encoding,
                                                 goal_encoding), dim=1)
 
             final_encoded_condition = self("goal_masking",
@@ -411,7 +437,6 @@ class PiDiff(BaseModel):
                                                 final_encoded_condition=final_encoded_condition,
                                                 goal_mask = goal_mask)
 
-        
         # initialize action from Gaussian noise
         noisy_diffusion_output = torch.randn(
             (len(final_encoded_condition), self.pred_horizon, self.action_dim),device=self.device)
@@ -439,6 +464,10 @@ class PiDiff(BaseModel):
         
         return action_pred
 
+    def time_embedding(self, time_delta):
+        time_delta_embedding = self.time_embedding_net(time_delta)
+        time_delta_embedding = time_delta_embedding.unsqueeze(1)
+        return time_delta_embedding
 
     def forward(self, func_name, **kwargs):
         
@@ -457,6 +486,10 @@ class PiDiff(BaseModel):
             else:
                 output = self.fuse_modalities(kwargs["modalities"])
 
+        elif func_name == "time_embedding":
+            output = self.time_embedding(kwargs["time_delta"])
+        
+        
         elif func_name == "action_encoder":
             output = self.infer_action_encoder(kwargs["action"])
 

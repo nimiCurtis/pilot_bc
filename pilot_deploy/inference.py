@@ -351,7 +351,9 @@ class PilotAgent(nn.Module):
                 goal_rel_pos_to_target: torch.Tensor = None,
                 prev_actions: torch.Tensor = None,
                 vision_mem = None,
-                lin_mem = None) -> Tuple[torch.Tensor, torch.Tensor]:
+                lin_mem = None,
+                use_mem = None,
+                time_delta = None) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Forward pass through the model to predict the next waypoint.
 
@@ -369,7 +371,9 @@ class PilotAgent(nn.Module):
                                                     goal_rel_pos_to_target,
                                                     prev_actions,
                                                     vision_mem,
-                                                    lin_mem)
+                                                    lin_mem,
+                                                    use_mem,
+                                                    time_delta)
         predicted_waypoints_normalized = to_numpy(predicted_waypoints_normalized)
         predicted_waypoint = self.get_waypoint(predicted_waypoints_normalized)
 
@@ -401,7 +405,9 @@ class PilotAgent(nn.Module):
                     goal_rel_pos_to_target: torch.Tensor,
                     prev_actions: torch.Tensor,
                     vision_mem: torch.Tensor,
-                    lin_mem: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+                    lin_mem: torch.Tensor,
+                    use_mem: torch.Tensor,
+                    time_delta: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Generate raw predictions using the policy model.
 
@@ -418,6 +424,10 @@ class PilotAgent(nn.Module):
         vision_mem_img = vision_mem.unsqueeze(0).to(self.device)
         
         normalized_action_context_queue, target_context_queue, goal_to_target, goal_mask = None, None, None, None
+        
+        
+        use_mem = use_mem.unsqueeze(0).to(self.device)
+        time_delta = time_delta.unsqueeze(0).to(self.device)
         
         if prev_actions is not None:
             normalized_action_context_queue = actions_forward_pass(prev_actions,self.action_stats,self.learn_angle,norm_type=self.norm_type)
@@ -450,7 +460,9 @@ class PilotAgent(nn.Module):
                 goal_mask=goal_mask,
                 normalized_action_context = normalized_action_context_queue,
                 vision_mem = vision_mem_img,
-                lin_mem = lin_mem_vec
+                lin_mem = lin_mem_vec,
+                use_mem= use_mem,
+                time_delta = time_delta
             )
 
         return normalized_actions[0]  # no batch dimension
@@ -462,7 +474,9 @@ class PilotAgent(nn.Module):
                     goal_mask ,
                     normalized_action_context,
                     vision_mem,
-                    lin_mem):
+                    lin_mem,
+                    use_mem,
+                    time_delta):
         
         if self.is_diffusion_model:
             # actions = self.model.infer_trajectory(
@@ -484,7 +498,9 @@ class PilotAgent(nn.Module):
                 normalized_action_context,
                 self.noise_scheduler,
                 vision_mem,
-                lin_mem
+                lin_mem,
+                use_mem,
+                time_delta
             )
         else:
             actions = self.model.infer_actions(

@@ -148,7 +148,9 @@ class PiDiffTrainer(BasicTrainer):
                 action_mask,
                 goal_pos_to_target_mask,
                 vision_obs_memory,
-                last_det
+                last_det,
+                mem_time_delta,
+                use_mem,
             ) = data
 
             action_dim = normalized_actions.shape[-1]
@@ -167,6 +169,9 @@ class PiDiffTrainer(BasicTrainer):
             # TARGET
             rel_pos_to_target_context = rel_pos_to_target_context.to(self.device)
             last_det_memory = last_det.to(self.device)
+            mem_time_delta = mem_time_delta.to(self.device)
+            use_mem = use_mem.to(self.device)
+            use_mem = use_mem.view(use_mem.shape[0],1,1)
             
             # GOAL
             goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
@@ -207,9 +212,9 @@ class PiDiffTrainer(BasicTrainer):
             # Predict the noise residual
             obs_encoding_condition, mem_encoding = self.model("vision_encoder",obs_img=vision_obs_context,
                                                                 mem_img=vision_obs_memory)
-            target_in_context = torch.any(torch.any(rel_pos_to_target_context,axis=1),axis=1)
-            mem_mask = torch.logical_not(target_in_context).long()
-            mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
+            # target_in_context = torch.any(torch.any(rel_pos_to_target_context,axis=1),axis=1)
+            # mem_mask = torch.logical_not(target_in_context).long()
+            # mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
             
             # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
             if self.goal_condition:
@@ -235,6 +240,14 @@ class PiDiffTrainer(BasicTrainer):
                         fused_modalities_encoding = self.model("fuse_modalities",
                                                             modalities=modalities,
                                                             mask=modal_dropout_mask)
+
+                        mem_modalities = [mem_encoding, lin_mem_encoding]
+                        fused_mem_encoding = self.model("fuse_modalities",
+                                                        modalities=mem_modalities)
+                        time_embedding = self.model("time_embedding",
+                                                        time_delta=mem_time_delta)
+                        fused_mem_encoding = fused_mem_encoding + time_embedding
+
                 else:
                     # modalities are vision only
                     fused_modalities_encoding = obs_encoding_condition
@@ -242,13 +255,12 @@ class PiDiffTrainer(BasicTrainer):
                 goal_encoding = self.model("goal_encoder",
                                         goal_rel_pos_to_target=goal_rel_pos_to_target)
                 
-
-                mem_encoding = mem_mask*mem_encoding
-                lin_mem_encoding = mem_mask*lin_mem_encoding
+                
+                fused_mem_encoding = use_mem*fused_mem_encoding
                 
                 final_encoded_condition = torch.cat((fused_modalities_encoding,
                                                     action_encoding,
-                                                    mem_encoding,lin_mem_encoding,
+                                                    fused_mem_encoding,
                                                     goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
                 final_encoded_condition = self.model("goal_masking",
                                                     final_encoded_condition=final_encoded_condition,
@@ -292,7 +304,7 @@ class PiDiffTrainer(BasicTrainer):
             
             if i % self.print_log_freq == 0 :
                 # Set model to evaluation mode and disable gradient calculations
-                print(f"Memory uses: {torch.sum(mem_mask).item()}")
+                print(f"Memory uses: {int(torch.sum(use_mem).item())}")
                 self.model.eval()
                 with torch.no_grad():
                     # Initialize action from Gaussian noise
@@ -434,7 +446,9 @@ class PiDiffTrainer(BasicTrainer):
                     action_mask,
                     goal_pos_to_target_mask,
                     vision_obs_memory,
-                    last_det
+                    last_det,
+                    mem_time_delta,
+                    use_mem,
                 ) = data
                 
                 action_dim = normalized_actions.shape[-1]
@@ -452,7 +466,10 @@ class PiDiffTrainer(BasicTrainer):
                 # TARGET
                 rel_pos_to_target_context = rel_pos_to_target_context.to(self.device)
                 last_det_memory = last_det.to(self.device)
-
+                mem_time_delta = mem_time_delta.to(self.device)
+                use_mem = use_mem.to(self.device)
+                use_mem = use_mem.view(use_mem.shape[0],1,1)
+                
                 # GOAL
                 goal_rel_pos_to_target = goal_rel_pos_to_target.to(self.device)
 
@@ -491,9 +508,9 @@ class PiDiffTrainer(BasicTrainer):
                 # Predict the noise residual
                 obs_encoding_condition, mem_encoding = eval_model("vision_encoder",obs_img=vision_obs_context, mem_img=vision_obs_memory)
 
-                target_in_context = torch.any(torch.any(rel_pos_to_target_context,axis=1),axis=1)
-                mem_mask = torch.logical_not(target_in_context).long()
-                mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
+                # target_in_context = torch.any(torch.any(rel_pos_to_target_context,axis=1),axis=1)
+                # mem_mask = torch.logical_not(target_in_context).long()
+                # mem_mask = mem_mask.view(mem_mask.shape[0], 1, 1)
                 
                 # If goal condition, concat goal and target obs, and then infer the goal masking attention layers
                 if self.goal_condition:
@@ -526,6 +543,14 @@ class PiDiffTrainer(BasicTrainer):
                         fused_modalities_encoding = eval_model("fuse_modalities",
                                                             modalities=modalities,
                                                             mask=modal_dropout_mask)
+                        
+                        mem_modalities = [mem_encoding, lin_mem_encoding]
+                        fused_mem_encoding = eval_model("fuse_modalities",
+                                                        modalities=mem_modalities)
+                        time_embedding = eval_model("time_embedding",
+                                                        time_delta=mem_time_delta)
+                        fused_mem_encoding = fused_mem_encoding + time_embedding
+                        
                     else:
                         # modalities are vision only
                         fused_modalities_encoding = obs_encoding_condition
@@ -533,13 +558,11 @@ class PiDiffTrainer(BasicTrainer):
                     goal_encoding = eval_model("goal_encoder",
                                             goal_rel_pos_to_target=goal_rel_pos_to_target)
                     
-                    lin_mem_encoding = mem_mask*lin_mem_encoding
-                    mem_encoding = mem_mask*mem_encoding
+                    fused_mem_encoding = use_mem*fused_mem_encoding
                     
                     final_encoded_condition = torch.cat((fused_modalities_encoding,
                                                         action_encoding,
-                                                        mem_encoding,
-                                                        lin_mem_encoding,
+                                                        fused_mem_encoding,
                                                         goal_encoding), dim=1)  # >> Concat the lin_encoding as a token too
 
                     final_encoded_condition = eval_model("goal_masking",
@@ -566,7 +589,7 @@ class PiDiffTrainer(BasicTrainer):
                 loss = losses["diffusion_noise_loss"]
 
                 if i % self.eval_log_freq == 0 :
-                    print(f"Memory uses: {torch.sum(mem_mask).item()}")
+                    print(f"Memory uses: {int(torch.sum(use_mem).item())}")
                     # initialize action from Gaussian noise
                     noisy_diffusion_output = torch.randn(
                         (len(final_encoded_condition), self.pred_horizon, action_dim),device=self.device)

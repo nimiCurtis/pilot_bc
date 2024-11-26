@@ -519,7 +519,7 @@ class PilotDataset(Dataset):
         target_traj_data_context = self._get_trajectory(f_curr, target=True) #fcur
         target_traj_data_goal = self._get_trajectory(f_goal, target=True) #fgoal
         
-        last_det_time = self._find_last_det_time(target_traj_data_context, curr_time, self.waypoint_spacing,curr_data_properties["frame_rate"], context_times=context_times)
+        last_det_time, mem_time_delta, use_mem  = self._find_last_det_time(target_traj_data_context, curr_time, self.waypoint_spacing,curr_data_properties["frame_rate"], context_times=context_times)
         vision_obs_memory = self._load_image(f_curr, last_det_time)
         vision_obs_memory_tensor = transform_images(vision_obs_memory, self.memory_transform)
 
@@ -534,6 +534,10 @@ class PilotDataset(Dataset):
                                                                                                                     last_det_time,
                                                                                                                     context)
 
+        
+        
+        
+        
         # Compute the timestep distances
         if goal_is_negative:
             distance = self.max_dist_cat
@@ -561,6 +565,8 @@ class PilotDataset(Dataset):
             torch.as_tensor(goal_pos_to_target_mask, dtype=torch.float32),
             vision_obs_memory_tensor,
             torch.as_tensor(last_det, dtype=torch.float32),
+            torch.as_tensor(mem_time_delta, dtype=torch.float32),
+            torch.as_tensor(use_mem, dtype=torch.float32)
         )
 
 
@@ -582,14 +588,23 @@ class PilotDataset(Dataset):
         # Slice the trajectory up to the current time to consider only relevant past data
         upto_curr_time_trajes = target_traj[:curr_time+1]
         # Loop through the trajectory slice in reverse order to find the most recent detection
+        memory_time = curr_time
+        use_memory = 0
         for i in range(len(upto_curr_time_trajes)-1, -1, -waypoint_spacing):  # Start from the last index and go backward
+
             # Check if there is any position detected at time step i
             if np.any(upto_curr_time_trajes[i]['position']):
                 if i not in context_times:
-                    return max(i-int(frame_rate/2),0) # Update the last detection time to the current index
+                    memory_time = max(i-int(frame_rate/2),0) # Update the last detection time to the current index
+                    break
                 else:
-                    return i
-        return curr_time
+                    memory_time = i
+                    break
+
+        delta_time = curr_time - memory_time
+        use_memory = 1 if delta_time > 0 and memory_time != 0 else 0
+        
+        return memory_time, delta_time, use_memory
 
 
 
