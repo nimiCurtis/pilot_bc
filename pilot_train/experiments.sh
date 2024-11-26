@@ -26,5 +26,5 @@
 
 
 #finetune
-python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.0_ah16_ph32_tceTrue_ntmaxmin_2024-11-21_11-26-41 data.pred_horizon=32 training.goal_mask_prob=0.0 training.modal_dropout_prob=0.0
-python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.75_ah16_ph32_tceTrue_ntmaxmin_2024-11-21_11-56-45 training.goal_mask_prob=0.75 training.modal_dropout_prob=0.5 data.pred_horizon=32 
+# python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz128_c2_ac1_gcTrue_gcp0.0_ah16_ph32_tceTrue_ntmaxmin_2024-11-21_11-26-41 data.pred_horizon=32 training.goal_mask_prob=0.0 training.modal_dropout_prob=0.0
+python3 train.py --config-name=train_pilot_finetune training.fine_tune.model=pidiff_bsz256_c2_ac2_gcTrue_gcp0.75_ah16_ph32_tceTrue_ntmaxmin_2024-11-24_17-17-18 training.goal_mask_prob=0.75 training.modal_dropout_prob=0.8 data.pred_horizon=32 
