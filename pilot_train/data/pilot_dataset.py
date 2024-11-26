@@ -534,10 +534,6 @@ class PilotDataset(Dataset):
                                                                                                                     last_det_time,
                                                                                                                     context)
 
-        
-        
-        
-        
         # Compute the timestep distances
         if goal_is_negative:
             distance = self.max_dist_cat
@@ -556,7 +552,7 @@ class PilotDataset(Dataset):
         return (
             vision_obs_context_tensor, 
             torch.as_tensor(rel_pos_to_target_context, dtype=torch.float32),
-            torch.as_tensor(goal_rel_pos_to_target, dtype=torch.float32),
+            torch.as_tensor(goal_pos_to_target_mask*(goal_rel_pos_to_target - last_det), dtype=torch.float32), # Takes the delta to the goal of last det (memory/context)
             torch.as_tensor(normalized_actions, dtype=torch.float32),
             torch.as_tensor(normalized_actions_context, dtype=torch.float32),
             torch.as_tensor(normalized_goal_pos, dtype=torch.float32),
