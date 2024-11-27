@@ -148,7 +148,7 @@ class PiDiff(BaseModel):
         
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=seq_len)
-        self.sa_layer = nn.TransformerEncoderLayer(
+        sa_layer = nn.TransformerEncoderLayer(
             d_model=self.obs_encoding_size, 
             nhead=mha_num_attention_heads, 
             dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
@@ -156,7 +156,7 @@ class PiDiff(BaseModel):
             batch_first=True, 
             norm_first=True
         )
-        self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+        self.sa_encoder = nn.TransformerEncoder(sa_layer, num_layers=mha_num_attention_layers)
 
         # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
         self.goal_mask = torch.zeros((1, seq_len), dtype=torch.bool)
@@ -488,8 +488,7 @@ class PiDiff(BaseModel):
 
         elif func_name == "time_embedding":
             output = self.time_embedding(kwargs["time_delta"])
-        
-        
+
         elif func_name == "action_encoder":
             output = self.infer_action_encoder(kwargs["action"])
 

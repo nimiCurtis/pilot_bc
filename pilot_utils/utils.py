@@ -291,11 +291,12 @@ def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_t
     mask = torch.ones(batch_size, modalities_size, dtype=torch.int)
     
     # Check for tensors that are entirely zero and set the corresponding mask value
-    is_zero_tensor = torch.sum((curr_rel_pos_to_target == 0).all(axis=-1).long(), axis=-1)
+    target_in_context = torch.any(torch.any(curr_rel_pos_to_target,axis=-1),axis=-1).long()
+    target_not_in_context = torch.logical_not(target_in_context)
     
     # Calculate the adjusted modal dropout probability
-    num_zeros = torch.sum(is_zero_tensor)
-    total_elements = is_zero_tensor.size(0)
+    num_zeros = torch.sum(target_not_in_context)
+    total_elements = target_not_in_context.size(0)
     beta = (num_zeros.float() / total_elements).cpu()
 
     probability = modal_dropout_prob - beta.item()
@@ -305,12 +306,12 @@ def get_modal_dropout_mask(batch_size: int, modalities_size: int, curr_rel_pos_t
         num_to_drop = int(batch_size * probability)
         
         # Randomly select the indices of the tensors to drop
-        zero_indices = (is_zero_tensor == 0).nonzero(as_tuple=True)[0]
-        drop_indices = random.sample(zero_indices.tolist(), num_to_drop)
+        target_in_context_indices = target_in_context.nonzero(as_tuple=True)[0]
+        drop_indices = random.sample(target_in_context_indices.tolist(), num_to_drop)
         
         # For each selected tensor, randomly select one modality to mask
         for idx in drop_indices:
-            modality_to_mask = random.randint(0, modalities_size - 1)
+            modality_to_mask = 1 #random.randint(0, modalities_size - 1)
             mask[idx, modality_to_mask] = 0
 
     return mask

@@ -444,11 +444,14 @@ class PilotAgent(nn.Module):
             
             # not(torch.any(curr_rel_pos_to_target)) -> if there is no target detection in the context -> mask the goal!  
             target_in_context = torch.any(curr_rel_pos_to_target)
-            
+            target_not_in_context = (torch.logical_not(target_in_context)).long()
             # if target in context -> dont mask! , if not -> mask the goal!
-            goal_mask = (torch.logical_not(target_in_context)).long()
+            goal_mask = target_not_in_context if (not(use_mem) or time_delta>50) else torch.as_tensor(0) 
+            
+            # print(f"use_memory: {use_mem.item()} | time_delta = {time_delta.item()} |  goal mask = {goal_mask.item()}")
+            
             goal_mask = goal_mask.unsqueeze(0).to(self.device)
-
+            
         if goal_rel_pos_to_target is not None:
             # print(goal_rel_pos_to_target)
             goal_to_target = goal_rel_pos_to_target.unsqueeze(0).to(self.device)

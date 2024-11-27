@@ -138,4 +138,8 @@ if __name__ == "__main__":
         # Train
         train(cfg)
 
+        if wandb.run:
+            wandb.finish()
+
+    # 
     main()

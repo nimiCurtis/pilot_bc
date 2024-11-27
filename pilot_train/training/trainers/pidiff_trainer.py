@@ -209,6 +209,10 @@ class PiDiffTrainer(BasicTrainer):
                 noise=noise,
                 timesteps=timesteps)
 
+            
+            
+            
+
             # Predict the noise residual
             obs_encoding_condition, mem_encoding = self.model("vision_encoder",obs_img=vision_obs_context,
                                                                 mem_img=vision_obs_memory)
@@ -291,11 +295,16 @@ class PiDiffTrainer(BasicTrainer):
             loss = losses["diffusion_noise_loss"] if not(self.regularized_loss) else losses["diffusion_noise_loss_reg"]
 
 
-            # step optimizer
-            self.optimizer.zero_grad()
+            if i % self.print_log_freq == 0 :
+                # Clone model parameters before update
+                param_before = {name: param.clone().detach() for name, param in self.model.named_parameters() if param.requires_grad}
+
+            # Perform the backward pass and optimizer step
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
+            self.optimizer.zero_grad()
+
 
             # Update Exponential Moving Average of the model weights after optimizing
             if self.use_ema:
@@ -303,6 +312,12 @@ class PiDiffTrainer(BasicTrainer):
             
             
             if i % self.print_log_freq == 0 :
+                # Compare model parameters after update
+                for name, param in self.model.named_parameters():
+                    if param.requires_grad:  # Check only trainable parameters
+                        if torch.equal(param_before[name], param):
+                            print(f"\033[93mWarning: Parameter {name} was NOT updated.\033[0m")
+
                 # Set model to evaluation mode and disable gradient calculations
                 print(f"Memory uses: {int(torch.sum(use_mem).item())}")
                 self.model.eval()
