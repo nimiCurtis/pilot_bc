@@ -19,7 +19,7 @@ device: cuda
 # training setup
 training:
   # goal_condition: True
-  batch_size: 256
+  batch_size: 64
   eval_batch_size: 32
   epochs: 30
   current_epoch: 0
@@ -78,17 +78,17 @@ data:
   # context
   context_type: temporal
 
-  context_size: 2
-  action_context_size: 2 # modify to 0 for not using actions history
+  context_size: 1
+  action_context_size: 1 # modify to 0 for not using actions history
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
 # Take the distances with relate to the horizon
   distance:
     min_dist_cat: 20
-    max_dist_cat: 50
+    max_dist_cat: 40
   action:
     min_dist_cat: 0
-    max_dist_cat: 50
+    max_dist_cat: 40
 
   # action output params
   pred_horizon: 32
