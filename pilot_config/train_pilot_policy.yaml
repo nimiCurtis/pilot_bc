@@ -48,10 +48,10 @@ training:
     min_decay: 0.0
     decay: 0.9999
 
-  goal_mask_prob: 0.7 # 0 for no mask att all -> task specific
+  goal_mask_prob: 1.0 # 0 for no mask att all -> task specific
                       # 1 for mask all -> task agnostic, only explore
                       # p ~ (0,1) -> task specific with some explorations capabilities
-  modal_dropout_prob: 0.7 # 0 for no dropout , 1 for dropout one modal anytime
+  modal_dropout_prob: 1.0 # 0 for no dropout , 1 for dropout one modal anytime
 
   regularized_loss: False # l2 regularization
   debug:
@@ -78,17 +78,17 @@ data:
   # context
   context_type: temporal
 
-  context_size: 1
+  context_size: 4
   action_context_size: 1 # modify to 0 for not using actions history
   target_dim: 2 # 3 for [d,cos(theta),sin(theta)] | 2 for [x,y]
 
 # Take the distances with relate to the horizon
   distance:
-    min_dist_cat: 20
-    max_dist_cat: 40
+    min_dist_cat: 15
+    max_dist_cat: 30
   action:
     min_dist_cat: 0
-    max_dist_cat: 40
+    max_dist_cat: 30
 
   # action output params
   pred_horizon: 16 

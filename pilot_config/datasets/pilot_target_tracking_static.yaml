@@ -58,27 +58,27 @@ nimrod:
   end_slack: 3
   goals_per_obs: 1
   negative_mining: false
-  number_of_bags: 194
+  number_of_bags: 211
   start_from: 2
   stats:
     max_ang_vel: 50.2
     max_lin_vel:
     - 3.1076
     - 1.1998
-    mean_ang_vel: -0.013
+    mean_ang_vel: -0.0128
     mean_lin_vel:
-    - 0.3896
-    - 0.0131
+    - 0.4044
+    - 0.0098
     min_ang_vel: -50.1955
     min_lin_vel:
-    - -2.0026
-    - -1.8429
-    std_ang_vel: 1.4703
+    - -2.1176
+    - -2.3288
+    std_ang_vel: 1.6873
     std_lin_vel:
-    - 0.4171
-    - 0.1416
+    - 0.4238
+    - 0.1467
   test: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/test/nimrod
-  time: 60.0401
+  time: 65.7363
   train: /home/roblab20/dev/pilot/pilot_bc/pilot_train/dataset/pilot_target_tracking_static/train/nimrod
   waypoint_spacing: 1
 nimrod_wpt2:

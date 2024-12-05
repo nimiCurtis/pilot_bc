@@ -3,7 +3,7 @@ destination_folder: "/home/roblab20/dev/pilot/pilot_bc/pilot_dataset/eval"
 bags_folder: /media/roblab20/Expansion/pilot/test_easy
 save_raw: true                        # I dont see a reason why to set it to false
 mode: eval
-force: true
+force: false
 nimrod:                               # dataset name
   aligned_topics: ["odom", "target_object", "goal_reach", "goal_pose"]     # pick topics to be aligned
   # sync_rate: 4                    # alignment rate, if null we will 

@@ -240,6 +240,7 @@ class PiDiffTrainer(BasicTrainer):
                         
                         # Not in use!
                         modal_dropout_mask = get_modal_dropout_mask(self.train_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=self.modal_dropout_prob).to(self.device)   # modify
+                        modal_dropout_mask[:,1] = 0
 
                         fused_modalities_encoding = self.model("fuse_modalities",
                                                             modalities=modalities,
@@ -247,7 +248,8 @@ class PiDiffTrainer(BasicTrainer):
 
                         mem_modalities = [mem_encoding, lin_mem_encoding]
                         fused_mem_encoding = self.model("fuse_modalities",
-                                                        modalities=mem_modalities)
+                                                        modalities=mem_modalities,
+                                                        mask=modal_dropout_mask)
                         time_embedding = self.model("time_embedding",
                                                         time_delta=mem_time_delta)
                         fused_mem_encoding = fused_mem_encoding + time_embedding
@@ -554,14 +556,15 @@ class PiDiffTrainer(BasicTrainer):
                         
                         # Not in use!
                         modal_dropout_mask = get_modal_dropout_mask(self.eval_batch_size,modalities_size=len(modalities),curr_rel_pos_to_target=rel_pos_to_target_context,modal_dropout_prob=0.0).to(self.device)   # modify
-
+                        modal_dropout_mask[:,1] = 0
                         fused_modalities_encoding = eval_model("fuse_modalities",
                                                             modalities=modalities,
                                                             mask=modal_dropout_mask)
                         
                         mem_modalities = [mem_encoding, lin_mem_encoding]
                         fused_mem_encoding = eval_model("fuse_modalities",
-                                                        modalities=mem_modalities)
+                                                        modalities=mem_modalities,
+                                                        mask=modal_dropout_mask)
                         time_embedding = eval_model("time_embedding",
                                                         time_delta=mem_time_delta)
                         fused_mem_encoding = fused_mem_encoding + time_embedding
