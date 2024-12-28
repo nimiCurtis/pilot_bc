@@ -18,7 +18,7 @@ wandb/
 */logs
 logs
 
-*.png
+# *.png
 *.jpg
 *.pth
 *.mp4
