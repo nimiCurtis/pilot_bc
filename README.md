@@ -39,8 +39,8 @@ by non-experts.
 **&rarr; Collect data by hand in your environment**
 <p align="center">
   <img src="web/data_collect.gif" alt="animated"
-  width="400px"
-  height="250px"
+  width="450px"
+  height="300px"
 </p>
 
 
