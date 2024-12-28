@@ -1,7 +1,7 @@
 <div align="center">
 <h2>Pilot Behavior Cloning</h2>
-<h3>A Method For Learning Tracking Skills From Human Demos</h3>
-
+<h3>(The official repo of ViDEN)</h3>
+<h4>Visual Demonstration-based Embodiment-agnostic Navigation</h4>
 
 <img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="https://opensource.org/license/apache-2-0" />
 <img src="https://img.shields.io/github/last-commit/nimiCurtis/pilot_bc?style&color=5D6D7E" alt="git-last-commit" />
@@ -48,7 +48,7 @@ by non-experts.
 
 **&rarr; Clone behavior using Diffusion Policy**
 <p align="center">
-  <img src="web/arch.gif" alt="animated"
+  <img src="web/sketch.png" alt="image"
   width="400px"
   height="230px"
 </p>
@@ -89,7 +89,7 @@ Deploy:
 
 Additionally, the whole project-cycle (data collection till deploy) depends on following software:
 
-- [zion_ros_interface](https://github.com/nimiCurtis/zion_zed_ros_interface) (iterface wrapper for zed cameras and bag recording system)
+- [zion_ros_interface](https://github.com/nimiCurtis/zion_zed_ros_interface) (interface wrapper for zed cameras and bag recording system)
 - [bagtool](https://github.com/nimiCurtis/bagtool) (bag processing and pilot_bc dataset structure creator)
 - [waypoints_follower_control](https://github.com/nimiCurtis/waypoints_follower_control) (ROS wrapper for a simple waypoints reaching controller)
 
@@ -210,9 +210,9 @@ cd checkpoints && mkdir <agent name>
 Once you have a trained agent, copy (from the logs dir) its `config.yaml` file and model weights to `pilot_deploy/checkpoints/<agent name>`.
 
 
-Now, all that remains is to deploy the agent by using the [waypoints_follower_control](https://github.com/nimiCurtis/waypoints_follower_control) ROS package and enjoy some rollouts.
+Now, all that remains is to deploy the agent by using the [waypoints_follower_control](https://github.com/nimiCurtis/waypoints_follower_control) ROS packages.
 
-Static experiments:
+<!-- Static experiments:
 <p align="center">
 <div style="display: flex; justify-content: center;">
   <img src="web/exp1.gif" alt="GIF 1" width="100px" style="margin-right: 10px;" />
@@ -229,7 +229,7 @@ Dynamic experiments:
   <img src="web/exp4.gif" alt="GIF 4" width="100px" style="margin-right: 10px;" />
   <img src="web/exp7.gif" alt="GIF 7" width="100px" />
 </div>
-</p>
+</p> -->
 
 ---
 
