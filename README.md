@@ -49,8 +49,8 @@ by non-experts.
 **&rarr; Clone behavior using Diffusion Policy**
 <p align="center">
   <img src="web/sketch.png" alt="image"
-  width="400px"
-  height="230px"
+  width="600px"
+  height="250px"
 </p>
 
 **&rarr; Deploy on your robot**
