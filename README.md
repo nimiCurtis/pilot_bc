@@ -18,6 +18,8 @@
     - [Data](#data)
     - [Train](#train)
     - [Deploy](#deploy)
+- [Citing](#citing)
+- [}](#)
 - [License](#license)
 
 
@@ -231,6 +233,25 @@ Dynamic experiments:
 </div>
 </p> -->
 
+---
+
+## Citing
+
+The ViDEN data collection, training and deployment methods used in this software are described in the following paper (preprint). If you use this work in an academic context, please cite the following publication:
+
+* > N. Curtis, O. Azulay, and A. Sintov,
+  > **"Embodiment-Agnostic Navigation Policy Trained with Visual Demonstrations"**,
+  > arXiv preprint ([arXiv:2412.20226](https://arxiv.org/abs/2412.20226v1)), 2024. 
+
+        @misc{curtis2024embodimentagnosticnavigationpolicytrained,
+        title={Embodiment-Agnostic Navigation Policy Trained with Visual Demonstrations}, 
+        author={Nimrod Curtis and Osher Azulay and Avishai Sintov},
+        year={2024},
+        eprint={2412.20226},
+        archivePrefix={arXiv},
+        primaryClass={cs.RO},
+        url={https://arxiv.org/abs/2412.20226}, 
+}
 ---
 
 
